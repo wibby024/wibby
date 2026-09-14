@@ -1,0 +1,64 @@
+.message-action-bar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  background: var(--wibby-surface);
+  border: 1px solid var(--wibby-border);
+  border-radius: 20px;
+  padding: 4px 6px;
+  box-shadow: var(--shadow-md);
+  z-index: 100;
+  backdrop-filter: blur(10px);
+  
+  /* Initial animation state */
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.15s ease-out, transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.action-bar-reactions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, background-color 0.15s;
+}
+
+.reaction-btn {
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+}
+
+.reaction-btn:hover {
+  transform: scale(1.2);
+  background: var(--wibby-bg-hover);
+}
+
+.plus-btn, .context-menu-btn {
+  font-size: 16px;
+  width: 30px;
+  height: 30px;
+  color: var(--wibby-text-muted);
+}
+
+.plus-btn:hover, .context-menu-btn:hover {
+  background: var(--wibby-bg-hover);
+  color: var(--wibby-text);
+}
+
+.action-bar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--wibby-border);
+  margin: 0 4px;
+}

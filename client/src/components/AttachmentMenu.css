@@ -1,0 +1,291 @@
+.attachment-menu-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg-surface, #1e1b2e);
+  border: 1px solid var(--border-color, rgba(168, 85, 247, 0.3));
+  border-radius: 16px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 1px rgba(255, 255, 255, 0.15);
+  width: 290px;
+  max-width: calc(100vw - 24px);
+  animation: attachmentMenuPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 1000;
+  box-sizing: border-box;
+}
+
+@keyframes attachmentMenuPop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Header */
+.attachment-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.attachment-menu-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-primary-light, #c084fc);
+}
+
+.attachment-menu-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #9ca3af);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.attachment-menu-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #f3f4f6);
+}
+
+/* Dropzone */
+.attachment-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 12px;
+  border: 1.5px dashed rgba(168, 85, 247, 0.4);
+  border-radius: 12px;
+  background: rgba(168, 85, 247, 0.05);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  user-select: none;
+}
+
+.attachment-dropzone:hover,
+.attachment-dropzone:focus-visible {
+  border-color: var(--color-primary-light, #c084fc);
+  background: rgba(168, 85, 247, 0.12);
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.2);
+  outline: none;
+}
+
+.attachment-dropzone.drag-over {
+  border-color: #a855f7;
+  background: rgba(168, 85, 247, 0.2);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.35);
+  transform: scale(1.02);
+}
+
+.dropzone-icon-wrap {
+  color: var(--color-primary-light, #c084fc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dropzone-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dropzone-primary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #f3f4f6);
+}
+
+.dropzone-secondary {
+  font-size: 11px;
+  color: var(--text-secondary, #9ca3af);
+}
+
+.dropzone-highlight {
+  color: var(--color-primary-light, #c084fc);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Quick Grid */
+.attachment-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.attachment-quick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px;
+  background: var(--bg-surface-elevated, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  color: var(--text-primary, #f3f4f6);
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.attachment-quick-btn:hover,
+.attachment-quick-btn:focus-visible {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: rgba(168, 85, 247, 0.4);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.attachment-quick-btn:active {
+  transform: translateY(0);
+}
+
+.quick-btn-icon-bg {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+
+.attachment-quick-btn:hover .quick-btn-icon-bg {
+  transform: scale(1.08);
+}
+
+.camera-bg {
+  background: rgba(168, 85, 247, 0.22);
+}
+
+.photo-bg {
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.video-bg {
+  background: rgba(236, 72, 153, 0.18);
+}
+
+.doc-bg {
+  background: rgba(16, 185, 129, 0.18);
+}
+
+.quick-btn-emoji {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.quick-btn-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary, #f3f4f6);
+}
+
+/* Browse All Button */
+.attachment-browse-all-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: var(--text-secondary, #9ca3af);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.attachment-browse-all-btn:hover,
+.attachment-browse-all-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary, #f3f4f6);
+  border-color: rgba(168, 85, 247, 0.3);
+  outline: none;
+}
+
+.browse-all-icon {
+  font-size: 14px;
+}
+
+/* Light Theme Adjustments */
+:root[data-theme='light'] .attachment-menu-popover {
+  background: #ffffff;
+  border-color: rgba(168, 85, 247, 0.3);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(168, 85, 247, 0.12);
+}
+
+:root[data-theme='light'] .attachment-menu-header {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme='light'] .attachment-menu-close-btn {
+  color: #6b7280;
+}
+
+:root[data-theme='light'] .attachment-menu-close-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1f2937;
+}
+
+:root[data-theme='light'] .attachment-dropzone {
+  background: rgba(168, 85, 247, 0.04);
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
+:root[data-theme='light'] .attachment-dropzone:hover {
+  background: rgba(168, 85, 247, 0.08);
+}
+
+:root[data-theme='light'] .dropzone-primary {
+  color: #1f2937;
+}
+
+:root[data-theme='light'] .dropzone-secondary {
+  color: #6b7280;
+}
+
+:root[data-theme='light'] .attachment-quick-btn {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  color: #1f2937;
+}
+
+:root[data-theme='light'] .attachment-quick-btn:hover {
+  background: #faf5ff;
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
+:root[data-theme='light'] .quick-btn-label {
+  color: #1f2937;
+}
+
+:root[data-theme='light'] .attachment-browse-all-btn {
+  border-color: #e5e7eb;
+  color: #4b5563;
+}
+
+:root[data-theme='light'] .attachment-browse-all-btn:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}

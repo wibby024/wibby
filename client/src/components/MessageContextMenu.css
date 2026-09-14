@@ -1,0 +1,48 @@
+.message-context-menu {
+  position: fixed;
+  z-index: 1000;
+}
+
+.menu-options {
+  background: var(--wibby-surface);
+  border: 1px solid var(--wibby-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  backdrop-filter: blur(10px);
+}
+
+
+.menu-divider {
+  height: 1px;
+  background: var(--wibby-border);
+  margin: 6px 0;
+}
+
+.menu-item {
+  background: none;
+  border: none;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--wibby-text);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.1s;
+}
+
+.menu-item:hover {
+  background: var(--wibby-bg-hover);
+}
+
+.menu-item.danger {
+  color: #ef4444;
+}
+
+.menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}

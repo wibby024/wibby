@@ -1,0 +1,199 @@
+/* ============================================
+   App Layout
+   ============================================ */
+
+.app-layout {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* ---- Chat Panel ---- */
+
+.chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-left: var(--sidebar-width);
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* ---- Loading Screen ---- */
+
+.app-loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 14px;
+  background: #f7f7fb;
+  color: #64748b;
+}
+
+.app-loading-mark {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  color: white;
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  font-size: 22px;
+  font-weight: 800;
+  animation: wibby-loading-pulse 1.4s ease-in-out infinite;
+}
+
+.app-loading p {
+  margin: 0;
+  font-size: 13px;
+}
+
+@keyframes wibby-loading-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+/* ---- Responsive ---- */
+
+@media (max-width: 768px) {
+  .chat-panel {
+    margin-left: 0;
+  }
+}
+
+/* ============================================
+   Session Conflict Modal
+   ============================================ */
+
+.session-conflict-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.session-conflict-card {
+  background: var(--wibby-surface, #1E1B4B);
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.12));
+  border-radius: 18px;
+  padding: 2rem 1.75rem;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  animation: modalScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="light"] .session-conflict-card {
+  background: #FFFFFF;
+  border-color: rgba(124, 58, 237, 0.2);
+  box-shadow: 0 20px 40px rgba(124, 58, 237, 0.15);
+}
+
+.session-conflict-icon {
+  font-size: 2.75rem;
+  margin-bottom: 1rem;
+}
+
+.session-conflict-title {
+  margin: 0 0 0.6rem 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--wibby-text, #F8FAFC);
+}
+
+[data-theme="light"] .session-conflict-title {
+  color: #0F172A;
+}
+
+.session-conflict-desc {
+  margin: 0 0 1.75rem 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--wibby-text-secondary, #94A3B8);
+}
+
+[data-theme="light"] .session-conflict-desc {
+  color: #475569;
+}
+
+.session-conflict-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.session-conflict-btn-logout {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.15));
+  background: var(--wibby-surface-hover, rgba(255, 255, 255, 0.06));
+  color: var(--wibby-text-secondary, #94A3B8);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+[data-theme="light"] .session-conflict-btn-logout {
+  background: #F1F5F9;
+  border-color: #CBD5E1;
+  color: #475569;
+}
+
+.session-conflict-btn-logout:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #EF4444;
+}
+
+.session-conflict-btn-continue {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: none;
+  background: var(--wibby-primary, #7C3AED);
+  color: #FFFFFF;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+  transition: all 0.2s ease;
+}
+
+.session-conflict-btn-continue:hover {
+  background: #6D28D9;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45);
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalScaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}

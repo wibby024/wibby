@@ -1,0 +1,301 @@
+.create-story-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 1rem;
+}
+
+.create-story-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--wibby-surface);
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: createStoryIn 0.2s var(--ease-out);
+}
+
+@keyframes createStoryIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.create-story-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--wibby-border);
+}
+
+.create-story-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--wibby-chat-bg);
+  padding: 0.25rem;
+  border-radius: var(--radius-lg);
+}
+
+.create-story-tab {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  color: var(--wibby-text-secondary);
+  transition: var(--transition-fast);
+}
+
+.create-story-tab.active {
+  background: var(--wibby-surface);
+  color: var(--wibby-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.create-story-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--wibby-text-muted);
+  font-size: 1rem;
+  transition: var(--transition-fast);
+}
+
+.create-story-close:hover {
+  background: var(--wibby-surface-hover);
+  color: var(--wibby-text);
+}
+
+.create-story-body {
+  padding: 1.25rem;
+}
+
+.story-text-editor {
+  height: 280px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.5rem;
+  transition: background 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.story-text-input {
+  width: 100%;
+  flex: 1;
+  background: transparent;
+  color: #fff;
+  font-size: 1.25rem;
+  font-weight: 600;
+  text-align: center;
+  resize: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.4;
+}
+
+.story-text-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.music-notes-quick-picks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.quick-pick-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: left;
+}
+
+.quick-pick-chips {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.quick-pick-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.music-chip {
+  padding: 0.3rem 0.65rem;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-full);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: var(--transition-fast);
+}
+
+.music-chip:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.story-bg-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+.story-bg-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  transition: var(--transition-fast);
+}
+
+.story-bg-dot.active {
+  transform: scale(1.2);
+  border-color: #fff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+}
+
+.story-media-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.story-media-dropzone {
+  height: 240px;
+  background: var(--wibby-chat-bg);
+  border: 2px dashed var(--wibby-border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.story-media-dropzone:hover {
+  border-color: var(--wibby-primary);
+  background: var(--wibby-primary-subtle);
+}
+
+.dropzone-icon {
+  font-size: 2.25rem;
+}
+
+.dropzone-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--wibby-text);
+}
+
+.dropzone-sub {
+  font-size: 0.8125rem;
+  color: var(--wibby-text-muted);
+}
+
+.story-media-preview-wrap {
+  position: relative;
+  height: 240px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #000;
+}
+
+.story-media-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.story-remove-media-btn {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+}
+
+.story-caption-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--wibby-chat-bg);
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-md);
+  color: var(--wibby-text);
+  font-size: 0.9375rem;
+}
+
+.story-caption-input:focus {
+  border-color: var(--wibby-primary);
+  box-shadow: 0 0 0 3px var(--wibby-primary-glow);
+}
+
+.create-story-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--wibby-border);
+}
+
+.create-story-btn-cancel {
+  padding: 0.625rem 1rem;
+  border-radius: var(--radius-md);
+  color: var(--wibby-text-secondary);
+  font-weight: 500;
+  transition: var(--transition-fast);
+}
+
+.create-story-btn-cancel:hover {
+  background: var(--wibby-surface-hover);
+  color: var(--wibby-text);
+}
+
+.create-story-btn-post {
+  padding: 0.625rem 1.25rem;
+  background: var(--wibby-primary);
+  color: #fff;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  transition: var(--transition-fast);
+  box-shadow: 0 4px 12px var(--wibby-primary-glow);
+}
+
+.create-story-btn-post:hover:not(:disabled) {
+  background: var(--wibby-primary-hover);
+}
+
+.create-story-btn-post:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

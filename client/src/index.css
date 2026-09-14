@@ -1,0 +1,366 @@
+/* ============================================
+   WIBBY — Design Tokens & Global Reset
+   ============================================ */
+
+:root, [data-theme="light"] {
+  /* ---- Brand Colors ---- */
+  --wibby-primary: #7C3AED;
+  --wibby-primary-hover: #6D28D9;
+  --wibby-primary-light: #A78BFA;
+  --wibby-primary-subtle: #EDE9FE;
+  --wibby-primary-glow: rgba(124, 58, 237, 0.15);
+
+  /* ---- Light Mode Surface Colors ---- */
+  --wibby-bg: #F0F2F5;
+  --wibby-surface: #FFFFFF;
+  --wibby-surface-hover: #F8FAFC;
+  --wibby-surface-active: #F1F5F9;
+  --wibby-chat-bg: #E8ECF1;
+
+  /* ---- Light Mode Text Colors ---- */
+  --wibby-text: #0F172A;
+  --wibby-text-secondary: #334155;
+  --wibby-text-muted: #64748B;
+  --wibby-text-inverse: #FFFFFF;
+
+  /* ---- Light Mode Border Colors ---- */
+  --wibby-border: #CBD5E1;
+  --wibby-border-light: #E2E8F0;
+
+  /* ---- Status Colors ---- */
+  --wibby-online: #16A34A;
+  --wibby-offline: #64748B;
+  --wibby-danger: #DC2626;
+
+  /* ---- Deleted Message Colors (Light) ---- */
+  --wibby-deleted-bg: rgba(225, 29, 72, 0.08);
+  --wibby-deleted-border: rgba(225, 29, 72, 0.25);
+  --wibby-deleted-text: #9F1239;
+  --wibby-message-time: #475569;
+
+  /* ---- Layout ---- */
+  --sidebar-width: 360px;
+  --header-height: 68px;
+  --composer-height: 72px;
+
+  /* ---- Typography ---- */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* ---- Border Radius ---- */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* ---- Light Mode Shadows ---- */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.15);
+
+  /* ---- Transitions ---- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --transition-fast: 120ms var(--ease-out);
+  --transition-normal: 200ms var(--ease-out);
+  --transition-slow: 350ms var(--ease-out);
+}
+
+[data-theme="dark"] {
+  --wibby-primary: #8B5CF6;
+  --wibby-primary-hover: #7C3AED;
+  --wibby-primary-light: #A78BFA;
+  --wibby-primary-subtle: rgba(139, 92, 246, 0.15);
+  
+  --wibby-bg: #0F172A;
+  --wibby-surface: #1E293B;
+  --wibby-surface-hover: #334155;
+  --wibby-surface-active: #475569;
+  --wibby-chat-bg: #0B1120;
+  
+  --wibby-text: #F8FAFC;
+  --wibby-text-secondary: #CBD5E1;
+  --wibby-text-muted: #64748B;
+  
+  --wibby-border: #334155;
+  --wibby-border-light: #1E293B;
+
+  /* ---- Deleted Message Colors (Dark) ---- */
+  --wibby-deleted-bg: rgba(159, 18, 57, 0.15);
+  --wibby-deleted-border: rgba(159, 18, 57, 0.3);
+  --wibby-deleted-text: #FDA4AF;
+  --wibby-message-time: #AEB6CF;
+  
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================
+   WIBBY — Chat Theme Presets
+   ============================================ */
+
+/* Instagram Theme Presets (Dark Mode) */
+[data-chat-theme="ig-classic"] {
+  --wibby-chat-theme-bg: #0F0914;
+  --wibby-chat-theme-gradient: radial-gradient(ellipse at 50% 0%, rgba(225, 48, 108, 0.22) 0%, rgba(131, 58, 180, 0.12) 50%, #0F0914 90%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #833AB4 0%, #FD1D1D 50%, #FCB045 100%);
+}
+
+[data-chat-theme="ig-cyberpunk"] {
+  --wibby-chat-theme-bg: #060814;
+  --wibby-chat-theme-gradient: radial-gradient(ellipse at 50% 0%, rgba(0, 240, 255, 0.2) 0%, rgba(255, 0, 122, 0.14) 60%, #060814 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #00F0FF 0%, #7000FF 50%, #FF007A 100%);
+}
+
+[data-chat-theme="ig-ocean"] {
+  --wibby-chat-theme-bg: #040D1A;
+  --wibby-chat-theme-gradient: radial-gradient(ellipse at 50% 0%, rgba(6, 182, 212, 0.22) 0%, rgba(29, 78, 216, 0.14) 60%, #040D1A 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #06B6D4 0%, #3B82F6 50%, #1D4ED8 100%);
+}
+
+[data-chat-theme="ig-golden-hour"] {
+  --wibby-chat-theme-bg: #140A06;
+  --wibby-chat-theme-gradient: radial-gradient(ellipse at 50% 0%, rgba(245, 158, 11, 0.22) 0%, rgba(239, 68, 68, 0.14) 60%, #140A06 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #F59E0B 0%, #EF4444 50%, #EC4899 100%);
+}
+
+[data-chat-theme="ig-sage"] {
+  --wibby-chat-theme-bg: #06140C;
+  --wibby-chat-theme-gradient: radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.22) 0%, rgba(4, 120, 87, 0.14) 60%, #06140C 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #10B981 0%, #059669 50%, #047857 100%);
+}
+
+[data-chat-theme="ig-love"] {
+  --wibby-chat-theme-bg: #17050B;
+  --wibby-chat-theme-gradient: radial-gradient(ellipse at 50% 0%, rgba(244, 63, 94, 0.24) 0%, rgba(190, 18, 60, 0.15) 60%, #17050B 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #F43F5E 0%, #E11D48 50%, #BE123C 100%);
+}
+
+[data-chat-theme="ig-midnight"] {
+  --wibby-chat-theme-bg: #090714;
+  --wibby-chat-theme-gradient: radial-gradient(ellipse at 50% 0%, rgba(99, 102, 241, 0.22) 0%, rgba(139, 92, 246, 0.14) 60%, #090714 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #4C1D95 100%);
+}
+
+[data-chat-theme="ig-monochrome"] {
+  --wibby-chat-theme-bg: #0B0E14;
+  --wibby-chat-theme-gradient: radial-gradient(ellipse at 50% 0%, rgba(100, 116, 139, 0.2) 0%, rgba(30, 41, 59, 0.14) 60%, #0B0E14 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #64748B 0%, #334155 50%, #1E293B 100%);
+}
+
+[data-chat-theme="classic-purple"] {
+  --wibby-chat-theme-bg: var(--wibby-chat-bg);
+  --wibby-chat-theme-gradient: radial-gradient(ellipse at 50% 0%, rgba(124, 58, 237, 0.14) 0%, transparent 70%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #7C3AED, #5B21B6);
+}
+
+[data-chat-theme="midnight-velvet"] {
+  --wibby-chat-theme-bg: #090714;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, rgba(30, 27, 75, 0.4) 0%, #090714 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #4338CA, #1E1B4B);
+}
+
+[data-chat-theme="sunset-glow"] {
+  --wibby-chat-theme-bg: #140810;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, rgba(244, 63, 94, 0.16) 0%, #140810 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #F43F5E, #9F1239);
+}
+
+[data-chat-theme="emerald-forest"] {
+  --wibby-chat-theme-bg: #05140e;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, rgba(5, 150, 105, 0.16) 0%, #05140e 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #059669, #064E3B);
+}
+
+[data-chat-theme="rose-quartz"] {
+  --wibby-chat-theme-bg: #140612;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, rgba(219, 39, 119, 0.16) 0%, #140612 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #DB2777, #831843);
+}
+
+[data-chat-theme="slate-minimal"] {
+  --wibby-chat-theme-bg: #0c1322;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, rgba(51, 65, 85, 0.2) 0%, #0c1322 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #475569, #0F172A);
+}
+
+/* Light mode chat theme adaptations */
+[data-theme="light"][data-chat-theme="ig-classic"] {
+  --wibby-chat-theme-bg: #FFF5F8;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #FFE4ED 0%, #FFF5F8 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #833AB4 0%, #FD1D1D 50%, #FCB045 100%);
+}
+
+[data-theme="light"][data-chat-theme="ig-cyberpunk"] {
+  --wibby-chat-theme-bg: #F0FDFF;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #CCFBF1 0%, #F0FDFF 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #00B4D8 0%, #7000FF 50%, #FF007A 100%);
+}
+
+[data-theme="light"][data-chat-theme="ig-ocean"] {
+  --wibby-chat-theme-bg: #F0F9FF;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #E0F2FE 0%, #F0F9FF 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #0284C7 0%, #2563EB 100%);
+}
+
+[data-theme="light"][data-chat-theme="ig-golden-hour"] {
+  --wibby-chat-theme-bg: #FFFBEB;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #FEF3C7 0%, #FFFBEB 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #D97706 0%, #DC2626 100%);
+}
+
+[data-theme="light"][data-chat-theme="ig-sage"] {
+  --wibby-chat-theme-bg: #F0FDF4;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #DCFCE7 0%, #F0FDF4 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+[data-theme="light"][data-chat-theme="ig-love"] {
+  --wibby-chat-theme-bg: #FFF1F2;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #FFE4E6 0%, #FFF1F2 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #E11D48 0%, #9F1239 100%);
+}
+
+[data-theme="light"][data-chat-theme="ig-midnight"] {
+  --wibby-chat-theme-bg: #EEF2FF;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #E0E7FF 0%, #EEF2FF 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #4F46E5 0%, #6D28D9 100%);
+}
+
+[data-theme="light"][data-chat-theme="ig-monochrome"] {
+  --wibby-chat-theme-bg: #F8FAFC;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #E2E8F0 0%, #F8FAFC 100%);
+  --wibby-chat-theme-bubble: linear-gradient(135deg, #475569 0%, #1E293B 100%);
+}
+
+[data-theme="light"][data-chat-theme="classic-purple"] {
+  --wibby-chat-theme-bg: #F0F2F5;
+  --wibby-chat-theme-gradient: radial-gradient(ellipse at 50% 0%, rgba(124, 58, 237, 0.08) 0%, #F0F2F5 70%);
+}
+
+[data-theme="light"][data-chat-theme="midnight-velvet"] {
+  --wibby-chat-theme-bg: #EEF2FF;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #E0E7FF 0%, #EEF2FF 100%);
+}
+
+[data-theme="light"][data-chat-theme="sunset-glow"] {
+  --wibby-chat-theme-bg: #FFF1F2;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #FFE4E6 0%, #FFF1F2 100%);
+}
+
+[data-theme="light"][data-chat-theme="emerald-forest"] {
+  --wibby-chat-theme-bg: #ECFDF5;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #D1FAE5 0%, #ECFDF5 100%);
+}
+
+[data-theme="light"][data-chat-theme="rose-quartz"] {
+  --wibby-chat-theme-bg: #FDF2F8;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #FCE7F3 0%, #FDF2F8 100%);
+}
+
+[data-theme="light"][data-chat-theme="slate-minimal"] {
+  --wibby-chat-theme-bg: #F8FAFC;
+  --wibby-chat-theme-gradient: linear-gradient(180deg, #E2E8F0 0%, #F8FAFC 100%);
+}
+
+/* ============================================
+   Global Reset
+   ============================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--wibby-text);
+  background: var(--wibby-bg);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  border: none;
+  outline: none;
+  background: none;
+}
+
+button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+/* ============================================
+   Scrollbar
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--wibby-border);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--wibby-text-muted);
+}
+
+/* ============================================
+   Selection
+   ============================================ */
+
+::selection {
+  background: var(--wibby-primary-subtle);
+  color: var(--wibby-primary);
+}

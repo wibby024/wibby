@@ -1,0 +1,189 @@
+.together-dock {
+  background: var(--wibby-surface);
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  margin: 0.75rem 1.25rem;
+  overflow: hidden;
+  transition: all 0.25s var(--ease-out);
+  animation: dockSlideDown 0.25s var(--ease-out);
+  z-index: 100;
+}
+
+@keyframes dockSlideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.together-dock.minimized {
+  margin-bottom: 0.25rem;
+}
+
+.together-dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 1rem;
+  background: var(--wibby-chat-bg);
+  border-bottom: 1px solid var(--wibby-border);
+}
+
+.together-dock-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.together-badge {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--wibby-primary);
+  background: var(--wibby-primary-subtle);
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-full);
+}
+
+.together-sync-status {
+  font-size: 0.75rem;
+  color: var(--wibby-text-muted);
+}
+
+.together-dock-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.together-ctrl-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  color: var(--wibby-text-muted);
+  transition: var(--transition-fast);
+}
+
+.together-ctrl-btn:hover {
+  background: var(--wibby-surface-hover);
+  color: var(--wibby-text);
+}
+
+.together-ctrl-btn.close-btn:hover {
+  color: var(--wibby-danger);
+}
+
+.together-dock-body {
+  padding: 0.75rem;
+}
+
+.together-url-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.together-url-input {
+  flex: 1;
+  padding: 0.625rem 1rem;
+  background: var(--wibby-chat-bg);
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-md);
+  color: var(--wibby-text);
+  font-size: 0.875rem;
+}
+
+.together-url-input:focus {
+  border-color: var(--wibby-primary);
+  box-shadow: 0 0 0 3px var(--wibby-primary-glow);
+}
+
+.together-start-btn {
+  padding: 0.625rem 1.25rem;
+  background: var(--wibby-primary);
+  color: #fff;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+
+.together-start-btn:hover:not(:disabled) {
+  background: var(--wibby-primary-hover);
+}
+
+.together-start-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.together-player-frame-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.change-media-form {
+  margin-bottom: 0.5rem;
+}
+
+.together-iframe,
+.together-video-player {
+  width: 100%;
+  height: 260px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: #000;
+  object-fit: contain;
+}
+
+.together-sync-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.together-seek-btn {
+  padding: 0.4rem 0.65rem;
+  background: var(--wibby-surface-hover);
+  color: var(--wibby-text);
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.together-seek-btn:hover {
+  background: var(--wibby-primary-subtle);
+  border-color: var(--wibby-primary);
+  color: var(--wibby-primary);
+}
+
+.together-sync-play-btn {
+  padding: 0.4rem 0.875rem;
+  background: var(--wibby-primary-subtle);
+  color: var(--wibby-primary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.together-sync-play-btn:hover {
+  background: var(--wibby-primary);
+  color: #fff;
+}
+
+.together-host-tag {
+  font-size: 0.75rem;
+  color: var(--wibby-text-muted);
+  white-space: nowrap;
+}
+

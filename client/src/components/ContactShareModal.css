@@ -1,0 +1,147 @@
+.contact-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 1rem;
+}
+
+.contact-modal-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--wibby-surface);
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: contactModalIn 0.2s var(--ease-out);
+}
+
+@keyframes contactModalIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.contact-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--wibby-border);
+}
+
+.contact-modal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.contact-modal-icon {
+  font-size: 1.25rem;
+}
+
+.contact-modal-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--wibby-text);
+}
+
+.contact-modal-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--wibby-text-muted);
+  font-size: 1rem;
+  transition: var(--transition-fast);
+}
+
+.contact-modal-close:hover {
+  background: var(--wibby-surface-hover);
+  color: var(--wibby-text);
+}
+
+.contact-modal-form {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.contact-modal-error {
+  padding: 0.75rem 1rem;
+  background: var(--wibby-deleted-bg);
+  border: 1px solid var(--wibby-deleted-border);
+  color: var(--wibby-deleted-text);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+}
+
+.contact-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.contact-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--wibby-text-secondary);
+}
+
+.contact-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--wibby-chat-bg);
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-md);
+  color: var(--wibby-text);
+  font-size: 0.9375rem;
+  transition: var(--transition-fast);
+}
+
+.contact-input:focus {
+  border-color: var(--wibby-primary);
+  box-shadow: 0 0 0 3px var(--wibby-primary-glow);
+}
+
+.contact-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.contact-btn-cancel {
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-md);
+  color: var(--wibby-text-secondary);
+  font-weight: 500;
+  transition: var(--transition-fast);
+}
+
+.contact-btn-cancel:hover {
+  background: var(--wibby-surface-hover);
+  color: var(--wibby-text);
+}
+
+.contact-btn-submit {
+  padding: 0.75rem 1.5rem;
+  background: var(--wibby-primary);
+  color: #fff;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  transition: var(--transition-fast);
+  box-shadow: 0 4px 12px var(--wibby-primary-glow);
+}
+
+.contact-btn-submit:hover {
+  background: var(--wibby-primary-hover);
+}

@@ -1,0 +1,219 @@
+.stories-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--wibby-surface);
+  border-bottom: 1px solid var(--wibby-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.stories-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.story-circle-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-top: 26px;
+}
+
+/* Instagram Floating Note Bubble */
+.instagram-note-bubble {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--wibby-surface-hover, rgba(30, 27, 75, 0.85));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.12));
+  border-radius: 14px;
+  padding: 3px 8px;
+  max-width: 86px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: auto;
+  animation: noteFloat 3s ease-in-out infinite alternate;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, box-shadow 0.2s ease;
+}
+
+[data-theme="light"] .instagram-note-bubble {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(124, 58, 237, 0.2);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+}
+
+.instagram-note-bubble.note-prompt {
+  opacity: 0.85;
+  border-style: dashed;
+  padding: 2px 7px;
+}
+
+.instagram-note-bubble:hover {
+  transform: translateX(-50%) translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.3);
+}
+
+.instagram-note-bubble.is-playing-music {
+  border-color: var(--wibby-primary, #8B5CF6);
+  box-shadow: 0 0 14px rgba(139, 92, 246, 0.5);
+  background: var(--wibby-surface, #1E1B4B);
+}
+
+.note-music-equalizer {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 10px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.note-music-equalizer .eq-bar {
+  width: 2px;
+  background: #A78BFA;
+  border-radius: 1px;
+  animation: eqBounce 0.8s ease-in-out infinite alternate;
+}
+
+.note-music-equalizer .bar-1 { height: 60%; animation-delay: 0.1s; }
+.note-music-equalizer .bar-2 { height: 100%; animation-delay: 0.3s; }
+.note-music-equalizer .bar-3 { height: 40%; animation-delay: 0.2s; }
+
+@keyframes eqBounce {
+  0% { transform: scaleY(0.3); }
+  100% { transform: scaleY(1); }
+}
+
+.note-text-snippet {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--wibby-text, #F8FAFC);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 72px;
+  display: inline-block;
+  line-height: 1.2;
+}
+
+[data-theme="light"] .note-text-snippet {
+  color: #1E293B;
+}
+
+/* Thought bubble tail dots linking bubble to avatar */
+.thought-tail-dot {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--wibby-surface-hover, rgba(30, 27, 75, 0.85));
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.12));
+}
+
+[data-theme="light"] .thought-tail-dot {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(124, 58, 237, 0.2);
+}
+
+.thought-tail-dot.dot-1 {
+  bottom: -4px;
+  left: 44%;
+  width: 5px;
+  height: 5px;
+}
+
+.thought-tail-dot.dot-2 {
+  bottom: -7px;
+  left: 41%;
+  width: 3px;
+  height: 3px;
+}
+
+@keyframes noteFloat {
+  0% {
+    transform: translateX(-50%) translateY(0);
+  }
+  100% {
+    transform: translateX(-50%) translateY(-2px);
+  }
+}
+
+.story-avatar-ring {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  transition: var(--transition-fast);
+}
+
+.story-avatar-ring.has-story.unviewed {
+  background: linear-gradient(135deg, #EC4899, #8B5CF6, #3B82F6);
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+}
+
+.story-avatar-ring.has-story.viewed {
+  background: var(--wibby-border);
+}
+
+.story-avatar-ring.no-story {
+  background: transparent;
+}
+
+.story-circle-item:hover .story-avatar-ring {
+  transform: scale(1.05);
+}
+
+.story-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #fff;
+  border: 2px solid var(--wibby-surface);
+}
+
+.story-add-badge {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--wibby-primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--wibby-surface);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.story-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--wibby-text-secondary);
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}

@@ -1,0 +1,173 @@
+.voice-message-player {
+  display: flex;
+  flex-direction: column;
+  min-width: 250px;
+  max-width: 340px;
+  padding: 0.25rem 0.2rem;
+  user-select: none;
+}
+
+.voice-player-main {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+/* Play/Pause Circle Button */
+.voice-player-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.voice-message-player.own .voice-player-btn {
+  background: rgba(255, 255, 255, 0.95);
+  color: #7C3AED;
+}
+
+.voice-message-player.own .voice-player-btn:hover:not(:disabled) {
+  background: #FFFFFF;
+  transform: scale(1.06);
+}
+
+.voice-message-player.peer .voice-player-btn {
+  background: #8B5CF6;
+  color: #FFFFFF;
+}
+
+.voice-message-player.peer .voice-player-btn:hover:not(:disabled) {
+  background: #7C3AED;
+  transform: scale(1.06);
+}
+
+.voice-player-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* Loading Spinner */
+.voice-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: voiceSpin 0.7s linear infinite;
+}
+
+/* Waveform Container */
+.voice-waveform-container {
+  flex: 1;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.voice-waveform-bars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+}
+
+.voice-bar-item {
+  flex: 1;
+  border-radius: 2px;
+  min-height: 4px;
+  max-height: 30px;
+  transform-origin: center;
+  transition: background 0.1s ease;
+}
+
+/* Waveform coloring based on message ownership and playback progress */
+.voice-message-player.own .voice-bar-item.played {
+  background: #FFFFFF;
+}
+
+.voice-message-player.own .voice-bar-item.unplayed {
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.voice-message-player.peer .voice-bar-item.played {
+  background: #A78BFA;
+}
+
+.voice-message-player.peer .voice-bar-item.unplayed {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Side controls (Speed & Time) */
+.voice-player-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+  min-width: 44px;
+}
+
+.voice-speed-badge {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.voice-speed-badge:hover {
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.voice-time-label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Error fallback */
+.voice-player-error {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.3rem 0;
+}
+
+.voice-error-text {
+  font-size: 0.8rem;
+  color: #FCA5A5;
+}
+
+.voice-error-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.voice-retry-btn, .voice-download-btn-mini {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: inherit;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.voice-retry-btn:hover, .voice-download-btn-mini:hover {
+  background: rgba(255, 255, 255, 0.25);
+}

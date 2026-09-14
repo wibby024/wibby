@@ -1,0 +1,227 @@
+.poll-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 1rem;
+}
+
+.poll-modal-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--wibby-surface);
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: pollModalIn 0.2s var(--ease-out);
+}
+
+@keyframes pollModalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.poll-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--wibby-border);
+}
+
+.poll-modal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.poll-modal-icon {
+  font-size: 1.25rem;
+}
+
+.poll-modal-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--wibby-text);
+}
+
+.poll-modal-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--wibby-text-muted);
+  font-size: 1rem;
+  transition: var(--transition-fast);
+}
+
+.poll-modal-close:hover {
+  background: var(--wibby-surface-hover);
+  color: var(--wibby-text);
+}
+
+.poll-modal-form {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.poll-modal-error {
+  padding: 0.75rem 1rem;
+  background: var(--wibby-deleted-bg);
+  border: 1px solid var(--wibby-deleted-border);
+  color: var(--wibby-deleted-text);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+}
+
+.poll-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.poll-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--wibby-text-secondary);
+}
+
+.poll-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--wibby-chat-bg);
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-md);
+  color: var(--wibby-text);
+  font-size: 0.9375rem;
+  transition: var(--transition-fast);
+}
+
+.poll-input:focus {
+  border-color: var(--wibby-primary);
+  box-shadow: 0 0 0 3px var(--wibby-primary-glow);
+}
+
+.poll-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.poll-option-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.poll-option-num {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--wibby-text-muted);
+  width: 16px;
+  text-align: center;
+}
+
+.option-input {
+  flex: 1;
+}
+
+.poll-remove-opt-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--wibby-text-muted);
+  border-radius: 50%;
+  transition: var(--transition-fast);
+}
+
+.poll-remove-opt-btn:hover {
+  background: var(--wibby-surface-hover);
+  color: var(--wibby-danger);
+}
+
+.poll-add-opt-btn {
+  align-self: flex-start;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--wibby-primary);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-fast);
+}
+
+.poll-add-opt-btn:hover {
+  background: var(--wibby-primary-subtle);
+}
+
+.poll-toggle-group {
+  padding-top: 0.25rem;
+}
+
+.poll-toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: var(--wibby-text);
+  cursor: pointer;
+}
+
+.poll-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--wibby-primary);
+  cursor: pointer;
+}
+
+.poll-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.poll-btn-cancel {
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-md);
+  color: var(--wibby-text-secondary);
+  font-weight: 500;
+  transition: var(--transition-fast);
+}
+
+.poll-btn-cancel:hover {
+  background: var(--wibby-surface-hover);
+  color: var(--wibby-text);
+}
+
+.poll-btn-submit {
+  padding: 0.75rem 1.5rem;
+  background: var(--wibby-primary);
+  color: #fff;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  transition: var(--transition-fast);
+  box-shadow: 0 4px 12px var(--wibby-primary-glow);
+}
+
+.poll-btn-submit:hover {
+  background: var(--wibby-primary-hover);
+}

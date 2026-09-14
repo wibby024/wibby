@@ -1,0 +1,357 @@
+.story-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2500;
+  padding: 1rem;
+}
+
+.story-viewer-card {
+  width: 100%;
+  max-width: 420px;
+  height: min(88vh, 720px);
+  background: #000;
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  animation: viewerIn 0.2s var(--ease-out);
+}
+
+@keyframes viewerIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.story-progress-bar-wrap {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  gap: 4px;
+  z-index: 20;
+}
+
+.story-progress-segment {
+  flex: 1;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.story-progress-fill {
+  height: 100%;
+  background: #fff;
+  transition: width 0.05s linear;
+}
+
+.story-viewer-header {
+  position: absolute;
+  top: 1.5rem;
+  left: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 20;
+}
+
+.story-author-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.story-author-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.875rem;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+}
+
+.story-author-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.story-author-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.story-timestamp {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.story-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.story-delete-btn,
+.story-viewer-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: var(--transition-fast);
+}
+
+.story-delete-btn:hover,
+.story-viewer-close:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.story-viewer-stage {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.story-tap-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 35%;
+  z-index: 10;
+  cursor: pointer;
+}
+
+.story-tap-zone.left { left: 0; }
+.story-tap-zone.right { right: 0; }
+
+.story-text-stage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.story-text-body {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.4;
+  word-break: break-word;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.story-media-stage {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+.story-image-full,
+.story-video-full {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.story-caption-bar {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  right: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  border-radius: var(--radius-lg);
+  color: #fff;
+  font-size: 0.9375rem;
+  text-align: center;
+  z-index: 15;
+}
+
+.story-reaction-float {
+  position: absolute;
+  font-size: 3rem;
+  animation: floatUp 1.2s ease-out forwards;
+  z-index: 30;
+  pointer-events: none;
+}
+
+@keyframes floatUp {
+  0% { transform: translateY(20px) scale(0.5); opacity: 0; }
+  20% { transform: translateY(0) scale(1.2); opacity: 1; }
+  100% { transform: translateY(-80px) scale(1); opacity: 0; }
+}
+
+.story-viewer-footer {
+  padding: 0.75rem 1rem 1rem;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.story-emoji-reactions {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.story-emoji-btn {
+  font-size: 1.5rem;
+  padding: 0.35rem;
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+}
+
+.story-emoji-btn:hover {
+  transform: scale(1.3);
+}
+
+.story-reply-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.story-reply-input {
+  flex: 1;
+  padding: 0.625rem 1rem;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-full);
+  color: #fff;
+  font-size: 0.875rem;
+}
+
+.story-reply-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.story-reply-input:focus {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: #fff;
+}
+
+.story-reply-send-btn {
+  padding: 0.625rem 1.125rem;
+  background: var(--wibby-primary);
+  color: #fff;
+  border-radius: var(--radius-full);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+
+.story-reply-send-btn:hover:not(:disabled) {
+  background: var(--wibby-primary-hover);
+}
+
+.story-reply-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   Instagram Music Note Stage Badge & Vinyl Disc
+   ============================================ */
+
+.story-music-note-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 28px;
+  padding: 8px 16px 8px 10px;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  animation: musicBadgeFloat 3s ease-in-out infinite alternate;
+}
+
+.spinning-vinyl-disc {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #2d2d30 20%, #111 60%, #000 100%);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  animation: spinVinyl 3s linear infinite;
+  flex-shrink: 0;
+}
+
+.vinyl-center {
+  font-size: 14px;
+}
+
+.music-badge-info {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.music-badge-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  line-height: 1.2;
+}
+
+.music-badge-sub {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #A78BFA;
+  margin-top: 2px;
+}
+
+@keyframes spinVinyl {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes musicBadgeFloat {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-4px); }
+}
+

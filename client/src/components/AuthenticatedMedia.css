@@ -1,0 +1,134 @@
+.auth-image-container,
+.auth-video-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.auth-media-skeleton {
+  position: absolute;
+  inset: 0;
+  min-height: 180px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.auth-media-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(168, 85, 247, 0.2);
+  border-top-color: var(--color-primary-light, #c084fc);
+  border-radius: 50%;
+  animation: authMediaSpin 0.8s linear infinite;
+}
+
+@keyframes authMediaSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.auth-image-content {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 380px;
+  object-fit: cover;
+  border-radius: 8px;
+  transition: opacity 0.2s ease;
+}
+
+.auth-image-content.hidden {
+  opacity: 0;
+}
+
+.auth-image-content.visible {
+  opacity: 1;
+}
+
+.auth-video-content {
+  display: block;
+  width: 100%;
+  max-height: 380px;
+  border-radius: 8px;
+  background: #000;
+}
+
+.auth-media-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px dashed rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: var(--text-secondary, #9ca3af);
+  font-size: 13px;
+  min-height: 140px;
+  text-align: center;
+}
+
+.auth-media-error-icon {
+  font-size: 24px;
+}
+
+.auth-media-error-text {
+  color: #f87171;
+  font-weight: 500;
+}
+
+.auth-media-retry-btn {
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #c084fc;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.auth-media-retry-btn:hover {
+  background: rgba(168, 85, 247, 0.3);
+  border-color: #a855f7;
+  color: #fff;
+}
+
+.auth-video-error-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.auth-media-download-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e5e7eb;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.auth-media-download-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
