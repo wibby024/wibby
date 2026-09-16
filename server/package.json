@@ -13,6 +13,8 @@
     "storage:verify-encryption": "node src/scripts/verify-encryption.mjs"
   },
   "dependencies": {
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
@@ -27,8 +29,6 @@
   "devDependencies": {
     "@breezystack/lamejs": "^1.2.7",
     "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/multer": "^2.2.0",
     "@types/node": "^22.20.2",
     "lamejs": "^1.2.1",
     "socket.io-client": "^4.8.3",
