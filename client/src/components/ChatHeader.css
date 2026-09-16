@@ -468,6 +468,7 @@
   }
 
   .chat-header {
-    padding: 0 12px;
+    padding: env(safe-area-inset-top, 0px) 12px 0;
+    height: calc(var(--header-height) + env(safe-area-inset-top, 0px));
   }
 }

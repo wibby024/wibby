@@ -187,3 +187,19 @@
   white-space: nowrap;
 }
 
+@media (max-width: 640px) {
+  .together-dock {
+    margin: 0.5rem;
+    border-radius: var(--radius-lg);
+  }
+
+  .together-dock-body {
+    padding: 0.5rem;
+  }
+
+  .together-iframe,
+  .together-video-player {
+    height: 200px;
+  }
+}
+

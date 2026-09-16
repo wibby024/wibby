@@ -201,12 +201,12 @@ export default function VoiceMessagePlayer({ message, isOwn = false }: VoiceMess
   };
 
   /**
-   * Seek by clicking or scrubbing the waveform
+   * Seek by clicking or scrubbing the waveform (supports mouse and mobile touch)
    */
-  const handleSeek = async (e: React.MouseEvent<HTMLDivElement>) => {
+  const applySeekFromClientX = async (clientX: number, container: HTMLElement) => {
     const effectiveDuration = duration || message.duration || 1;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
+    const rect = container.getBoundingClientRect();
+    const clickX = clientX - rect.left;
     const ratio = Math.max(0, Math.min(1, clickX / rect.width));
     const targetTime = ratio * effectiveDuration;
 
@@ -217,6 +217,16 @@ export default function VoiceMessagePlayer({ message, isOwn = false }: VoiceMess
       audio.currentTime = targetTime;
     } catch (err) {
       console.error('[WIBBY VOICE] Seek error:', err);
+    }
+  };
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    applySeekFromClientX(e.clientX, e.currentTarget);
+  };
+
+  const handleTouchSeek = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches && e.touches.length > 0) {
+      applySeekFromClientX(e.touches[0].clientX, e.currentTarget);
     }
   };
 
@@ -294,6 +304,8 @@ export default function VoiceMessagePlayer({ message, isOwn = false }: VoiceMess
           <div 
             className="voice-waveform-container" 
             onClick={handleSeek}
+            onTouchStart={handleTouchSeek}
+            onTouchMove={handleTouchSeek}
             title="Click or drag to seek"
             role="slider"
             aria-label="Audio scrubber"

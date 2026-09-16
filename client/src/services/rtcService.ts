@@ -661,9 +661,24 @@ export class RTCService {
 
     try {
       console.log('[WIBBY WEBRTC] Switching camera to deviceId:', deviceId);
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: deviceId } }
-      });
+      let newStream: MediaStream;
+      try {
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: deviceId } }
+        });
+      } catch (exactErr) {
+        console.warn('[WIBBY WEBRTC] Exact deviceId failed, attempting fallback constraints:', exactErr);
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { ideal: deviceId } }
+          });
+        } catch (idealErr) {
+          console.warn('[WIBBY WEBRTC] Ideal deviceId failed, attempting facingMode fallback:', idealErr);
+          newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } }
+          });
+        }
+      }
 
       const newVideoTrack = newStream.getVideoTracks()[0];
       if (!newVideoTrack) return false;
