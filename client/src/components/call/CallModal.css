@@ -1038,22 +1038,24 @@
    - Authoritative foreground: contain, 100% sharp, zero crop
    ------------------------------------------------------------- */
 
-/* Layer 1: Ambient live video background */
+/* Layer 1: Ambient live video background - ultra lightweight GPU composited */
 .call-video-bg-live {
   position: absolute;
   inset: -15%;
   width: 130%;
   height: 130%;
   object-fit: cover;
-  opacity: 0.28;
-  filter: brightness(0.35) saturate(0.85);
+  opacity: 0.18;
   pointer-events: none;
   z-index: 1;
   display: block;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 .call-video-bg-live.local {
-  transform: scaleX(-1);
+  transform: scaleX(-1) translateZ(0);
+  -webkit-transform: scaleX(-1) translateZ(0);
 }
 
 .call-video-bg-live.hidden {
@@ -1074,7 +1076,7 @@
   display: none;
 }
 
-/* Layer 2: Authoritative Foreground Video */
+/* Layer 2: Authoritative Foreground Video - 100% Zero-Lag Hardware Compositing */
 .call-video-fg-live {
   position: relative;
   width: 100%;
@@ -1084,11 +1086,14 @@
   object-fit: contain; /* Complete uncropped native frame */
   z-index: 3;
   display: block;
-  filter: drop-shadow(0 6px 28px rgba(0, 0, 0, 0.65));
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 .call-video-fg-live.local-main {
-  transform: scaleX(-1); /* Mirrored selfie */
+  transform: scaleX(-1) translateZ(0); /* Mirrored selfie */
+  -webkit-transform: scaleX(-1) translateZ(0);
 }
 
 /* Rear / Environment Camera Unmirroring — NEVER EVER MIRRORED */

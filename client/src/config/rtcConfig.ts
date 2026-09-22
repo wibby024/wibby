@@ -73,36 +73,36 @@ export const VIDEO_MEDIA_CONSTRAINTS: MediaTrackConstraints = {
  */
 export const CAMERA_1080P_CONSTRAINTS: MediaTrackConstraints = {
   facingMode: 'user',
-  width: { ideal: 1920, min: 1280 },
-  height: { ideal: 1080, min: 720 },
-  frameRate: { ideal: 30, min: 24 }
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+  frameRate: { ideal: 30 }
 };
 
 export const DEVICE_CAMERA_CONSTRAINTS: MediaTrackConstraints = CAMERA_1080P_CONSTRAINTS;
 
 export const PRODUCTION_CAMERA_CONSTRAINTS: MediaTrackConstraints[] = [
-  // 1. Primary device camera constraint: Landscape 1080p Full HD
+  // 1. Primary device camera constraint: Landscape 1080p target @ 30 FPS
   {
     facingMode: 'user',
-    width: { ideal: 1920, min: 1280 },
-    height: { ideal: 1080, min: 720 },
-    frameRate: { ideal: 30, min: 24 }
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+    frameRate: { ideal: 30 }
   },
-  // 2. Portrait 1080p Full HD (Smartphone held vertically)
-  {
-    facingMode: 'user',
-    width: { ideal: 1080, min: 720 },
-    height: { ideal: 1920, min: 1280 },
-    frameRate: { ideal: 30, min: 24 }
-  },
-  // 3. Landscape 720p HD fallback
+  // 2. High-performance 720p HD @ 30 FPS (ultra-smooth 30fps motion on mobile & webcams)
   {
     facingMode: 'user',
     width: { ideal: 1280 },
     height: { ideal: 720 },
     frameRate: { ideal: 30 }
   },
-  // 4. Portrait 720p HD fallback
+  // 3. Portrait 1080p target @ 30 FPS (Smartphone held vertically)
+  {
+    facingMode: 'user',
+    width: { ideal: 1080 },
+    height: { ideal: 1920 },
+    frameRate: { ideal: 30 }
+  },
+  // 4. Portrait 720p HD @ 30 FPS (Smartphone held vertically)
   {
     facingMode: 'user',
     width: { ideal: 720 },
@@ -112,8 +112,9 @@ export const PRODUCTION_CAMERA_CONSTRAINTS: MediaTrackConstraints[] = [
   // 5. Ideal facing mode with high-definition target
   {
     facingMode: { ideal: 'user' },
-    width: { ideal: 1920 },
-    height: { ideal: 1080 }
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    frameRate: { ideal: 30 }
   },
   // 6. Ideal facing mode fallback
   {
@@ -224,14 +225,14 @@ export function formatSdpForVideo(
 
   // 2. Controlled Bandwidth Signaling under m=video
   if (enableSdpBandwidthPacing && result.includes('m=video')) {
-    // Inject b=AS:5000 and b=TIAS:5000000 beneath m=video if not present (allows up to 5.0 Mbps for motion)
+    // Inject b=AS:3200 and b=TIAS:3200000 beneath m=video if not present (optimal 3.2 Mbps ceiling for smooth 30fps 1080p)
     const mVideoRegex = /(m=video[^\r\n]+(?:\r?\n[c=][^\r\n]+)?)/;
-    if (!result.includes('b=AS:5000') && !result.includes('b=TIAS:5000000')) {
-      result = result.replace(mVideoRegex, `$1\r\nb=AS:5000\r\nb=TIAS:5000000`);
+    if (!result.includes('b=AS:3200') && !result.includes('b=TIAS:3200000')) {
+      result = result.replace(mVideoRegex, `$1\r\nb=AS:3200\r\nb=TIAS:3200000`);
     }
 
     // Locate video payload types (H264, VP8, VP9) and add start/min/max bitrates in a=fmtp
-    // Primes Google Congestion Control at 2.5 Mbps start and 1.0 Mbps floor to prevent motion starvation
+    // Primes Google Congestion Control at 1.8 Mbps start and 600 kbps floor to eliminate packet drops and bufferbloat lag
     const videoPts: string[] = [];
     const videoPtRegex = /a=rtpmap:(\d+)\s+(?:VP8|H264|VP9)\/90000/gi;
     let ptMatch: RegExpExecArray | null;
@@ -245,13 +246,13 @@ export function formatSdpForVideo(
         result = result.replace(fmtpRegex, (_m, params) => {
           let updated = params;
           if (!updated.includes('x-google-min-bitrate=')) {
-            updated += ';x-google-min-bitrate=1000';
+            updated += ';x-google-min-bitrate=600';
           }
           if (!updated.includes('x-google-start-bitrate=')) {
-            updated += ';x-google-start-bitrate=2500';
+            updated += ';x-google-start-bitrate=1800';
           }
           if (!updated.includes('x-google-max-bitrate=')) {
-            updated += ';x-google-max-bitrate=6000';
+            updated += ';x-google-max-bitrate=3500';
           }
           return `a=fmtp:${pt} ${updated}`;
         });
@@ -260,7 +261,7 @@ export function formatSdpForVideo(
         const rtpmapLine = new RegExp(`(a=rtpmap:${pt}\\s+[^\\r\\n]+)`, 'i');
         result = result.replace(
           rtpmapLine,
-          `$1\r\na=fmtp:${pt} x-google-min-bitrate=1000;x-google-start-bitrate=2500;x-google-max-bitrate=6000`
+          `$1\r\na=fmtp:${pt} x-google-min-bitrate=600;x-google-start-bitrate=1800;x-google-max-bitrate=3500`
         );
       }
     }

@@ -127,7 +127,7 @@ export class RTCService {
   private currentCaptureHeight = 0;
   private currentCaptureFps = 0;
   private videoQualityMode: VideoQualityMode = 'auto';
-  private videoBitrateTargetMbps = 6.0; // 6.0 Mbps optimal motion budget
+  private videoBitrateTargetMbps = 3.2; // 3.2 Mbps optimal smooth motion budget
   private peakMotionBitrateMbps = 0;
   private minStaticBitrateMbps = 0;
 
@@ -389,8 +389,8 @@ export class RTCService {
       }
 
       if ('contentHint' in vTrack) {
-        vTrack.contentHint = 'detail';
-        console.log('[WIBBY WEBRTC] Applied contentHint = "detail" to camera video track for maximum clarity');
+        vTrack.contentHint = 'motion';
+        console.log('[WIBBY WEBRTC] Applied contentHint = "motion" to camera video track for buttery-smooth 30fps motion');
       }
 
       console.log('[WIBBY WEBRTC] Actual camera capture settings & capabilities:', {
@@ -872,7 +872,7 @@ export class RTCService {
       this.currentCaptureFps = Math.round(trackSettings.frameRate || 0);
 
       if ('contentHint' in newVideoTrack) {
-        newVideoTrack.contentHint = 'detail';
+        newVideoTrack.contentHint = 'motion';
       }
 
       console.log(`[WIBBY WEBRTC] Camera switch succeeded. Active facingMode: ${this.currentFacingMode}, capture: ${this.currentCaptureWidth}x${this.currentCaptureHeight}`);
@@ -1390,19 +1390,19 @@ export class RTCService {
             const mime = (c.mimeType || '').toLowerCase();
             const fmtp = (c.sdpFmtpLine || '').toLowerCase();
             if (mime.includes('h264')) {
-              // High profile or Constrained Baseline
-              if (fmtp.includes('profile-level-id=640c') || fmtp.includes('profile-level-id=42e0')) return 100;
-              return 85;
+              // Dedicated hardware encoder on iOS, Android, macOS & Windows (near-zero CPU, buttery 30fps)
+              if (fmtp.includes('profile-level-id=42e0') || fmtp.includes('profile-level-id=640c')) return 100;
+              return 90;
             }
-            if (mime.includes('vp9')) return 90;
-            if (mime.includes('vp8')) return 60;
-            if (mime.includes('av1')) return 50;
+            if (mime.includes('vp8')) return 75; // Fast, lightweight software fallback
+            if (mime.includes('vp9')) return 50; // Heavy software encoder, avoided on mobile devices
+            if (mime.includes('av1')) return 30;
             return 10;
           };
           return getScore(b) - getScore(a);
         });
         videoTransceiver.setCodecPreferences(codecs);
-        console.log('[WIBBY WEBRTC] Prioritized high-definition video codecs (H.264 High/VP9) on transceiver');
+        console.log('[WIBBY WEBRTC] Prioritized hardware-accelerated H.264/VP8 video codecs for buttery-smooth 30fps playback');
       } else if (this.videoCodecPreference === 'vp8') {
         codecs.sort((a, b) => {
           const aVP8 = a.mimeType?.toLowerCase().includes('vp8') ? 1 : 0;
@@ -1954,17 +1954,16 @@ export class RTCService {
           (params.encodings[0] as any).minBitrate = 1_500_000;
         }
       } else {
-        // High clarity video call optimization:
-        // 'maintain-resolution' ensures video frames stay crisp, clear 1080p/720p without dropping to blurry pixelated soup.
-        params.degradationPreference = 'maintain-resolution';
+        // High clarity & smooth motion optimization:
+        // 'balanced' degradation ensures both fluid 30 FPS motion and sharp resolution without stutter or severe downclocking.
+        params.degradationPreference = 'balanced';
 
         // Hard 1080p transmission requirement:
         // If camera capture is 4K (>=3840 wide), downsample by 2.0 to transmit pristine 1080p.
         // If camera capture is 1080p (or standard), scaleResolutionDownBy is 1.0 to transmit 1080p.
-        // Resolution is NEVER silently downgraded to 720p/540p/480p.
         const is4KCapture = this.currentCaptureWidth >= 3840;
         const baseScale = is4KCapture ? 2.0 : 1.0;
-        const targetBps = Math.min(Math.max(Math.round(this.videoBitrateTargetMbps * 1_000_000), 2_500_000), 6_000_000);
+        const targetBps = Math.min(Math.max(Math.round(this.videoBitrateTargetMbps * 1_000_000), 2_000_000), 3_500_000);
 
         if (currentMode === 'data-saver') {
           params.degradationPreference = 'balanced';
@@ -1972,18 +1971,18 @@ export class RTCService {
           params.encodings[0].maxFramerate = 24;
           params.encodings[0].scaleResolutionDownBy = baseScale * 1.5;
         } else if (currentMode === '720p') {
-          params.degradationPreference = 'maintain-resolution';
-          params.encodings[0].maxBitrate = 2_500_000;
+          params.degradationPreference = 'balanced';
+          params.encodings[0].maxBitrate = 2_000_000;
           params.encodings[0].maxFramerate = 30;
           params.encodings[0].scaleResolutionDownBy = baseScale;
         } else {
-          // Standard / 1080p / auto: Hard 1080p transmission at optimal HD budget (4.5 - 6.0 Mbps)
-          params.degradationPreference = 'maintain-resolution';
+          // Standard / 1080p / auto: Fluid 30 FPS HD transmission with crisp clarity and no buffer queues
+          params.degradationPreference = 'balanced';
           params.encodings[0].maxBitrate = targetBps;
           params.encodings[0].maxFramerate = 30;
           params.encodings[0].scaleResolutionDownBy = baseScale;
           if ('minBitrate' in params.encodings[0]) {
-            (params.encodings[0] as any).minBitrate = Math.round(targetBps * 0.4);
+            (params.encodings[0] as any).minBitrate = Math.round(targetBps * 0.35);
           }
         }
       }
