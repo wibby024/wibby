@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useCall } from '../../context/CallContext';
 import { rtcService } from '../../services/rtcService';
+import { resolvePartnerName } from '../../utils/partnerName';
 import './FloatingCallCapsule.css';
 
 function formatDuration(seconds: number): string {
@@ -72,7 +73,7 @@ export default function FloatingCallCapsule() {
     }
   }, []);
 
-  const partnerName = activeCall?.remoteUser?.name || 'Partner';
+  const partnerName = resolvePartnerName(activeCall?.remoteUser);
   const initial = partnerName.charAt(0).toUpperCase();
   const isConnected = callState === 'CONNECTED';
   const isReconnecting = callState === 'RECONNECTING';

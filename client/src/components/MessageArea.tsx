@@ -15,6 +15,7 @@ import MessageInfoModal from './MessageInfoModal';
 import LinkPlayerModal from './LinkPlayerModal';
 import MiniMapWidget from './MiniMapWidget';
 import { AuthenticatedImage, AuthenticatedVideo } from './AuthenticatedMedia';
+import { resolvePartnerName } from '../utils/partnerName';
 import type { Message, PollData } from '../types/chat';
 import './MessageArea.css';
 
@@ -639,11 +640,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const chatDragCounterRef = useRef<number>(0);
 
-  const rawPartnerName = partner?.display_name || partner?.displayName;
-  const isBadPartnerName = !rawPartnerName || rawPartnerName === 'Unknown' || rawPartnerName === 'unknown';
-  const partnerName = !isBadPartnerName
-    ? rawPartnerName
-    : (partner?.username && partner.username !== 'unknown' ? partner.username : (partner?.email ? partner.email.split('@')[0] : 'Partner'));
+  const partnerName = resolvePartnerName(partner);
 
   // Prevent browser default behavior of opening dropped files
   useEffect(() => {

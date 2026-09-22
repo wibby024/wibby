@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 import { useCall } from '../../context/CallContext';
 import { rtcService } from '../../services/rtcService';
+import { resolvePartnerName } from '../../utils/partnerName';
 import './CallModal.css';
 
 function formatCallDuration(seconds: number): string {
@@ -972,7 +973,7 @@ export default function ActiveCallPanel() {
 
   if (!activeCall) return null;
 
-  const partnerName = activeCall.remoteUser.name || 'Partner';
+  const partnerName = resolvePartnerName(activeCall.remoteUser);
   const partnerUsername = (activeCall.remoteUser as any).username ? `@${(activeCall.remoteUser as any).username}` : '';
 
   const initial = partnerName.charAt(0).toUpperCase();

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { musicNoteService } from '../../services/musicNoteService';
+import { resolvePartnerName } from '../../utils/partnerName';
 import type { Story } from '../../types/chat';
 import CreateStoryModal from './CreateStoryModal';
 import StoryViewerModal from './StoryViewerModal';
@@ -41,7 +42,8 @@ export default function StoriesBar({
     ? rawUserDisplayName
     : (profile?.username && profile.username !== 'unknown' ? profile.username : 'You');
   const userInitial = customUserInitial || userDisplayName.charAt(0).toUpperCase();
-  const partnerInitial = customPartnerInitial || partnerName.charAt(0).toUpperCase();
+  const cleanPartnerName = resolvePartnerName({ displayName: partnerName }, partnerName);
+  const partnerInitial = customPartnerInitial || cleanPartnerName.charAt(0).toUpperCase();
 
   const fetchStories = useCallback(async () => {
     if (!user || !conversationId) return;
@@ -301,7 +303,7 @@ export default function StoriesBar({
                 <span>{partnerInitial}</span>
               </div>
             </div>
-            <span className="story-label">{partnerName}</span>
+            <span className="story-label">{cleanPartnerName}</span>
           </div>
         )}
       </div>
@@ -322,7 +324,7 @@ export default function StoriesBar({
           stories={stories}
           startIndex={viewerStartIndex}
           currentUserId={currentUserId}
-          partnerName={partnerName}
+          partnerName={cleanPartnerName}
           onClose={() => setViewerStartIndex(null)}
           onViewStory={handleViewStory}
           onReactStory={handleReactStory}

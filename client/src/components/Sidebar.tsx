@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { resolvePartnerName } from '../utils/partnerName';
 import WibbyLogo from './WibbyLogo';
 import './Sidebar.css';
 
@@ -47,11 +48,7 @@ export default function Sidebar({
   const formattedUsername = cleanUsername ? `@${cleanUsername}` : '';
   const initial = (displayName.charAt(0) || cleanUsername.charAt(0) || 'U').toUpperCase();
 
-  const rawPartnerName = partner?.display_name || partner?.displayName;
-  const isBadPartnerName = !rawPartnerName || rawPartnerName === 'Unknown' || rawPartnerName === 'unknown';
-  const partnerName = !isBadPartnerName
-    ? rawPartnerName
-    : (partner?.username && partner.username !== 'unknown' ? partner.username : (partner?.email ? partner.email.split('@')[0] : 'Partner'));
+  const partnerName = resolvePartnerName(partner);
   const partnerInitial = partnerName.charAt(0).toUpperCase();
 
   const handleSignOut = async () => {

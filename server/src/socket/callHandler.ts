@@ -31,6 +31,27 @@ export function getActiveCallByUserId(userId: string): ActiveCallSession | null 
   return activeCalls.get(callId) || null;
 }
 
+const isGenericName = (val: any): boolean => {
+  if (!val || typeof val !== 'string') return true;
+  const n = val.trim().toLowerCase();
+  return n === '' || n === 'partner' || n === 'unknown' || n === 'wibby user' || n === 'user' || n === 'you' || n === 'null' || n === 'undefined';
+};
+
+const resolveUserCallName = (u: any, uid: string): string => {
+  if (!u) return `User ${uid.slice(0, 4).toUpperCase()}`;
+  const raw = u.displayName || u.display_name || u.name;
+  if (!isGenericName(raw)) return raw.trim();
+  if (!isGenericName(u.username)) {
+    const un = u.username.trim().replace(/^@+/, '');
+    return un.charAt(0).toUpperCase() + un.slice(1);
+  }
+  if (u.email && typeof u.email === 'string' && u.email.includes('@')) {
+    const prefix = u.email.split('@')[0].trim();
+    if (!isGenericName(prefix)) return prefix.charAt(0).toUpperCase() + prefix.slice(1);
+  }
+  return `User ${uid.slice(0, 4).toUpperCase()}`;
+};
+
 export function registerCallHandlers(
   io: SocketIOServer,
   socket: Socket,
@@ -248,7 +269,7 @@ export function registerCallHandlers(
 
         // Fetch caller profile info
         const callerUser = await db.collection('users').findOne({ firebaseUid: uid });
-        const callerName = callerUser?.displayName || callerUser?.display_name || callerUser?.name || callerUser?.username || 'Partner';
+        const callerName = resolveUserCallName(callerUser, uid);
         const callerAvatar = callerUser?.avatarUrl || callerUser?.avatar || null;
 
         const session: ActiveCallSession = {
@@ -558,7 +579,7 @@ export function registerCallHandlers(
           const partnerId = recoverableSession.callerId === uid ? recoverableSession.calleeId : recoverableSession.callerId;
           const db = getDb();
           const partnerUser = await db.collection('users').findOne({ firebaseUid: partnerId });
-          const partnerName = partnerUser?.displayName || partnerUser?.display_name || partnerUser?.name || partnerUser?.username || 'Partner';
+          const partnerName = resolveUserCallName(partnerUser, partnerId);
           const partnerAvatar = partnerUser?.avatarUrl || partnerUser?.avatar || null;
 
           console.log(`[WIBBY CALL] Found recoverable call for user ${uid}: ${recoverableSession.callId}`);

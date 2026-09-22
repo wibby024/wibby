@@ -4,6 +4,7 @@ import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { useCall } from '../context/CallContext';
 import { formatLastSeen } from '../utils/time';
+import { resolvePartnerName } from '../utils/partnerName';
 import './ChatHeader.css';
 
 interface ChatHeaderProps {
@@ -43,11 +44,7 @@ export default function ChatHeader({
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const rawName = partner?.display_name || partner?.displayName;
-  const isBadName = !rawName || rawName === 'Unknown' || rawName === 'unknown';
-  const name = !isBadName
-    ? rawName
-    : (partner?.username && partner.username !== 'unknown' ? partner.username : (partner?.email ? partner.email.split('@')[0] : 'Partner'));
+  const name = resolvePartnerName(partner);
   const initial = name.charAt(0).toUpperCase();
 
   useEffect(() => {

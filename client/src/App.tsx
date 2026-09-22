@@ -15,6 +15,7 @@ import ChatSearchModal from './components/ChatSearchModal'
 import SettingsModal from './components/SettingsModal'
 import MiniGameModal from './components/games/MiniGameModal'
 import { notificationService } from './services/notificationService'
+import { resolvePartnerName, resolvePartnerUsername } from './utils/partnerName'
 import type { ChatThemePreset } from './types/chat'
 import './App.css'
 
@@ -47,16 +48,13 @@ function WibbyAppWrapper() {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed) {
-          const rawName = parsed.displayName || parsed.display_name;
-          const isBadName = !rawName || rawName === 'Unknown' || rawName === 'unknown';
-          const cleanName = isBadName
-            ? (parsed.username && parsed.username !== 'unknown' ? parsed.username : 'Partner')
-            : rawName;
+          const resolvedName = resolvePartnerName(parsed, '');
+          const resolvedUser = resolvePartnerUsername(parsed, '');
           return {
             ...parsed,
-            display_name: cleanName,
-            displayName: cleanName,
-            username: parsed.username && parsed.username !== 'unknown' ? parsed.username : 'partner'
+            display_name: resolvedName,
+            displayName: resolvedName,
+            username: resolvedUser
           };
         }
       }
@@ -171,41 +169,34 @@ function WibbyAppWrapper() {
       }
       if (data.paired && data.conversationId) {
         const rawPartner = data.partner;
-        const candidateName = rawPartner?.displayName || rawPartner?.display_name;
-        const isBad = !candidateName || candidateName === 'Unknown' || candidateName === 'unknown';
-        const partnerName = isBad
-          ? (rawPartner?.username && rawPartner.username !== 'unknown'
-              ? rawPartner.username
-              : (rawPartner?.email ? rawPartner.email.split('@')[0] : 'Partner'))
-          : candidateName;
+        const resolvedName = resolvePartnerName(rawPartner, '');
+        const resolvedUser = resolvePartnerUsername(rawPartner, '');
 
         const p = rawPartner ? {
           ...rawPartner,
-          display_name: partnerName,
-          displayName: partnerName,
-          username: rawPartner.username && rawPartner.username !== 'unknown' ? rawPartner.username : partnerName.toLowerCase().replace(/\s+/g, '_')
-        } : {
-          display_name: 'Partner',
-          displayName: 'Partner',
-          username: 'partner'
-        };
+          display_name: resolvedName,
+          displayName: resolvedName,
+          username: resolvedUser
+        } : null;
 
-        setPartner((prev: any) => {
-          const effectiveOnline = (typeof rawPartner?.online === 'boolean')
-            ? rawPartner.online
-            : (prev?.online ?? false);
-          const merged = {
-            ...p,
-            online: effectiveOnline,
-            lastSeen: rawPartner?.lastSeen || prev?.lastSeen
-          };
-          if (user?.uid) {
-            try {
-              localStorage.setItem(`wibby-partner-${user.uid}`, JSON.stringify(merged));
-            } catch {}
-          }
-          return merged;
-        });
+        if (p) {
+          setPartner((prev: any) => {
+            const effectiveOnline = (typeof rawPartner?.online === 'boolean')
+              ? rawPartner.online
+              : (prev?.online ?? false);
+            const merged = {
+              ...p,
+              online: effectiveOnline,
+              lastSeen: rawPartner?.lastSeen || prev?.lastSeen
+            };
+            if (user?.uid) {
+              try {
+                localStorage.setItem(`wibby-partner-${user.uid}`, JSON.stringify(merged));
+              } catch {}
+            }
+            return merged;
+          });
+        }
 
         setConversationId(data.conversationId);
         const syncedTheme = data.themeFamily || 'classic';
@@ -315,17 +306,35 @@ function WibbyAppWrapper() {
     const handleNewMessage = (msg: any) => {
       if (user && msg.senderId !== user.uid) {
         const preview = msg.text || (msg.type === 'image' ? 'Sent a photo' : msg.type === 'video' ? 'Sent a video' : msg.type === 'audio' ? 'Sent a voice message' : msg.fileName || 'Sent an attachment');
-        const rawSender = partner?.display_name || partner?.displayName;
-        const sender = (rawSender && rawSender !== 'Unknown' && rawSender !== 'unknown')
-          ? rawSender
-          : (partner?.username && partner.username !== 'unknown' ? partner.username : 'Partner');
+        const sender = resolvePartnerName(partner);
         notificationService.onNewMessage(sender, preview);
+      }
+    };
+
+    const handlePartnerProfileUpdated = (updatedProfile: any) => {
+      if (updatedProfile && (!updatedProfile.uid || updatedProfile.uid !== user?.uid)) {
+        setPartner((prev: any) => {
+          const merged = {
+            ...(prev || {}),
+            ...updatedProfile,
+            displayName: resolvePartnerName(updatedProfile, prev?.displayName || ''),
+            display_name: resolvePartnerName(updatedProfile, prev?.display_name || ''),
+            username: resolvePartnerUsername(updatedProfile, prev?.username || '')
+          };
+          if (user?.uid) {
+            try {
+              localStorage.setItem(`wibby-partner-${user.uid}`, JSON.stringify(merged));
+            } catch {}
+          }
+          return merged;
+        });
       }
     };
 
     socket.on('presence:update', handlePresence);
     socket.on('together:started', handleTogetherStarted);
     socket.on('conversation:theme-family-update', handleThemeFamilyUpdate);
+    socket.on('user:profile_updated', handlePartnerProfileUpdated);
     socket.on('unpair', handleUnpair);
     socket.on('session:conflict', handleSessionConflict);
     socket.on('session:force_logout', handleForceLogout);
@@ -335,6 +344,7 @@ function WibbyAppWrapper() {
       socket.off('presence:update', handlePresence);
       socket.off('together:started', handleTogetherStarted);
       socket.off('conversation:theme-family-update', handleThemeFamilyUpdate);
+      socket.off('user:profile_updated', handlePartnerProfileUpdated);
       socket.off('unpair', handleUnpair);
       socket.off('session:conflict', handleSessionConflict);
       socket.off('session:force_logout', handleForceLogout);
@@ -389,10 +399,7 @@ function WibbyAppWrapper() {
     };
   }, [socket, isPaired]);
 
-  const rawPartnerName = partner?.display_name || partner?.displayName;
-  const partnerName = (rawPartnerName && rawPartnerName !== 'Unknown' && rawPartnerName !== 'unknown')
-    ? rawPartnerName
-    : (partner?.username && partner.username !== 'unknown' ? partner.username : 'Partner');
+  const partnerName = resolvePartnerName(partner);
 
   const handleUnpairAction = () => {
     setIsPaired(false);

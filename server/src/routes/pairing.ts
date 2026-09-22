@@ -214,59 +214,141 @@ router.get('/status', requireAuth, statusLimiter, async (req: Request, res: Resp
 
     const partnerUid = conversation.members.find((uid: string) => uid !== user.uid);
     
-    let partner = await db.collection('users').findOne({ firebaseUid: partnerUid }, {
-      projection: { displayName: 1, display_name: 1, username: 1, avatarUrl: 1, online: 1, lastSeen: 1, firebaseUid: 1, _id: 0 }
-    });
+    let partner = partnerUid ? await db.collection('users').findOne({ firebaseUid: partnerUid }) : null;
 
-    if (!partner && partnerUid) {
+    const isBadValue = (val: any): boolean => {
+      if (!val || typeof val !== 'string') return true;
+      const n = val.trim().toLowerCase();
+      return n === '' || n === 'partner' || n === 'unknown' || n === 'wibby user' || n === 'user' || n === 'you' || n === 'null' || n === 'undefined';
+    };
+
+    const capitalize = (str: string) => {
+      if (!str) return '';
+      const t = str.trim();
+      return t.charAt(0).toUpperCase() + t.slice(1);
+    };
+
+    const candidateName = partner?.displayName || partner?.display_name;
+    const isBadCandidateName = isBadValue(candidateName);
+    const candidateUsername = partner?.username;
+    const isBadCandidateUsername = isBadValue(candidateUsername);
+
+    let resolvedPartnerName = !isBadCandidateName ? candidateName.trim() : '';
+    let partnerUsername = !isBadCandidateUsername ? candidateUsername.trim().replace(/^@+/, '').toLowerCase() : '';
+    let partnerEmail = partner?.email || '';
+
+    // If partner is not found in MongoDB OR has a generic placeholder name/username, consult Firebase Admin Auth
+    if (partnerUid && (!partner || isBadCandidateName || isBadCandidateUsername || !partnerEmail)) {
       try {
         const userRecord = await adminAuth.getUser(partnerUid);
         if (userRecord) {
-          const emailPrefix = userRecord.email ? userRecord.email.split('@')[0] : '';
-          const name = userRecord.displayName || (emailPrefix ? emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1) : 'Partner');
-          const username = (emailPrefix || `user_${partnerUid.slice(0, 6)}`).toLowerCase();
-          
-          const newPartnerDoc = {
-            firebaseUid: partnerUid,
-            username,
-            email: userRecord.email || '',
-            displayName: name,
-            display_name: name,
-            avatarUrl: userRecord.photoURL || null,
-            bio: '',
-            customStatus: '',
-            privacy: {
-              lastSeen: 'partner',
-              readReceipts: true,
-              typingIndicator: true,
-              storyVisibility: 'partner'
-            },
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
-          const insertRes = await db.collection('users').insertOne(newPartnerDoc);
-          partner = { _id: insertRes.insertedId, ...newPartnerDoc };
+          const firebaseEmail = userRecord.email?.trim() || '';
+          const emailPrefix = firebaseEmail ? firebaseEmail.split('@')[0] : '';
+          const firebaseName = userRecord.displayName?.trim() || '';
+          if (firebaseEmail && !partnerEmail) {
+            partnerEmail = firebaseEmail;
+          }
+
+          if (isBadValue(resolvedPartnerName)) {
+            if (!isBadValue(firebaseName)) {
+              resolvedPartnerName = firebaseName;
+            } else if (!isBadValue(partnerUsername)) {
+              resolvedPartnerName = capitalize(partnerUsername);
+            } else if (!isBadValue(emailPrefix)) {
+              resolvedPartnerName = capitalize(emailPrefix);
+            }
+          }
+
+          if (isBadValue(partnerUsername)) {
+            if (!isBadValue(emailPrefix)) {
+              partnerUsername = emailPrefix.toLowerCase().replace(/[^a-z0-9_]/g, '');
+            } else if (!isBadValue(firebaseName)) {
+              partnerUsername = firebaseName.toLowerCase().replace(/[^a-z0-9_]/g, '');
+            }
+          }
         }
       } catch (err) {
         console.error('[WIBBY PAIRING] Failed to resolve partner from Firebase Admin:', err);
       }
     }
 
-    const partnerName = partner?.display_name || partner?.displayName || partner?.username || 'Partner';
+    // Secondary fallback from partnerEmail if still generic
+    const fallbackEmailPrefix = partnerEmail ? partnerEmail.split('@')[0] : '';
+    if (isBadValue(resolvedPartnerName)) {
+      if (!isBadValue(partnerUsername)) {
+        resolvedPartnerName = capitalize(partnerUsername);
+      } else if (!isBadValue(fallbackEmailPrefix)) {
+        resolvedPartnerName = capitalize(fallbackEmailPrefix);
+      } else {
+        resolvedPartnerName = `User ${partnerUid ? partnerUid.slice(0, 4).toUpperCase() : 'WIBBY'}`;
+      }
+    }
+
+    if (isBadValue(partnerUsername)) {
+      if (!isBadValue(fallbackEmailPrefix)) {
+        partnerUsername = fallbackEmailPrefix.toLowerCase().replace(/[^a-z0-9_]/g, '');
+      } else {
+        partnerUsername = `user_${(partnerUid || 'wibby').slice(0, 6).toLowerCase()}`;
+      }
+    }
+
+    // Auto-heal MongoDB document so it permanently stores the clean personal name
+    if (partnerUid && (isBadCandidateName || isBadCandidateUsername || !partner)) {
+      try {
+        const partnerDocToSave = {
+          firebaseUid: partnerUid,
+          username: partnerUsername,
+          email: partnerEmail,
+          displayName: resolvedPartnerName,
+          display_name: resolvedPartnerName,
+          avatarUrl: partner?.avatarUrl || null,
+          bio: partner?.bio || '',
+          customStatus: partner?.customStatus || '',
+          privacy: partner?.privacy || {
+            lastSeen: 'partner',
+            readReceipts: true,
+            typingIndicator: true,
+            storyVisibility: 'partner'
+          },
+          updatedAt: new Date()
+        };
+
+        await db.collection('users').updateOne(
+          { firebaseUid: partnerUid },
+          { $set: partnerDocToSave, $setOnInsert: { createdAt: new Date() } },
+          { upsert: true }
+        );
+
+        partner = await db.collection('users').findOne({ firebaseUid: partnerUid });
+      } catch (e) {
+        console.error('[WIBBY PAIRING] Failed to auto-heal partner in MongoDB:', e);
+      }
+    }
+
+    const finalDisplayName = !isBadValue(resolvedPartnerName)
+      ? resolvedPartnerName
+      : (!isBadValue(partner?.displayName)
+          ? String(partner?.displayName)
+          : (!isBadValue(partnerUsername) ? capitalize(partnerUsername) : `User ${partnerUid ? partnerUid.slice(0, 4).toUpperCase() : ''}`));
+
+    const finalUsername = !isBadValue(partnerUsername)
+      ? partnerUsername
+      : (!isBadValue(partner?.username) ? String(partner?.username) : `user_${(partnerUid || '').slice(0, 6)}`);
+
     const isOnline = isUserOnline(partnerUid) || !!partner?.online;
 
-    const formattedPartner = partner ? {
-      ...partner,
+    const formattedPartner = {
+      ...(partner || {}),
       firebaseUid: partnerUid,
       online: isOnline,
-      display_name: partnerName,
-      displayName: partnerName
-    } : {
-      firebaseUid: partnerUid,
-      online: isOnline,
-      display_name: 'Partner',
-      displayName: 'Partner',
-      username: 'partner'
+      email: partnerEmail,
+      username: finalUsername,
+      displayName: finalDisplayName,
+      display_name: finalDisplayName,
+      avatarUrl: partner?.avatarUrl || null,
+      bio: partner?.bio || '',
+      customStatus: partner?.customStatus || '',
+      lastSeen: partner?.lastSeen || null
     };
 
     res.json({

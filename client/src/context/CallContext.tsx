@@ -10,6 +10,7 @@ import {
 } from '../services/rtcService';
 import { type VideoCodecPreference, fetchServerIceConfig } from '../config/rtcConfig';
 import { ringtoneService } from '../services/ringtoneService';
+import { resolvePartnerName } from '../utils/partnerName';
 import { auth } from '../lib/firebase';
 
 export type CallState =
@@ -518,7 +519,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           callId: data.callId,
           conversationId: data.conversationId,
           callType: data.callType,
-          partnerName: data.partner?.name || 'Partner',
+          partnerName: resolvePartnerName(data.partner),
           partnerAvatar: data.partner?.avatar,
           reconnectUntil: data.reconnectUntil
         });
@@ -527,7 +528,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           callId: data.callId,
           conversationId: data.conversationId,
           callType: data.callType,
-          partnerName: data.partner?.name || 'Partner',
+          partnerName: resolvePartnerName(data.partner),
           partnerAvatar: data.partner?.avatar,
           reconnectUntil: data.reconnectUntil
         });
@@ -571,7 +572,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         isCaller: false,
         remoteUser: {
           id: data.callerId,
-          name: data.callerName || 'Partner',
+          name: resolvePartnerName({ name: data.callerName, ...(data as any) }),
           avatar: data.callerAvatar
         },
         duration: 0,
@@ -902,10 +903,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         freshSessionId
       );
 
-      const rawPartnerName = partner?.displayName || partner?.display_name || partner?.name;
-      const partnerName = (rawPartnerName && rawPartnerName !== 'Unknown' && rawPartnerName !== 'unknown')
-        ? rawPartnerName
-        : (partner?.username && partner.username !== 'unknown' ? partner.username : 'Partner');
+      const partnerName = resolvePartnerName(partner);
       const partnerAvatar = partner?.avatarUrl || partner?.avatar || null;
       const newCall: ActiveCall = {
         callId,

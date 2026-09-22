@@ -7,6 +7,7 @@ import {
 } from 'react'
 import { onAuthStateChanged, signOut as firebaseSignOut, type User } from 'firebase/auth'
 import { auth } from '../lib/firebase'
+import { isGenericPlaceholder, capitalize } from '../utils/partnerName'
 
 export interface UserProfile {
   username: string;
@@ -36,11 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const parsed = JSON.parse(saved);
         if (parsed) {
           const rawName = parsed.displayName || parsed.display_name;
-          const isBadName = !rawName || rawName === 'Unknown' || rawName === 'unknown';
+          const isBadName = isGenericPlaceholder(rawName);
+          const cleanUser = parsed.username && !isGenericPlaceholder(parsed.username) ? capitalize(parsed.username.replace(/^@+/, '')) : '';
           return {
             ...parsed,
             displayName: isBadName
-              ? (parsed.username && parsed.username !== 'unknown' ? parsed.username : 'User')
+              ? (cleanUser || 'User')
               : rawName
           };
         }
@@ -63,14 +65,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       if (response.ok) {
         const data = await response.json()
-        const resolvedDisplayName = (data.displayName && data.displayName !== 'Unknown' && data.displayName !== 'unknown')
-          ? data.displayName
-          : (data.display_name && data.display_name !== 'Unknown' && data.display_name !== 'unknown')
-            ? data.display_name
-            : (firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'User'));
+        const rawFetchedName = data.displayName || data.display_name;
+        const cleanEmail = firebaseUser.email ? capitalize(firebaseUser.email.split('@')[0]) : '';
+        const cleanFirebaseName = firebaseUser.displayName && !isGenericPlaceholder(firebaseUser.displayName) ? firebaseUser.displayName : '';
+        const cleanUsername = data.username && !isGenericPlaceholder(data.username) ? capitalize(data.username.replace(/^@+/, '')) : '';
 
-        const resolvedUsername = (data.username && data.username !== 'unknown')
-          ? data.username
+        const resolvedDisplayName = !isGenericPlaceholder(rawFetchedName)
+          ? rawFetchedName
+          : (cleanFirebaseName || cleanUsername || cleanEmail || 'User');
+
+        const resolvedUsername = data.username && !isGenericPlaceholder(data.username)
+          ? data.username.replace(/^@+/, '')
           : (firebaseUser.displayName?.toLowerCase().replace(/\s+/g, '_') || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'user'));
 
         const normalizedProfile: UserProfile = {

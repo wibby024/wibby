@@ -1,5 +1,6 @@
 import { useCall } from '../../context/CallContext';
 import { ringtoneService } from '../../services/ringtoneService';
+import { resolvePartnerName } from '../../utils/partnerName';
 import './CallModal.css';
 
 export default function IncomingCallModal() {
@@ -7,7 +8,7 @@ export default function IncomingCallModal() {
 
   if (!activeCall) return null;
 
-  const partnerName = activeCall.remoteUser.name || 'Partner';
+  const partnerName = resolvePartnerName(activeCall.remoteUser);
   const initial = partnerName.charAt(0).toUpperCase();
 
   return (

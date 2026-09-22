@@ -5,6 +5,7 @@ import { formatLastSeen } from '../utils/time';
 import { formatFileSize } from '../config/media';
 import { e2eeService } from '../services/e2eeService';
 import { notificationService, NOTIFICATION_TONES, type NotificationTone } from '../services/notificationService';
+import { resolvePartnerName } from '../utils/partnerName';
 import './ChatInfoDrawer.css';
 
 interface ChatInfoDrawerProps {
@@ -92,11 +93,7 @@ export default function ChatInfoDrawer({
     };
   }, []);
 
-  const rawName = partner?.display_name || partner?.displayName;
-  const isBadName = !rawName || rawName === 'Unknown' || rawName === 'unknown';
-  const name = !isBadName
-    ? rawName
-    : (partner?.username && partner.username !== 'unknown' ? partner.username : (partner?.email ? partner.email.split('@')[0] : 'Partner'));
+  const name = resolvePartnerName(partner);
   const initial = name.charAt(0).toUpperCase();
 
   useEffect(() => {

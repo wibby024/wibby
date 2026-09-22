@@ -86,11 +86,61 @@ router.get('/profile', requireAuth, async (req: Request, res: Response) => {
       existing = { _id: insertRes.insertedId, ...newUser };
     }
 
-    const resolvedDisplayName = existing.displayName || existing.display_name || existing.username || 'You';
+    const isBadValue = (val: any): boolean => {
+      if (!val || typeof val !== 'string') return true;
+      const n = val.trim().toLowerCase();
+      return n === '' || n === 'partner' || n === 'unknown' || n === 'wibby user' || n === 'user' || n === 'you' || n === 'null' || n === 'undefined';
+    };
+
+    const currentName = existing.displayName || existing.display_name;
+    const isBadCurrentName = isBadValue(currentName);
+    const isBadCurrentUsername = isBadValue(existing.username);
+
+    let resolvedDisplayName = !isBadCurrentName ? currentName.trim() : '';
+    let resolvedUsername = !isBadCurrentUsername ? existing.username.trim().replace(/^@+/, '').toLowerCase() : '';
+
+    if (!resolvedDisplayName || !resolvedUsername) {
+      const emailPrefix = user.email ? user.email.split('@')[0] : '';
+      if (!resolvedDisplayName) {
+        if (!isBadValue(user.name)) {
+          resolvedDisplayName = user.name;
+        } else if (!isBadValue(resolvedUsername)) {
+          resolvedDisplayName = resolvedUsername.charAt(0).toUpperCase() + resolvedUsername.slice(1);
+        } else if (!isBadValue(emailPrefix)) {
+          resolvedDisplayName = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+        } else {
+          resolvedDisplayName = `User ${user.uid.slice(0, 4).toUpperCase()}`;
+        }
+      }
+
+      if (!resolvedUsername) {
+        if (!isBadValue(emailPrefix)) {
+          resolvedUsername = emailPrefix.toLowerCase().replace(/[^a-z0-9_]/g, '');
+        } else if (!isBadValue(user.name)) {
+          resolvedUsername = user.name.toLowerCase().replace(/[^a-z0-9_]/g, '');
+        } else {
+          resolvedUsername = `user_${user.uid.slice(0, 6).toLowerCase()}`;
+        }
+      }
+
+      await db.collection('users').updateOne(
+        { _id: existing._id },
+        {
+          $set: {
+            displayName: resolvedDisplayName,
+            display_name: resolvedDisplayName,
+            username: resolvedUsername,
+            updatedAt: new Date()
+          }
+        }
+      );
+    }
+
     const profileResponse = {
       ...existing,
       displayName: resolvedDisplayName,
-      display_name: resolvedDisplayName
+      display_name: resolvedDisplayName,
+      username: resolvedUsername
     };
 
     res.json(profileResponse);
@@ -147,7 +197,10 @@ router.put('/profile', requireAuth, async (req: Request, res: Response) => {
       }
     }
 
-    if (parsed.displayName !== undefined) updateFields.displayName = parsed.displayName;
+    if (parsed.displayName !== undefined) {
+      updateFields.displayName = parsed.displayName;
+      updateFields.display_name = parsed.displayName;
+    }
     if (parsed.bio !== undefined) updateFields.bio = parsed.bio;
     if (parsed.avatarUrl !== undefined) updateFields.avatarUrl = parsed.avatarUrl;
     if (parsed.customStatus !== undefined) updateFields.customStatus = parsed.customStatus;
