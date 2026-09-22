@@ -483,7 +483,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
             </div>
 
             {/* Bottom Tile: You */}
-            <div className="call-sidebar-user-tile local">
+            <div className={`call-sidebar-user-tile local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''}`}>
               {isLocalSharing ? (
                 // If local is sharing, local user's info card goes here
                 <div className="call-video-placeholder">
@@ -657,6 +657,8 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
         <div
           ref={localPanelRef}
           className={`call-video-panel local-panel ${
+            currentFacingMode === 'environment' ? 'is-rear-camera' : ''
+          } ${
             isScreenSharing ? 'is-screen-share' : ''
           } ${
             focusedParticipant === 'local'

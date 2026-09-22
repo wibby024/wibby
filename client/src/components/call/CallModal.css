@@ -1091,10 +1091,16 @@
   transform: scaleX(-1); /* Mirrored selfie */
 }
 
-/* Rear / Environment Camera Unmirroring */
+/* Rear / Environment Camera Unmirroring — NEVER EVER MIRRORED */
 .call-video-fg-live.local-main.is-rear-camera,
 .call-video-bg-live.local.is-rear-camera,
-.call-video-bg-live.is-rear-camera {
+.call-video-bg-live.is-rear-camera,
+.call-video-panel.local-panel.is-rear-camera video,
+.call-video-panel.local-panel.is-rear-camera .call-video-fg-live,
+.call-video-panel.local-panel.is-rear-camera .call-video-bg-live,
+.call-sidebar-user-tile.local.is-rear-camera video,
+.call-screenshare-sidebar .call-sidebar-user-tile.local video.is-rear-camera,
+.call-screenshare-sidebar .call-sidebar-user-tile.local.is-rear-camera video {
   transform: none !important;
   -webkit-transform: none !important;
 }

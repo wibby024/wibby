@@ -24,7 +24,8 @@ export default function FloatingCallCapsule() {
     toggleMute,
     hangup,
     isScreenSharing,
-    isRemoteScreenSharing
+    isRemoteScreenSharing,
+    currentFacingMode
   } = useCall();
 
   const miniRemoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -349,7 +350,7 @@ export default function FloatingCallCapsule() {
 
           {/* Local Preview PiP in corner (independently respecting local camera aspect ratio) */}
           <div
-            className={`mini-video-pip-wrap ${isRemotePortrait ? 'portrait-parent' : ''}`}
+            className={`mini-video-pip-wrap ${isRemotePortrait ? 'portrait-parent' : ''} ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''}`}
             title="Your preview"
             style={{
               width: `${localPipSize.width}px`,
@@ -360,7 +361,7 @@ export default function FloatingCallCapsule() {
             {/* Layer 1: Local PiP Background Fill (Same Live MediaStream, object-fit: cover, NO BLUR) */}
             <video
               ref={miniLocalBgVideoRef}
-              className={`mini-video-element local-bg ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
+              className={`mini-video-element local-bg ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
               autoPlay
               playsInline
               muted
@@ -370,7 +371,7 @@ export default function FloatingCallCapsule() {
             {/* Layer 2: Local PiP Main Video (Same Live MediaStream, object-fit: contain, complete frame) */}
             <video
               ref={miniLocalVideoRef}
-              className={`mini-video-element local ${isScreenSharing ? 'is-screen-share' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
+              className={`mini-video-element local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isScreenSharing ? 'is-screen-share' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
               autoPlay
               playsInline
               muted

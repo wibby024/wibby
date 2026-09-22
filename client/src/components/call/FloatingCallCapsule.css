@@ -454,7 +454,11 @@
 
 .mini-video-element.is-screen-share,
 .mini-video-element.local.is-screen-share,
-.mini-video-element.local-bg.is-screen-share {
+.mini-video-element.local-bg.is-screen-share,
+.mini-video-element.is-rear-camera,
+.mini-video-element.local.is-rear-camera,
+.mini-video-element.local-bg.is-rear-camera,
+.mini-video-pip-wrap.is-rear-camera video {
   transform: none !important;
   -webkit-transform: none !important;
 }

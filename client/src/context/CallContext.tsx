@@ -182,8 +182,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     rtcService.setOnTelemetryCallback((telemetry) => {
       setRealtimeTelemetry(telemetry);
     });
+    rtcService.setOnFacingModeChangeCallback((mode) => {
+      console.log('[CallContext] Camera facing mode updated:', mode);
+      setCurrentFacingMode(mode);
+    });
     return () => {
       rtcService.setOnTelemetryCallback(null);
+      rtcService.setOnFacingModeChangeCallback(null);
     };
   }, []);
 
