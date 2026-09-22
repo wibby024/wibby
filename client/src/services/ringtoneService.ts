@@ -1,30 +1,26 @@
 /**
- * Dedicated Incoming Call Ringtone Service for Wibby.
+ * Dedicated Phone-Like Incoming Call Ringtone Service for Wibby.
  * 
- * Completely isolated from:
- * - RTCPeerConnection
- * - WebRTC remote MediaStream / <audio>
- * - Local microphone MediaStream
- * - VoiceRecorder & VoiceMessagePlayer
- * 
- * Uses a dedicated HTMLAudioElement with bundled pristine audio asset (/audio/wibby-ringtone.mp3).
- * Audio fallback to /audio/wibby-ringtone.wav if needed.
+ * Generates an authentic, familiar phone ringtone using Web Audio API synthesis
+ * with graceful fallback to bundled audio asset (/audio/wibby-ringtone.mp3).
  * 
  * Features:
- * - Zero clicks, pops, crackles, or loop distortion.
- * - Single controlled instance per call session.
- * - Resilient autoplay handling with passive gesture unlock (no console spam).
- * - Immediate, complete stop on Accept, Decline, Cancel, Hangup, Timeout, Unmount.
+ * - Familiar, phone-like dual-frequency harmonic caller ringtone (melodic & clear).
+ * - Immediate, reliable stopping on accept, decline, cancel, timeout, or call end.
+ * - Resilient autoplay unlock on first user interaction if browser policy blocks initial audio.
+ * - Zero clicks, zero audio loops left running after call completion.
  */
 
 class RingtoneService {
-  private audioElement: HTMLAudioElement | null = null;
+  private audioCtx: AudioContext | null = null;
   private isPlaying = false;
-  private autoplayBlocked = false;
   private currentCallId: string | null = null;
-  private instanceId: string = 'rt_' + Math.random().toString(36).substring(2, 8);
+  private ringCycleTimer: any = null;
+  private activeOscillators: OscillatorNode[] = [];
+  private activeGainNodes: GainNode[] = [];
+  private audioElement: HTMLAudioElement | null = null;
   private userGestureAttached = false;
-  private startCountPerCall: Record<string, number> = {};
+  private autoplayBlocked = false;
 
   constructor() {
     this.initAudioElement();
@@ -32,25 +28,33 @@ class RingtoneService {
 
   private initAudioElement() {
     if (typeof window === 'undefined') return;
-    if (this.audioElement) return;
+    try {
+      const audio = new Audio('/audio/wibby-ringtone.mp3');
+      audio.preload = 'auto';
+      audio.loop = true;
+      audio.volume = 0.65;
 
-    this.instanceId = 'rt_' + Math.random().toString(36).substring(2, 8);
-    const audio = new Audio('/audio/wibby-ringtone.mp3');
-    audio.preload = 'auto';
-    audio.loop = true;
-    audio.volume = 0.65; // Conservative headroom, pleasant, clean, zero clipping
+      audio.addEventListener('error', () => {
+        if (audio.src.endsWith('.mp3')) {
+          audio.src = '/audio/wibby-ringtone.wav';
+          audio.load();
+        }
+      });
+      this.audioElement = audio;
+    } catch {
+      // Audio element creation failure is fine, Web Audio API handles it
+    }
+  }
 
-    // Fallback to WAV if MP3 is not supported or fails
-    audio.addEventListener('error', (e) => {
-      console.warn('[RINGTONE] Audio asset warning, checking format fallback:', e);
-      if (audio.src.endsWith('.mp3')) {
-        audio.src = '/audio/wibby-ringtone.wav';
-        audio.load();
+  private getAudioContext(): AudioContext | null {
+    if (typeof window === 'undefined') return null;
+    if (!this.audioCtx || this.audioCtx.state === 'closed') {
+      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtxClass) {
+        this.audioCtx = new AudioCtxClass();
       }
-    });
-
-    this.audioElement = audio;
-    console.log(`[RINGTONE] create: instanceId=${this.instanceId} timestamp=${Date.now()} src=${audio.src}`);
+    }
+    return this.audioCtx;
   }
 
   private attachGestureUnlock() {
@@ -58,15 +62,20 @@ class RingtoneService {
     this.userGestureAttached = true;
 
     const unlockHandler = () => {
-      if (this.isPlaying && this.autoplayBlocked && this.audioElement) {
-        console.log(`[RINGTONE] User gesture detected; unlocking blocked ringtone: callId=${this.currentCallId}`);
-        this.audioElement.play()
-          .then(() => {
+      if (this.isPlaying && this.autoplayBlocked) {
+        const ctx = this.getAudioContext();
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().then(() => {
             this.autoplayBlocked = false;
-            console.log(`[RINGTONE] Playback resumed on gesture: callId=${this.currentCallId}`);
-          })
-          .catch(() => {});
+          }).catch(() => {});
+        }
+        if (this.audioElement) {
+          this.audioElement.play().then(() => {
+            this.autoplayBlocked = false;
+          }).catch(() => {});
+        }
       }
+
       if (!this.isPlaying || !this.autoplayBlocked) {
         window.removeEventListener('pointerdown', unlockHandler);
         window.removeEventListener('keydown', unlockHandler);
@@ -81,84 +90,166 @@ class RingtoneService {
   }
 
   /**
-   * Start incoming call ringtone for a specific callId.
+   * Plays a single melodic double-ring burst using Web Audio API synthesis.
+   * Cadence: Ring (0.8s) -> Pause (0.25s) -> Ring (0.8s) -> Wait (2.5s) -> Repeat
    */
-  start(callId: string = 'call_incoming') {
-    if (!this.audioElement) {
-      this.initAudioElement();
-    }
-    const audio = this.audioElement;
-    if (!audio) return;
+  private playPhoneBurst() {
+    if (!this.isPlaying) return;
 
-    // Deduplication: If already playing for this exact callId, avoid double trigger
-    if (this.isPlaying && this.currentCallId === callId) {
-      if (this.autoplayBlocked) {
-        audio.play().then(() => { this.autoplayBlocked = false; }).catch(() => {});
-      }
+    const ctx = this.getAudioContext();
+    if (!ctx) {
+      // Fallback to audio element if Web Audio is unsupported
+      this.playAudioElementFallback();
       return;
     }
 
-    this.currentCallId = callId;
-    this.isPlaying = true;
-    this.startCountPerCall[callId] = (this.startCountPerCall[callId] || 0) + 1;
-    const count = this.startCountPerCall[callId];
-
-    console.log(`[RINGTONE] start: callId=${callId} instanceId=${this.instanceId} ringtoneStartCount=${count} timestamp=${Date.now()}`);
-
-    audio.currentTime = 0;
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => {
-          this.autoplayBlocked = false;
-          console.log(`[RINGTONE] Ringtone playing cleanly: callId=${callId}`);
-        })
-        .catch((err: any) => {
-          if (err.name === 'NotAllowedError') {
-            this.autoplayBlocked = true;
-            console.log(`[RINGTONE] Autoplay blocked by browser policy (Incognito/uninteracted window); gesture unlock attached.`);
-            this.attachGestureUnlock();
-          } else {
-            console.warn(`[RINGTONE] Playback warning:`, err?.message || err);
-          }
-        });
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {
+        this.autoplayBlocked = true;
+        this.attachGestureUnlock();
+      });
     }
+
+    const now = ctx.currentTime;
+
+    // Modern, soft bell/marimba arpeggio: C6 (1046.50Hz), E6 (1318.51Hz), G6 (1567.98Hz), C7 (2093.00Hz)
+    // Warm harmonic envelope with smooth exponential decay
+    const notes = [
+      { freq: 1046.50, time: 0.00, dur: 0.40 },
+      { freq: 1318.51, time: 0.15, dur: 0.40 },
+      { freq: 1567.98, time: 0.30, dur: 0.40 },
+      { freq: 2093.00, time: 0.45, dur: 0.80 },
+      // Second melodic phrase
+      { freq: 1567.98, time: 1.20, dur: 0.40 },
+      { freq: 1318.51, time: 1.35, dur: 0.40 },
+      { freq: 1046.50, time: 1.50, dur: 0.40 },
+      { freq: 1318.51, time: 1.65, dur: 0.80 }
+    ];
+
+    notes.forEach(note => {
+      const startTime = now + note.time;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(note.freq, startTime);
+
+      // Add a subtle harmonic overtone for warm acoustic richness
+      const overtone = ctx.createOscillator();
+      const overtoneGain = ctx.createGain();
+      overtone.type = 'sine';
+      overtone.frequency.setValueAtTime(note.freq * 2.01, startTime); // Slight detune for bell-like quality
+      overtoneGain.gain.setValueAtTime(0, startTime);
+      overtoneGain.gain.linearRampToValueAtTime(0.02, startTime + 0.015);
+      overtoneGain.gain.exponentialRampToValueAtTime(0.0001, startTime + note.dur * 0.6);
+
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.15, startTime + 0.015); // Faster attack
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + note.dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      overtone.connect(overtoneGain);
+      overtoneGain.connect(ctx.destination);
+
+      osc.start(startTime);
+      osc.stop(startTime + note.dur);
+      overtone.start(startTime);
+      overtone.stop(startTime + note.dur);
+
+      this.activeOscillators.push(osc, overtone);
+      this.activeGainNodes.push(gain, overtoneGain);
+    });
+
+    // Schedule next ring cycle after 3.6 seconds
+    this.ringCycleTimer = setTimeout(() => {
+      if (this.isPlaying) {
+        this.playPhoneBurst();
+      }
+    }, 3600);
+  }
+
+  private playAudioElementFallback() {
+    if (!this.audioElement || !this.isPlaying) return;
+    this.audioElement.currentTime = 0;
+    this.audioElement.play().catch((err: any) => {
+      if (err.name === 'NotAllowedError') {
+        this.autoplayBlocked = true;
+        this.attachGestureUnlock();
+      }
+    });
   }
 
   /**
-   * Immediately and cleanly stop ringtone playback.
+   * Start the incoming call ringtone.
    */
-  stop(callId?: string) {
-    if (!this.isPlaying && (!this.audioElement || this.audioElement.paused)) return;
+  start(callId: string = 'call_incoming') {
+    if (this.isPlaying && this.currentCallId === callId) return;
 
-    const stoppedCallId = callId || this.currentCallId;
-    console.log(`[RINGTONE] stop: callId=${stoppedCallId} instanceId=${this.instanceId} timestamp=${Date.now()}`);
-
-    this.isPlaying = false;
+    this.stop();
+    this.currentCallId = callId;
+    this.isPlaying = true;
     this.autoplayBlocked = false;
 
+    console.log(`[RINGTONE] Starting phone ringtone for call: ${callId}`);
+    this.playPhoneBurst();
+  }
+
+  /**
+   * Immediately and cleanly stop all ringtone audio.
+   */
+  stop(callId?: string) {
+    if (!this.isPlaying && this.activeOscillators.length === 0) return;
+
+    this.isPlaying = false;
+    this.currentCallId = null;
+
+    if (this.ringCycleTimer) {
+      clearTimeout(this.ringCycleTimer);
+      this.ringCycleTimer = null;
+    }
+
+    // Stop and disconnect all Web Audio oscillators
+    this.activeOscillators.forEach(osc => {
+      try {
+        osc.stop();
+        osc.disconnect();
+      } catch {}
+    });
+    this.activeOscillators = [];
+
+    // Fade out and disconnect gain nodes
+    this.activeGainNodes.forEach(gain => {
+      try {
+        gain.gain.setValueAtTime(0, 0);
+        gain.disconnect();
+      } catch {}
+    });
+    this.activeGainNodes = [];
+
+    // Stop audio element if running
     if (this.audioElement) {
       try {
         this.audioElement.pause();
         this.audioElement.currentTime = 0;
-      } catch (e) {
-        // ignore
-      }
-      console.log(`[RINGTONE] stop complete: paused=${this.audioElement.paused} currentTime=${this.audioElement.currentTime}`);
+      } catch {}
     }
 
-    if (this.userGestureAttached && typeof window !== 'undefined') {
-      this.userGestureAttached = false;
-    }
+    console.log(`[RINGTONE] Ringtone stopped cleanly for callId=${callId || 'all'}`);
   }
 
   /**
-   * Complete destruction of ringtone resources.
+   * Complete destruction of resources.
    */
   destroy() {
     this.stop();
+    if (this.audioCtx && this.audioCtx.state !== 'closed') {
+      try {
+        this.audioCtx.close().catch(() => {});
+      } catch {}
+      this.audioCtx = null;
+    }
     if (this.audioElement) {
-      console.log(`[RINGTONE] destroy: instanceId=${this.instanceId} timestamp=${Date.now()}`);
       this.audioElement.src = '';
       this.audioElement = null;
     }

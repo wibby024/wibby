@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import type { ChatThemePreset } from '../types/chat';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { notificationService, NOTIFICATION_TONES, type NotificationTone } from '../services/notificationService';
 import './SettingsModal.css';
 
 interface SettingsModalProps {
@@ -13,21 +14,13 @@ interface SettingsModalProps {
   onSelectThemePreset?: (preset: ChatThemePreset) => void;
 }
 
-const THEME_PRESETS: Array<{ id: ChatThemePreset; name: string; gradient: string }> = [
-  { id: 'ig-classic', name: 'Instagram Sunset', gradient: 'linear-gradient(135deg, #833AB4, #FD1D1D, #FCB045)' },
-  { id: 'ig-cyberpunk', name: 'Cyberpunk Neon', gradient: 'linear-gradient(135deg, #00F0FF, #7000FF, #FF007A)' },
-  { id: 'ig-ocean', name: 'Ocean Pacific', gradient: 'linear-gradient(135deg, #06B6D4, #3B82F6, #1D4ED8)' },
-  { id: 'ig-golden-hour', name: 'Golden Hour', gradient: 'linear-gradient(135deg, #F59E0B, #EF4444, #EC4899)' },
-  { id: 'ig-sage', name: 'Matcha & Sage', gradient: 'linear-gradient(135deg, #10B981, #059669, #047857)' },
-  { id: 'ig-love', name: 'Rose & Love', gradient: 'linear-gradient(135deg, #F43F5E, #E11D48, #BE123C)' },
-  { id: 'ig-midnight', name: 'Midnight Galaxy', gradient: 'linear-gradient(135deg, #6366F1, #8B5CF6, #4C1D95)' },
-  { id: 'ig-monochrome', name: 'Monochrome Slate', gradient: 'linear-gradient(135deg, #64748B, #334155, #1E293B)' },
-  { id: 'classic-purple', name: 'Classic Purple', gradient: 'linear-gradient(135deg, #7C3AED, #5B21B6)' },
-  { id: 'midnight-velvet', name: 'Midnight Velvet', gradient: 'linear-gradient(135deg, #1E1B4B, #0F172A)' },
-  { id: 'sunset-glow', name: 'Sunset Glow', gradient: 'linear-gradient(135deg, #F43F5E, #FB7185)' },
-  { id: 'emerald-forest', name: 'Emerald Forest', gradient: 'linear-gradient(135deg, #059669, #047857)' },
-  { id: 'rose-quartz', name: 'Rose Quartz', gradient: 'linear-gradient(135deg, #DB2777, #9D174D)' },
-  { id: 'slate-minimal', name: 'Slate Minimal', gradient: 'linear-gradient(135deg, #334155, #1E293B)' }
+const THEME_PRESETS: Array<{ id: ChatThemePreset; name: string; gradient: string; description: string }> = [
+  { id: 'classic', name: 'Wibby Classic', gradient: 'linear-gradient(135deg, #7C3AED, #5B21B6)', description: 'Signature Purple & Violet' },
+  { id: 'sunset', name: 'Sunset Glow', gradient: 'linear-gradient(135deg, #F43F5E, #FB7185)', description: 'Warm Amber, Coral & Rose' },
+  { id: 'ocean', name: 'Ocean Breeze', gradient: 'linear-gradient(135deg, #06B6D4, #3B82F6)', description: 'Deep Cyan & Electric Blue' },
+  { id: 'emerald', name: 'Emerald Forest', gradient: 'linear-gradient(135deg, #059669, #047857)', description: 'Sage, Mint & Emerald' },
+  { id: 'rose', name: 'Rose Quartz', gradient: 'linear-gradient(135deg, #DB2777, #9D174D)', description: 'Blush Pink & Berry' },
+  { id: 'midnight', name: 'Midnight Slate', gradient: 'linear-gradient(135deg, #6366F1, #1E1B4B)', description: 'Slate, Indigo & Monochrome' }
 ];
 
 export default function SettingsModal({
@@ -35,12 +28,67 @@ export default function SettingsModal({
   onClose,
   theme,
   onToggleTheme,
-  currentThemePreset = 'classic-purple',
+  currentThemePreset = 'classic',
   onSelectThemePreset
 }: SettingsModalProps) {
 
   const { user, profile, refreshProfile, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'privacy' | 'security' | 'account'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'privacy' | 'security' | 'account'>('profile');
+
+  // Notification Sound & Browser Notification State
+  const [soundEnabled, setSoundEnabled] = useState(() => notificationService.isSoundEnabled());
+  const [selectedTone, setSelectedTone] = useState<NotificationTone>(() => notificationService.getNotificationTone());
+  const [browserNotifications, setBrowserNotifications] = useState(() => notificationService.isBrowserNotificationsEnabled());
+
+  useEffect(() => {
+    const handleSoundChange = (e: any) => {
+      if (e.detail && typeof e.detail.enabled === 'boolean') {
+        setSoundEnabled(e.detail.enabled);
+      }
+    };
+    const handleBrowserChange = (e: any) => {
+      if (e.detail && typeof e.detail.enabled === 'boolean') {
+        setBrowserNotifications(e.detail.enabled);
+      }
+    };
+    const handleToneChange = (e: any) => {
+      if (e.detail?.tone) {
+        setSelectedTone(e.detail.tone);
+      }
+    };
+    window.addEventListener('wibby:sound-setting-changed', handleSoundChange);
+    window.addEventListener('wibby:browser-notification-changed', handleBrowserChange);
+    window.addEventListener('wibby:notification-tone-changed', handleToneChange);
+    return () => {
+      window.removeEventListener('wibby:sound-setting-changed', handleSoundChange);
+      window.removeEventListener('wibby:browser-notification-changed', handleBrowserChange);
+      window.removeEventListener('wibby:notification-tone-changed', handleToneChange);
+    };
+  }, []);
+
+  const handleToggleSound = (enabled: boolean) => {
+    setSoundEnabled(enabled);
+    notificationService.setSoundEnabled(enabled);
+    if (enabled) {
+      notificationService.playTestTone(selectedTone);
+    }
+  };
+
+  const handleSelectTone = (tone: NotificationTone) => {
+    setSelectedTone(tone);
+    notificationService.setNotificationTone(tone);
+    notificationService.playTestTone(tone);
+  };
+
+  const handleToggleBrowserNotifications = async (enabled: boolean) => {
+    if (enabled) {
+      const granted = await notificationService.setBrowserNotificationsEnabled(true);
+      setBrowserNotifications(granted);
+    } else {
+      await notificationService.setBrowserNotificationsEnabled(false);
+      setBrowserNotifications(false);
+    }
+  };
 
   // Profile Form State
   const [displayName, setDisplayName] = useState('');
@@ -72,20 +120,24 @@ export default function SettingsModal({
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    if (profile) {
-      setDisplayName(profile.displayName || '');
-      setUsername(profile.username || '');
-      setBio((profile as any).bio || '');
-      setCustomStatus((profile as any).customStatus || '');
+    if (profile || user) {
+      const rawName = profile?.displayName || user?.displayName;
+      const initialDisplayName = (rawName && rawName !== 'Unknown' && rawName !== 'unknown') ? rawName : '';
+      const rawUsername = profile?.username;
+      const initialUsername = (rawUsername && rawUsername !== 'unknown') ? rawUsername : '';
+      setDisplayName(initialDisplayName);
+      setUsername(initialUsername);
+      setBio((profile as any)?.bio || '');
+      setCustomStatus((profile as any)?.customStatus || '');
     }
-  }, [profile]);
+  }, [profile, user]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !user) return;
 
     const fetchPrivacyAndDevices = async () => {
       try {
-        const token = localStorage.getItem('wibby-token') || '';
+        const token = await user.getIdToken();
         const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
         const privRes = await fetch(`${baseUrl}/api/users/privacy`, {
@@ -111,17 +163,18 @@ export default function SettingsModal({
     };
 
     fetchPrivacyAndDevices();
-  }, [isOpen]);
+  }, [isOpen, user]);
 
   if (!isOpen) return null;
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     setSavingProfile(true);
     setProfileMsg('');
     setIsProfileError(false);
     try {
-      const token = localStorage.getItem('wibby-token') || '';
+      const token = await user.getIdToken();
       const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/users/profile`;
       const payload: any = { displayName, bio, customStatus };
       if (username && username.trim() !== (profile?.username || '')) {
@@ -154,13 +207,13 @@ export default function SettingsModal({
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0]) return;
+    if (!e.target.files || !e.target.files[0] || !user) return;
     const file = e.target.files[0];
     const fd = new FormData();
     fd.append('avatar', file);
 
     try {
-      const token = localStorage.getItem('wibby-token') || '';
+      const token = await user.getIdToken();
       const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/users/avatar`;
       const res = await fetch(url, {
         method: 'POST',
@@ -177,8 +230,9 @@ export default function SettingsModal({
   };
 
   const handleSavePrivacy = async (updated: { lastSeen?: string; readReceipts?: boolean; typingIndicator?: boolean }) => {
+    if (!user) return;
     try {
-      const token = localStorage.getItem('wibby-token') || '';
+      const token = await user.getIdToken();
       const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/users/privacy`;
       await fetch(url, {
         method: 'PUT',
@@ -220,9 +274,10 @@ export default function SettingsModal({
   };
 
   const handleDeleteAccount = async () => {
+    if (!user) return;
     setDeleting(true);
     try {
-      const token = localStorage.getItem('wibby-token') || '';
+      const token = await user.getIdToken();
       const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/users/account`;
       await fetch(url, {
         method: 'DELETE',
@@ -263,6 +318,12 @@ export default function SettingsModal({
               onClick={() => setActiveTab('appearance')}
             >
               🎨 Appearance
+            </button>
+            <button
+              className={`settings-nav-item ${activeTab === 'notifications' ? 'active' : ''}`}
+              onClick={() => setActiveTab('notifications')}
+            >
+              🔔 Notifications & Sound
             </button>
             <button
               className={`settings-nav-item ${activeTab === 'privacy' ? 'active' : ''}`}
@@ -372,19 +433,138 @@ export default function SettingsModal({
                 </div>
 
                 <div className="settings-group-card">
-                  <label className="settings-group-title">Chat Wallpaper / Theme</label>
+                  <div className="theme-group-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                    <label className="settings-group-title" style={{ margin: 0 }}>Shared Theme Family</label>
+                    <span className="theme-sync-badge" style={{ fontSize: '0.75rem', color: 'var(--wibby-primary)', fontWeight: 500 }}>⚡ Synced with partner</span>
+                  </div>
+                  <p className="settings-field-hint" style={{ marginBottom: '0.75rem', fontSize: '0.8125rem', color: 'var(--wibby-text-muted)' }}>
+                    Selected theme family synchronizes with your partner. Light/Dark mode remains personal to each device.
+                  </p>
                   <div className="settings-theme-grid">
-                    {THEME_PRESETS.map(preset => (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        className={`preset-select-card ${currentThemePreset === preset.id ? 'active' : ''}`}
-                        onClick={() => onSelectThemePreset?.(preset.id)}
-                      >
-                        <div className="preset-swatch-large" style={{ background: preset.gradient }} />
-                        <span className="preset-name">{preset.name}</span>
-                      </button>
-                    ))}
+                    {THEME_PRESETS.map(preset => {
+                      const isSelected = currentThemePreset === preset.id ||
+                        (preset.id === 'classic' && currentThemePreset === 'classic-purple') ||
+                        (preset.id === 'sunset' && currentThemePreset === 'sunset-glow') ||
+                        (preset.id === 'ocean' && currentThemePreset === 'ig-ocean') ||
+                        (preset.id === 'emerald' && currentThemePreset === 'emerald-forest') ||
+                        (preset.id === 'rose' && currentThemePreset === 'rose-quartz') ||
+                        (preset.id === 'midnight' && (currentThemePreset === 'midnight-velvet' || currentThemePreset === 'slate-minimal'));
+
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          className={`preset-select-card ${isSelected ? 'active' : ''}`}
+                          onClick={() => onSelectThemePreset?.(preset.id)}
+                        >
+                          <div className="preset-swatch-large" style={{ background: preset.gradient }} />
+                          <div className="preset-meta" style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left', marginTop: '4px' }}>
+                            <span className="preset-name" style={{ fontWeight: 600 }}>{preset.name}</span>
+                            <span className="preset-desc" style={{ fontSize: '0.75rem', color: 'var(--wibby-text-muted)' }}>{preset.description}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Notifications & Sound Tab */}
+            {activeTab === 'notifications' && (
+              <div className="settings-notifications-section">
+                <div className="settings-group-card">
+                  <label className="settings-group-title">In-App Notification Sounds</label>
+                  <div className="privacy-toggle-row">
+                    <div>
+                      <span className="privacy-title">Message sound notifications</span>
+                      <p className="privacy-desc">Play an acoustic tone inside Wibby when your partner sends a message</p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <input
+                        type="checkbox"
+                        className="settings-checkbox"
+                        checked={soundEnabled}
+                        onChange={e => handleToggleSound(e.target.checked)}
+                      />
+                    </div>
+                  </div>
+
+                  {soundEnabled && (
+                    <div className="settings-tone-selection">
+                      <div className="settings-tone-header-meta">
+                        <span className="settings-tone-label">Notification Tone</span>
+                        <span className="settings-tone-subtext">Select your preferred incoming message chime</span>
+                      </div>
+                      <div className="settings-tone-grid">
+                        {NOTIFICATION_TONES.map(tone => {
+                          const isSelected = selectedTone === tone.id;
+                          return (
+                            <div
+                              key={tone.id}
+                              className={`settings-tone-card ${isSelected ? 'active' : ''}`}
+                              onClick={() => handleSelectTone(tone.id)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  handleSelectTone(tone.id);
+                                }
+                              }}
+                            >
+                              <div className="settings-tone-card-top">
+                                <span className="settings-tone-icon">{tone.icon}</span>
+                                <div className="settings-tone-info">
+                                  <div className="settings-tone-name-row">
+                                    <span className="settings-tone-name">
+                                      {tone.name} {tone.badge ? `(${tone.badge.toLowerCase()})` : ''}
+                                    </span>
+                                  </div>
+                                  <p className="settings-tone-desc">{tone.description}</p>
+                                </div>
+                                <div className={`settings-tone-radio ${isSelected ? 'checked' : ''}`}>
+                                  {isSelected && <span className="settings-tone-radio-dot" />}
+                                </div>
+                              </div>
+                              <div className="settings-tone-actions" onClick={e => e.stopPropagation()}>
+                                {tone.id === 'none' ? (
+                                  <span className="settings-tone-muted-hint">Muted</span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="settings-tone-preview-btn"
+                                    onClick={() => notificationService.playTestTone(tone.id)}
+                                    title={`Listen to sample ${tone.name}`}
+                                  >
+                                    ▶ Preview Sound
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="settings-group-card">
+                  <label className="settings-group-title">Desktop Browser Notifications</label>
+                  <div className="privacy-toggle-row">
+                    <div>
+                      <span className="privacy-title">Operating system popup banners</span>
+                      <p className="privacy-desc">Show browser OS notification banners when Wibby is running in a background tab</p>
+                      {!browserNotifications && (
+                        <span className="notifications-quiet-hint">✓ Quiet mode active: no disruptive browser popups</span>
+                      )}
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="settings-checkbox"
+                      checked={browserNotifications}
+                      onChange={e => handleToggleBrowserNotifications(e.target.checked)}
+                    />
                   </div>
                 </div>
               </div>

@@ -491,6 +491,226 @@
   font-weight: 600;
 }
 
+/* Notifications Section */
+.settings-notifications-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.settings-sound-test-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.45rem 0.85rem;
+  background: var(--wibby-surface);
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-md);
+  color: var(--wibby-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.settings-sound-test-btn:hover {
+  background: var(--wibby-primary-subtle);
+  border-color: var(--wibby-primary);
+  color: var(--wibby-primary);
+  transform: scale(1.02);
+}
+
+.notifications-quiet-hint {
+  display: inline-block;
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: #10b981;
+  font-weight: 500;
+}
+
+/* Notification Tone Selection Grid */
+.settings-tone-selection {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--wibby-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.settings-tone-header-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.settings-tone-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--wibby-text-muted);
+}
+
+.settings-tone-subtext {
+  font-size: 0.75rem;
+  color: var(--wibby-primary);
+  font-weight: 500;
+}
+
+.settings-tone-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 600px) {
+  .settings-tone-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-tone-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  background: var(--wibby-surface);
+  border: 1.5px solid var(--wibby-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  text-align: left;
+  user-select: none;
+}
+
+.settings-tone-card:hover {
+  border-color: rgba(124, 58, 237, 0.45);
+  transform: translateY(-1px);
+  background: rgba(124, 58, 237, 0.03);
+}
+
+.settings-tone-card.active {
+  border-color: var(--wibby-primary);
+  background: rgba(124, 58, 237, 0.08);
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.12);
+}
+
+.settings-tone-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.settings-tone-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.settings-tone-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-tone-name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+}
+
+.settings-tone-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--wibby-text);
+}
+
+.settings-tone-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 9999px;
+  background: rgba(124, 58, 237, 0.15);
+  color: var(--wibby-primary);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.settings-tone-desc {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.75rem;
+  color: var(--wibby-text-muted);
+  line-height: 1.35;
+}
+
+.settings-tone-radio {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--wibby-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition: all 0.15s ease;
+}
+
+.settings-tone-card.active .settings-tone-radio {
+  border-color: var(--wibby-primary);
+  background: var(--wibby-primary);
+}
+
+.settings-tone-radio-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.settings-tone-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.4rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
+.settings-tone-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.3rem 0.65rem;
+  background: var(--wibby-surface-hover, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-md);
+  color: var(--wibby-text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.settings-tone-preview-btn:hover {
+  background: var(--wibby-primary);
+  border-color: var(--wibby-primary);
+  color: #ffffff;
+  transform: scale(1.03);
+}
+
+.settings-tone-muted-hint {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--wibby-text-muted);
+  padding: 0.3rem 0.5rem;
+}
+
 @media (max-width: 640px) {
   .settings-modal-card {
     height: min(92vh, 600px);

@@ -429,6 +429,27 @@
   accent-color: var(--wibby-primary);
   width: 18px;
   height: 18px;
+  cursor: pointer;
+}
+
+.info-chime-test-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  background: var(--wibby-surface-active);
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  color: var(--wibby-text);
+  transition: all var(--transition-fast);
+}
+
+.info-chime-test-btn:hover {
+  background: var(--wibby-primary-subtle);
+  border-color: var(--wibby-primary);
+  transform: scale(1.06);
 }
 
 .unpair-action-btn {
@@ -628,6 +649,136 @@
     max-width: 100%;
     border-left: none;
   }
+
+  .chat-info-header {
+    padding-top: max(1.25rem, env(safe-area-inset-top, 0px));
+  }
+
+  .chat-info-close-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Call History Tab (Req 13) */
+.shared-calls-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.call-history-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--wibby-chat-bg);
+  border: 1px solid var(--wibby-border);
+  border-radius: var(--radius-lg);
+  transition: var(--transition-fast);
+}
+
+.call-history-card:hover {
+  border-color: var(--wibby-primary);
+}
+
+.call-history-icon-col {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.call-history-type-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--wibby-surface-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.call-history-type-icon.missed,
+.call-history-type-icon.declined {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.call-history-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  overflow: hidden;
+}
+
+.call-history-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.call-history-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--wibby-text);
+}
+
+.call-history-status-badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 1px 6px;
+  border-radius: 9999px;
+}
+
+.call-history-status-badge.completed {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.call-history-status-badge.missed,
+.call-history-status-badge.declined {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.call-history-status-badge.cancelled {
+  background: rgba(156, 163, 175, 0.15);
+  color: var(--wibby-text-muted);
+}
+
+.call-history-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--wibby-text-muted);
+}
+
+.call-meta-dot {
+  font-size: 0.625rem;
+}
+
+.call-history-callback-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--wibby-border);
+  background: var(--wibby-primary-subtle);
+  color: var(--wibby-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.call-history-callback-btn:hover {
+  background: var(--wibby-primary);
+  color: #fff;
+  transform: scale(1.08);
 }
 
 

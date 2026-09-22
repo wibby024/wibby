@@ -11,7 +11,9 @@ interface ChatHeaderProps {
   partner?: {
     firebaseUid?: string;
     display_name?: string;
+    displayName?: string;
     username?: string;
+    email?: string;
     avatarUrl?: string;
     online?: boolean;
     lastSeen?: string;
@@ -20,6 +22,7 @@ interface ChatHeaderProps {
   onOpenSearch?: () => void;
   onOpenInfoDrawer?: () => void;
   onOpenTogether?: () => void;
+  onOpenGame?: () => void;
   onClearChat?: () => void;
 }
 
@@ -30,6 +33,7 @@ export default function ChatHeader({
   onOpenSearch,
   onOpenInfoDrawer,
   onOpenTogether,
+  onOpenGame,
   onClearChat
 }: ChatHeaderProps) {
   const { socket } = useSocket();
@@ -39,7 +43,11 @@ export default function ChatHeader({
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const name = partner?.display_name || partner?.username || 'Partner';
+  const rawName = partner?.display_name || partner?.displayName;
+  const isBadName = !rawName || rawName === 'Unknown' || rawName === 'unknown';
+  const name = !isBadName
+    ? rawName
+    : (partner?.username && partner.username !== 'unknown' ? partner.username : (partner?.email ? partner.email.split('@')[0] : 'Partner'));
   const initial = name.charAt(0).toUpperCase();
 
   useEffect(() => {
@@ -183,10 +191,10 @@ export default function ChatHeader({
       </div>
 
       <div className="chat-header-actions">
-        {/* Watch Together */}
+        {/* Watch Together (desktop only — on mobile it's in More menu) */}
         {onOpenTogether && (
           <button
-            className="header-action-btn"
+            className="header-action-btn desktop-only"
             onClick={onOpenTogether}
             aria-label="Watch Together"
             title="Watch Together"
@@ -197,10 +205,25 @@ export default function ChatHeader({
           </button>
         )}
 
-        {/* Search button */}
+        {/* Mini Games (desktop only — on mobile it's in More menu) */}
+        {onOpenGame && (
+          <button
+            className="header-action-btn desktop-only"
+            onClick={onOpenGame}
+            aria-label="Play Game"
+            title="Play Mini Game"
+          >
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="6" width="20" height="12" rx="3" />
+              <path d="M6 12h4m-2-2v4m9-3h.01m2 2h.01" />
+            </svg>
+          </button>
+        )}
+
+        {/* Search (desktop only — on mobile it's in More menu) */}
         {onOpenSearch && (
           <button
-            className="header-action-btn"
+            className="header-action-btn desktop-only"
             onClick={onOpenSearch}
             aria-label="Search messages"
             title="Search messages"
@@ -299,6 +322,15 @@ export default function ChatHeader({
                     <polygon points="5 3 19 12 5 21 5 3" />
                   </svg>
                   <span>Watch Together</span>
+                </button>
+              )}
+              {onOpenGame && (
+                <button className="dropdown-item" role="menuitem" onClick={() => { setShowMoreMenu(false); onOpenGame(); }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="6" width="20" height="12" rx="3" />
+                    <path d="M6 12h4m-2-2v4m9-3h.01m2 2h.01" />
+                  </svg>
+                  <span>Play Mini Game</span>
                 </button>
               )}
               {onClearChat && (

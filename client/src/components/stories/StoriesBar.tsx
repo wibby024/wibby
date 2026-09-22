@@ -35,7 +35,11 @@ export default function StoriesBar({
   }, []);
 
   const currentUserId = user?.uid || '';
-  const userDisplayName = profile?.username || profile?.displayName || user?.displayName || 'You';
+  const rawUserDisplayName = profile?.displayName || user?.displayName;
+  const isBadUserDisplayName = !rawUserDisplayName || rawUserDisplayName === 'Unknown' || rawUserDisplayName === 'unknown';
+  const userDisplayName = !isBadUserDisplayName
+    ? rawUserDisplayName
+    : (profile?.username && profile.username !== 'unknown' ? profile.username : 'You');
   const userInitial = customUserInitial || userDisplayName.charAt(0).toUpperCase();
   const partnerInitial = customPartnerInitial || partnerName.charAt(0).toUpperCase();
 

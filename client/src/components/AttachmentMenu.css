@@ -3,8 +3,8 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px 14px;
-  background: var(--bg-surface, #1e1b2e);
-  border: 1px solid var(--border-color, rgba(168, 85, 247, 0.3));
+  background: var(--wibby-surface);
+  border: 1px solid var(--wibby-border);
   border-radius: 16px;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 1px rgba(255, 255, 255, 0.15);
   width: 290px;
@@ -58,7 +58,7 @@
 
 .attachment-menu-close-btn:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
 }
 
 /* Dropzone */
@@ -109,7 +109,7 @@
 .dropzone-primary {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
 }
 
 .dropzone-secondary {
@@ -137,10 +137,10 @@
   align-items: center;
   gap: 6px;
   padding: 10px 4px;
-  background: var(--bg-surface-elevated, rgba(255, 255, 255, 0.04));
-  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  background: var(--wibby-surface-hover);
+  border: 1px solid var(--wibby-border);
   border-radius: 12px;
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
   cursor: pointer;
   transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -187,6 +187,10 @@
   background: rgba(16, 185, 129, 0.18);
 }
 
+.game-bg {
+  background: rgba(245, 158, 11, 0.22);
+}
+
 .quick-btn-emoji {
   font-size: 18px;
   line-height: 1;
@@ -195,7 +199,7 @@
 .quick-btn-label {
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
 }
 
 /* Browse All Button */
@@ -219,7 +223,7 @@
 .attachment-browse-all-btn:hover,
 .attachment-browse-all-btn:focus-visible {
   background: rgba(255, 255, 255, 0.06);
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
   border-color: rgba(168, 85, 247, 0.3);
   outline: none;
 }

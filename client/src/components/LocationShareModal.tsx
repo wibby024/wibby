@@ -127,7 +127,7 @@ export default function LocationShareModal({ isOpen, onClose, onSendLocation }: 
               role="tab"
               aria-selected={shareMode === 'current'}
             >
-              📍 Send Current Place
+              📍 Current Place
             </button>
             <button
               type="button"
@@ -136,7 +136,7 @@ export default function LocationShareModal({ isOpen, onClose, onSendLocation }: 
               role="tab"
               aria-selected={shareMode === 'live'}
             >
-              📡 Share Live Location
+              📡 Live Location
             </button>
           </div>
 

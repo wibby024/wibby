@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { getDb, getClient } from '../lib/mongodb.js';
+import { auth as adminAuth } from '../lib/firebaseAdmin.js';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 
@@ -138,6 +139,7 @@ router.post('/redeem', requireAuth, redeemLimiter, async (req: Request, res: Res
       // 4. Create conversation
       const newConversation = {
         members: [pairingCode.creatorId, user.uid],
+        themeFamily: 'classic',
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -211,20 +213,61 @@ router.get('/status', requireAuth, statusLimiter, async (req: Request, res: Resp
 
     const partnerUid = conversation.members.find((uid: string) => uid !== user.uid);
     
-    const partner = await db.collection('users').findOne({ firebaseUid: partnerUid }, {
+    let partner = await db.collection('users').findOne({ firebaseUid: partnerUid }, {
       projection: { displayName: 1, display_name: 1, username: 1, avatarUrl: 1, online: 1, lastSeen: 1, firebaseUid: 1, _id: 0 }
     });
 
+    if (!partner && partnerUid) {
+      try {
+        const userRecord = await adminAuth.getUser(partnerUid);
+        if (userRecord) {
+          const emailPrefix = userRecord.email ? userRecord.email.split('@')[0] : '';
+          const name = userRecord.displayName || (emailPrefix ? emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1) : 'Partner');
+          const username = (emailPrefix || `user_${partnerUid.slice(0, 6)}`).toLowerCase();
+          
+          const newPartnerDoc = {
+            firebaseUid: partnerUid,
+            username,
+            email: userRecord.email || '',
+            displayName: name,
+            display_name: name,
+            avatarUrl: userRecord.photoURL || null,
+            bio: '',
+            customStatus: '',
+            privacy: {
+              lastSeen: 'partner',
+              readReceipts: true,
+              typingIndicator: true,
+              storyVisibility: 'partner'
+            },
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          const insertRes = await db.collection('users').insertOne(newPartnerDoc);
+          partner = { _id: insertRes.insertedId, ...newPartnerDoc };
+        }
+      } catch (err) {
+        console.error('[WIBBY PAIRING] Failed to resolve partner from Firebase Admin:', err);
+      }
+    }
+
+    const partnerName = partner?.display_name || partner?.displayName || partner?.username || 'Partner';
+
     const formattedPartner = partner ? {
       ...partner,
-      display_name: partner.display_name || partner.displayName || partner.username,
-      displayName: partner.displayName || partner.display_name || partner.username
-    } : null;
+      display_name: partnerName,
+      displayName: partnerName
+    } : {
+      display_name: 'Partner',
+      displayName: 'Partner',
+      username: 'partner'
+    };
 
     res.json({
       paired: true,
       conversationId: conversation._id.toString(),
-      partner: formattedPartner
+      partner: formattedPartner,
+      themeFamily: conversation.themeFamily || 'classic'
     });
   } catch (error) {
     console.error('Error checking pairing status:', error);

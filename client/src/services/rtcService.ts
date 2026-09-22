@@ -98,6 +98,9 @@ export class RTCService {
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
   private remoteAudioElement: HTMLAudioElement | null = null;
+  private remoteDisplayAudioElement: HTMLAudioElement | null = null;
+  private remoteDisplayAudioTrack: MediaStreamTrack | null = null;
+  private remoteAudioTrack: MediaStreamTrack | null = null;
   private pendingIceCandidates: RTCIceCandidateInit[] = [];
   private remoteDescriptionSet = false;
 
@@ -114,6 +117,7 @@ export class RTCService {
 
   // Phase 10: Screen Sharing State
   private screenStream: MediaStream | null = null;
+  private screenVideoElements = new Set<HTMLVideoElement>();
   private preSharingVideoTrack: MediaStreamTrack | null = null;
   private displayAudioSender: RTCRtpSender | null = null;
   private isScreenSharing = false;
@@ -311,11 +315,20 @@ export class RTCService {
       throw unsupportedErr;
     }
 
-    // Hard 1080p requirement: Target highest practical hardware quality (4K UHD when supported, otherwise 1080p)
-    // Production call path strictly maintains 1080p transmission without 720p/540p/480p resolution fallback.
-    const constraintsList = preferredVideoDeviceId
-      ? PRODUCTION_CAMERA_CONSTRAINTS.map(c => ({ ...c, deviceId: { exact: preferredVideoDeviceId } }))
-      : PRODUCTION_CAMERA_CONSTRAINTS;
+    // Device camera constraints matching CameraCaptureModal.tsx:
+    // Requests ideal 1080p target with facingMode (or preferred deviceId), allowing the browser
+    // to negotiate the native camera resolution without OverconstrainedError failures.
+    const currentFacing = this.currentFacingMode || 'user';
+    const constraintsList: MediaTrackConstraints[] = preferredVideoDeviceId
+      ? [
+          { deviceId: { exact: preferredVideoDeviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          { deviceId: { exact: preferredVideoDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          { deviceId: { ideal: preferredVideoDeviceId } }
+        ]
+      : PRODUCTION_CAMERA_CONSTRAINTS.map(c => ({
+          ...c,
+          facingMode: c.facingMode ? currentFacing : undefined
+        }));
 
     let acquiredStream: MediaStream | null = null;
     let cameraUnavailable = false;
@@ -326,14 +339,14 @@ export class RTCService {
         console.log(`[WIBBY WEBRTC] Attempting camera acquisition step [${i + 1}/${constraintsList.length}]:`, videoConstraint);
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: AUDIO_MEDIA_CONSTRAINTS.audio,
-          video: videoConstraint
+          video: Object.keys(videoConstraint).length > 0 ? videoConstraint : true
         });
         acquiredStream = stream;
         break;
       } catch (err: any) {
         console.warn(`[WIBBY WEBRTC] Camera acquisition step [${i + 1}] failed:`, err?.name, err?.message);
-        if (err?.name !== 'OverconstrainedError') {
-          // If permission was denied or camera not found, do not keep looping through constraints
+        if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+          // If permission was denied by user, do not keep looping through constraints
           break;
         }
       }
@@ -473,7 +486,12 @@ export class RTCService {
     el.autoplay = true;
     (el as any).playsInline = true;
     el.muted = true; // Local preview must always be muted to prevent acoustic feedback
-    if (this.localStream && this.localStream.getVideoTracks().length > 0) {
+    if (this.isScreenSharing && this.screenStream) {
+      if (el.srcObject !== this.screenStream) {
+        el.srcObject = this.screenStream;
+      }
+      el.play().catch(() => {});
+    } else if (this.localStream && this.localStream.getVideoTracks().length > 0) {
       if (el.srcObject !== this.localStream) {
         el.srcObject = this.localStream;
       }
@@ -497,6 +515,43 @@ export class RTCService {
         this.startLocalDisplayPacingMonitor(this.localVideoElement);
       }
     }
+  }
+
+  /**
+   * Bind dedicated screen share preview HTML element (used by hero presentation frame)
+   */
+  bindScreenVideoElement(el: HTMLVideoElement | null): void {
+    if (!el) return;
+    this.screenVideoElements.add(el);
+    el.autoplay = true;
+    (el as any).playsInline = true;
+    el.muted = true;
+    if (this.screenStream) {
+      if (el.srcObject !== this.screenStream) {
+        el.srcObject = this.screenStream;
+      }
+      el.play().catch(() => {});
+    }
+  }
+
+  /**
+   * Unbind dedicated screen share preview HTML element
+   */
+  unbindScreenVideoElement(el: HTMLVideoElement | null): void {
+    if (!el) return;
+    this.screenVideoElements.delete(el);
+    if (el.srcObject) {
+      try {
+        el.srcObject = null;
+      } catch {}
+    }
+  }
+
+  /**
+   * Get active local screen share stream if sharing.
+   */
+  getScreenStream(): MediaStream | null {
+    return this.screenStream;
   }
 
   /**
@@ -593,9 +648,6 @@ export class RTCService {
     }
   }
 
-  /**
-   * Unbind remote video element
-   */
   unbindRemoteVideoElement(el: HTMLVideoElement | null): void {
     if (!el) return;
     if (this.rvfcTargetElement === el) {
@@ -608,6 +660,24 @@ export class RTCService {
         this.startDisplayPacingMonitor(this.remoteVideoElement);
       }
     }
+  }
+
+  /**
+   * Imperatively trigger playback on all bound video elements.
+   * Required to fix black/frozen video in Safari when removing 'display: none' (hidden class).
+   */
+  triggerVideoPlayback(): void {
+    console.log('[WIBBY WEBRTC] Triggering imperative video playback to clear black frames');
+    this.localVideoElements.forEach(el => {
+      try {
+        if (el.paused) el.play().catch(() => {});
+      } catch (e) {}
+    });
+    this.remoteVideoElements.forEach(el => {
+      try {
+        if (el.paused) el.play().catch(err => console.warn('[WIBBY WEBRTC] Force play error:', err));
+      } catch (e) {}
+    });
   }
 
   /**
@@ -652,42 +722,121 @@ export class RTCService {
     }
   }
 
+  private currentFacingMode: 'user' | 'environment' = 'user';
+
   /**
    * Switch active camera device in-place via RTCRtpSender.replaceTrack()
-   * Eliminates need to restart call or renegotiate SDP.
+   * Supports:
+   * - Mobile front/rear toggle (facingMode: 'user' <-> 'environment')
+   * - Desktop multi-camera selection (external webcams, capture cards)
+   * - Graceful fallbacks preventing OverconstrainedError
    */
-  async switchCamera(deviceId: string): Promise<boolean> {
-    if (!this.peerConnection || !this.localStream) return false;
+  async switchCamera(deviceId?: string): Promise<boolean> {
+    if (!this.localStream) return false;
 
     try {
-      console.log('[WIBBY WEBRTC] Switching camera to deviceId:', deviceId);
-      let newStream: MediaStream;
-      try {
-        newStream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: deviceId } }
-        });
-      } catch (exactErr) {
-        console.warn('[WIBBY WEBRTC] Exact deviceId failed, attempting fallback constraints:', exactErr);
+      console.log('[WIBBY WEBRTC] Switching camera, requested deviceId:', deviceId);
+      let newStream: MediaStream | null = null;
+
+      // 1. If explicit deviceId requested (desktop / external camera)
+      if (deviceId && deviceId !== 'toggle-facing') {
         try {
           newStream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { ideal: deviceId } }
+            video: { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
           });
-        } catch (idealErr) {
-          console.warn('[WIBBY WEBRTC] Ideal deviceId failed, attempting facingMode fallback:', idealErr);
-          newStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } }
-          });
+        } catch (exactErr) {
+          console.warn('[WIBBY WEBRTC] Exact deviceId failed, attempting ideal fallback:', exactErr);
+          try {
+            newStream = await navigator.mediaDevices.getUserMedia({
+              video: { deviceId: { ideal: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+            });
+          } catch (idealErr) {
+            console.warn('[WIBBY WEBRTC] Ideal deviceId failed:', idealErr);
+          }
         }
       }
 
-      const newVideoTrack = newStream.getVideoTracks()[0];
+      // 2. If mobile toggle or no specific deviceId
+      if (!newStream) {
+        const nextFacing: 'user' | 'environment' = this.currentFacingMode === 'user' ? 'environment' : 'user';
+        console.log(`[WIBBY WEBRTC] Toggling mobile facingMode from ${this.currentFacingMode} to ${nextFacing}`);
+
+        // Try device enumeration first if available to find target camera device
+        let targetDeviceId: string | undefined;
+        try {
+          if (navigator.mediaDevices?.enumerateDevices) {
+            const allDevices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevs = allDevices.filter(d => d.kind === 'videoinput');
+            if (videoDevs.length > 1) {
+              const matchKeywords = nextFacing === 'environment'
+                ? ['back', 'rear', 'environment', 'camera2 0', 'camera 0', 'outer']
+                : ['front', 'user', 'facing front', 'camera2 1', 'camera 1', 'inner', 'selfie'];
+
+              const matched = videoDevs.find(d => {
+                const label = (d.label || '').toLowerCase();
+                return matchKeywords.some(kw => label.includes(kw));
+              });
+              if (matched && matched.deviceId) {
+                targetDeviceId = matched.deviceId;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[WIBBY WEBRTC] Camera enumeration error:', e);
+        }
+
+        if (targetDeviceId) {
+          try {
+            newStream = await navigator.mediaDevices.getUserMedia({
+              video: { deviceId: { exact: targetDeviceId } }
+            });
+            this.currentFacingMode = nextFacing;
+          } catch (e) {
+            console.warn('[WIBBY WEBRTC] Target deviceId acquire failed, trying facingMode:', e);
+          }
+        }
+
+        if (!newStream) {
+          try {
+            newStream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                facingMode: { ideal: nextFacing },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+              }
+            });
+            this.currentFacingMode = nextFacing;
+          } catch (facingErr) {
+            try {
+              newStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: nextFacing } }
+              });
+              this.currentFacingMode = nextFacing;
+            } catch (facingIdealErr) {
+              try {
+                newStream = await navigator.mediaDevices.getUserMedia({
+                  video: { facingMode: nextFacing }
+                });
+                this.currentFacingMode = nextFacing;
+              } catch (fallbackErr) {
+                newStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                this.currentFacingMode = nextFacing;
+              }
+            }
+          }
+        }
+      }
+
+      const newVideoTrack = newStream?.getVideoTracks()[0];
       if (!newVideoTrack) return false;
 
-      // Find the existing video sender on RTCPeerConnection
-      const videoSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'video');
-      if (videoSender) {
-        await videoSender.replaceTrack(newVideoTrack);
-        console.log('[WIBBY WEBRTC] RTCRtpSender.replaceTrack succeeded with new camera track');
+      // Find the existing video sender on RTCPeerConnection if established
+      if (this.peerConnection) {
+        const videoSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+        if (videoSender) {
+          await videoSender.replaceTrack(newVideoTrack);
+          console.log('[WIBBY WEBRTC] RTCRtpSender.replaceTrack succeeded with new camera track');
+        }
       }
 
       // Stop and replace old video track in localStream
@@ -700,17 +849,40 @@ export class RTCService {
       });
       this.localStream.addTrack(newVideoTrack);
 
-      // Re-bind to local video element preview
-      if (this.localVideoElement) {
-        this.localVideoElement.srcObject = this.localStream;
-        this.localVideoElement.play().catch(() => {});
-      }
+      // Re-bind to all local video preview elements — force reload by clearing srcObject first
+      this.localVideoElements.forEach(el => {
+        el.muted = true;
+        el.autoplay = true;
+        (el as any).playsInline = true;
+        el.srcObject = null;
+        el.srcObject = this.localStream;
+        el.play().catch(() => {});
+      });
 
       return true;
     } catch (err) {
       console.error('[WIBBY WEBRTC] Failed to switch camera device:', err);
       return false;
     }
+  }
+
+  /** Returns the current facing mode of the active camera */
+  getFacingMode(): 'user' | 'environment' {
+    return this.currentFacingMode;
+  }
+
+  /** Returns the active remote display audio track from screen share if any */
+  getRemoteDisplayAudioTrack(): MediaStreamTrack | null {
+    return this.remoteDisplayAudioTrack;
+  }
+
+  /**
+   * Toggle front/rear camera using facingMode constraint.
+   * Works on any device — on mobile it physically switches cameras,
+   * on desktop it gracefully falls back to whatever camera is available.
+   */
+  async flipCamera(): Promise<boolean> {
+    return this.switchCamera(undefined); // undefined triggers facingMode toggle path
   }
 
   /**
@@ -767,6 +939,15 @@ export class RTCService {
         audio.addEventListener('error', (e) => {
           console.error('[WIBBY WEBRTC AUDIO] Remote audio element error:', e);
         });
+      }
+
+      if (!this.remoteDisplayAudioElement) {
+        const displayAudio = document.createElement('audio');
+        displayAudio.autoplay = true;
+        (displayAudio as any).playsInline = true;
+        displayAudio.style.display = 'none';
+        document.body.appendChild(displayAudio);
+        this.remoteDisplayAudioElement = displayAudio;
       }
 
       // Warm up audio element during user interaction
@@ -916,22 +1097,54 @@ export class RTCService {
       });
 
       if (event.track.kind === 'audio') {
-        // HARD RULE: Always create an audio-ONLY stream for the audio element.
-        // Never give the audio element a stream that contains a video track.
-        const audioOnlyStream = new MediaStream([event.track]);
-        this.remoteStream = audioOnlyStream;
-        this.attachRemoteAudio(audioOnlyStream);
+        // If an active primary remote audio track is already playing in remoteAudioElement,
+        // this incoming track is a secondary audio stream (display audio from screen share!)
+        if (this.remoteAudioTrack && this.remoteAudioTrack.id !== event.track.id && this.remoteAudioTrack.readyState === 'live') {
+          console.log('[WIBBY WEBRTC] Secondary display audio track from screen share received:', event.track.id);
+          this.remoteDisplayAudioTrack = event.track;
+          const displayAudioStream = new MediaStream([event.track]);
+          this.attachRemoteDisplayAudio(displayAudioStream);
+          event.track.onended = () => {
+            console.log('[WIBBY WEBRTC] Display audio track ended');
+            this.remoteDisplayAudioTrack = null;
+            if (this.remoteDisplayAudioElement) {
+              this.remoteDisplayAudioElement.srcObject = null;
+            }
+          };
+        } else {
+          this.remoteAudioTrack = event.track;
+          const audioOnlyStream = new MediaStream([event.track]);
+          this.remoteStream = audioOnlyStream;
+          this.attachRemoteAudio(audioOnlyStream);
+        }
       } else if (event.track.kind === 'video') {
         // HARD RULE: Always create a video-ONLY stream for the video elements.
         // This guarantees the video element NEVER has an audio track that could
         // bypass the single-output-path rule, even if muted is somehow cleared.
         const videoOnlyStream = new MediaStream([event.track]);
         this.remoteVideoStream = videoOnlyStream;
+
+        // When the first RTP packet arrives and track un-mutes, ensure play() is triggered (Req 25, 26)
+        event.track.onunmute = () => {
+          console.log('[WIBBY WEBRTC] Remote video track unmuted — triggering playback on all remote video elements');
+          this.remoteVideoElements.forEach(el => {
+            el.muted = true;
+            el.autoplay = true;
+            (el as any).playsInline = true;
+            if (el.srcObject !== videoOnlyStream) {
+              el.srcObject = videoOnlyStream;
+            }
+            el.play().catch(err => console.warn('[WIBBY WEBRTC] Remote video play on unmute error:', err));
+          });
+        };
+
         this.remoteVideoElements.forEach(el => {
           // Imperatively enforce muting before setting srcObject
           el.muted = true;
+          el.autoplay = true;
+          (el as any).playsInline = true;
           if (el.srcObject !== videoOnlyStream) el.srcObject = videoOnlyStream;
-          el.play().catch(() => {});
+          el.play().catch(err => console.warn('[WIBBY WEBRTC] Remote video play on attach error:', err));
           this.startDisplayPacingMonitor(el);
         });
         if (this.onRemoteVideoActiveCallback) {
@@ -1390,10 +1603,21 @@ export class RTCService {
 
     let screenStream: MediaStream;
     try {
-      console.log('[WIBBY SCREEN] Requesting display media...');
+      console.log('[WIBBY SCREEN] Requesting display media with high quality video and audio...');
       screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
-        video: { cursor: 'always' },
-        audio: true  // Browser decides; will be silently omitted if unsupported
+        video: {
+          cursor: 'always',
+          displaySurface: 'monitor',
+          width: { ideal: 1920, max: 3840 },
+          height: { ideal: 1080, max: 2160 },
+          frameRate: { ideal: 30, max: 60 }
+        },
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 2
+        }
       } as any);
     } catch (err: any) {
       const name = err?.name;
@@ -1401,8 +1625,16 @@ export class RTCService {
         console.log('[WIBBY SCREEN] User cancelled screen picker or permission denied:', name);
         return 'cancelled';
       }
-      console.error('[WIBBY SCREEN] getDisplayMedia failed:', err);
-      return 'error';
+      try {
+        console.log('[WIBBY SCREEN] Retrying getDisplayMedia with fallback constraints...');
+        screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
+          video: { cursor: 'always' },
+          audio: true
+        } as any);
+      } catch (fallbackErr) {
+        console.error('[WIBBY SCREEN] getDisplayMedia fallback failed:', fallbackErr);
+        return 'error';
+      }
     }
 
     const screenVideoTrack = screenStream.getVideoTracks()[0];
@@ -1410,6 +1642,11 @@ export class RTCService {
       console.warn('[WIBBY SCREEN] No video track in display media stream');
       screenStream.getTracks().forEach(t => { try { t.stop(); } catch {} });
       return 'error';
+    }
+
+    // Prioritize fine detail, sharp text, and full resolution for screenshare
+    if ('contentHint' in screenVideoTrack) {
+      (screenVideoTrack as any).contentHint = 'detail';
     }
 
     const displayAudioTrack = screenStream.getAudioTracks()[0] ?? null;
@@ -1435,6 +1672,21 @@ export class RTCService {
     try {
       await videoSender.replaceTrack(screenVideoTrack);
       console.log('[WIBBY SCREEN] Video sender replaceTrack succeeded with screen track');
+
+      // Maximize bitrate for crisp, uncompressed 1080p screen share (Guardrail: maintain-resolution)
+      try {
+        const params = videoSender.getParameters();
+        if (params && params.encodings && params.encodings[0]) {
+          params.encodings[0].maxBitrate = 5_000_000; // 5 Mbps for razor-sharp text
+          params.encodings[0].scaleResolutionDownBy = 1.0;
+          if ('degradationPreference' in params) {
+            (params as any).degradationPreference = 'maintain-resolution';
+          }
+          await videoSender.setParameters(params);
+        }
+      } catch (tuneErr) {
+        console.warn('[WIBBY SCREEN] Could not tune screen video sender params:', tuneErr);
+      }
     } catch (err) {
       console.error('[WIBBY SCREEN] replaceTrack failed for screen video:', err);
       screenStream.getTracks().forEach(t => { try { t.stop(); } catch {} });
@@ -1443,10 +1695,14 @@ export class RTCService {
       return 'error';
     }
 
-    // Update local preview elements to show the screen
+    // Update local preview elements and dedicated screen video elements to show the screen
     const screenPreviewStream = new MediaStream([screenVideoTrack]);
     this.localVideoElements.forEach(el => {
       el.srcObject = screenPreviewStream;
+      el.play().catch(() => {});
+    });
+    this.screenVideoElements.forEach(el => {
+      el.srcObject = screenStream;
       el.play().catch(() => {});
     });
 
@@ -1511,6 +1767,13 @@ export class RTCService {
       this.screenStream = null;
     }
 
+    // Clear dedicated screen preview elements
+    this.screenVideoElements.forEach(el => {
+      try {
+        el.srcObject = null;
+      } catch {}
+    });
+
     // ── VIDEO: restore camera track ───────────────────────────────────────────
     const videoSender = this.peerConnection?.getSenders().find(s =>
       // The sender may now hold the screen track or a null track — find by video kind
@@ -1564,6 +1827,11 @@ export class RTCService {
       this.displayAudioSender = null;
     }
 
+    // Restore standard video sender parameters (maintain-framerate) for camera
+    try {
+      await this.applyVideoSenderParameters();
+    } catch {}
+
     console.log('[WIBBY SCREEN] Screen sharing stopped');
   }
 
@@ -1572,6 +1840,8 @@ export class RTCService {
    * Uses 'maintain-framerate' degradation preference (Guardrail #1) so Chrome
    * guarantees smooth 30 FPS motion during head and hand movements rather than
    * dropping framerate to 12-15 FPS.
+   * When screen sharing, switches to 'maintain-resolution' with 5 Mbps budget
+   * so presentation text and fine details remain pin-sharp without downsampling.
    */
   async applyVideoSenderParameters(mode?: VideoQualityMode): Promise<void> {
     if (!this.peerConnection) return;
@@ -1585,33 +1855,44 @@ export class RTCService {
         params.encodings = [{}];
       }
 
-      // Guardrail #1: 'maintain-framerate' is the primary strategy for smooth natural motion
-      params.degradationPreference = 'maintain-framerate';
-
-      // Hard 1080p transmission requirement:
-      // If camera capture is 4K (>=3840 wide), downsample by 2.0 to transmit pristine 1080p.
-      // If camera capture is 1080p (or standard), scaleResolutionDownBy is 1.0 to transmit 1080p.
-      // Resolution is NEVER silently downgraded to 720p/540p/480p.
-      const is4KCapture = this.currentCaptureWidth >= 3840;
-      const baseScale = is4KCapture ? 2.0 : 1.0;
-      const targetBps = Math.round(this.videoBitrateTargetMbps * 1_000_000);
-
-      if (currentMode === 'data-saver') {
-        params.encodings[0].maxBitrate = 800_000;
-        params.encodings[0].maxFramerate = 24;
-        params.encodings[0].scaleResolutionDownBy = baseScale * 1.5;
-      } else {
-        // Standard / 1080p / auto: Hard 1080p transmission at selected budget (default 6.0 Mbps)
-        params.encodings[0].maxBitrate = targetBps;
+      if (this.isScreenSharing) {
+        // SCREEN SHARE: Absolute highest clarity & sharp resolution for slides/documents/code
+        params.degradationPreference = 'maintain-resolution';
+        params.encodings[0].maxBitrate = 5_000_000; // 5 Mbps for pristine 1080p
         params.encodings[0].maxFramerate = 30;
-        params.encodings[0].scaleResolutionDownBy = baseScale;
+        params.encodings[0].scaleResolutionDownBy = 1.0;
         if ('minBitrate' in params.encodings[0]) {
-          (params.encodings[0] as any).minBitrate = Math.round(targetBps * 0.4);
+          (params.encodings[0] as any).minBitrate = 1_500_000;
+        }
+      } else {
+        // Guardrail #1: 'maintain-framerate' is the primary strategy for smooth natural motion
+        params.degradationPreference = 'maintain-framerate';
+
+        // Hard 1080p transmission requirement:
+        // If camera capture is 4K (>=3840 wide), downsample by 2.0 to transmit pristine 1080p.
+        // If camera capture is 1080p (or standard), scaleResolutionDownBy is 1.0 to transmit 1080p.
+        // Resolution is NEVER silently downgraded to 720p/540p/480p.
+        const is4KCapture = this.currentCaptureWidth >= 3840;
+        const baseScale = is4KCapture ? 2.0 : 1.0;
+        const targetBps = Math.round(this.videoBitrateTargetMbps * 1_000_000);
+
+        if (currentMode === 'data-saver') {
+          params.encodings[0].maxBitrate = 800_000;
+          params.encodings[0].maxFramerate = 24;
+          params.encodings[0].scaleResolutionDownBy = baseScale * 1.5;
+        } else {
+          // Standard / 1080p / auto: Hard 1080p transmission at selected budget (default 6.0 Mbps)
+          params.encodings[0].maxBitrate = targetBps;
+          params.encodings[0].maxFramerate = 30;
+          params.encodings[0].scaleResolutionDownBy = baseScale;
+          if ('minBitrate' in params.encodings[0]) {
+            (params.encodings[0] as any).minBitrate = Math.round(targetBps * 0.4);
+          }
         }
       }
 
       await videoSender.setParameters(params);
-      console.log(`[WIBBY WEBRTC] Applied video sender parameters [mode=${currentMode}, degradation=${params.degradationPreference}]:`, {
+      console.log(`[WIBBY WEBRTC] Applied video sender parameters [isScreenSharing=${this.isScreenSharing}, mode=${currentMode}, degradation=${params.degradationPreference}]:`, {
         maxBitrate: params.encodings[0].maxBitrate,
         maxFramerate: params.encodings[0].maxFramerate,
         scaleResolutionDownBy: params.encodings[0].scaleResolutionDownBy,
@@ -1656,6 +1937,13 @@ export class RTCService {
 
   getLatestTelemetry(): RealtimeCallTelemetry | null {
     return this.latestTelemetry;
+  }
+
+  /**
+   * Returns true if WebRTC peer connection is actively connected
+   */
+  isConnected(): boolean {
+    return this.peerConnection?.connectionState === 'connected';
   }
 
   /**
@@ -2054,6 +2342,32 @@ export class RTCService {
   }
 
   /**
+   * Dedicated display audio playback (for computer audio / YouTube sound shared via screen share)
+   */
+  private attachRemoteDisplayAudio(stream: MediaStream) {
+    try {
+      this.unlockRemoteAudio();
+      if (!this.remoteDisplayAudioElement) {
+        const displayAudio = document.createElement('audio');
+        displayAudio.autoplay = true;
+        (displayAudio as any).playsInline = true;
+        (displayAudio as any).webkitPlaysInline = true;
+        document.body.appendChild(displayAudio);
+        this.remoteDisplayAudioElement = displayAudio;
+      }
+      console.log('[WIBBY WEBRTC] Attaching remote display audio for screen share playback');
+      this.remoteDisplayAudioElement.srcObject = stream;
+      this.remoteDisplayAudioElement.volume = 1.0;
+      this.remoteDisplayAudioElement.muted = false;
+      this.remoteDisplayAudioElement.play().catch(e => {
+        console.warn('[WIBBY WEBRTC] Display audio playback error:', e);
+      });
+    } catch (err) {
+      console.error('[WIBBY WEBRTC] Error attaching remote display audio:', err);
+    }
+  }
+
+  /**
    * Minimal AudioContext with ONLY an AnalyserNode for speaking detection in native mode.
    * No output is connected to ctx.destination — the AudioContext is purely for RMS analysis.
    * Uses an audio-only MediaStream to avoid any interaction with the video element stream.
@@ -2339,9 +2653,9 @@ export class RTCService {
 
         const jitterMs = jitter * 1000;
         let quality: CallAudioQuality = 'excellent';
-        if (packetLossRate > 0.08 || jitterMs > 80 || rtt > 300) {
+        if (packetLossRate > 0.12 || jitterMs > 120 || rtt > 400) {
           quality = 'poor';
-        } else if (packetLossRate > 0.02 || jitterMs > 35 || rtt > 160) {
+        } else if (packetLossRate > 0.05 || jitterMs > 60 || rtt > 250) {
           quality = 'degraded';
         }
         if (this.peerConnection.iceConnectionState === 'disconnected') {
@@ -2590,8 +2904,17 @@ export class RTCService {
         this.screenStream.getTracks().forEach(t => { try { t.stop(); } catch {} });
         this.screenStream = null;
       }
+      this.screenVideoElements.forEach(el => {
+        try { el.srcObject = null; } catch {}
+      });
+      this.screenVideoElements.clear();
       this.preSharingVideoTrack = null;
       this.displayAudioSender = null;
+    } else {
+      this.screenVideoElements.forEach(el => {
+        try { el.srcObject = null; } catch {}
+      });
+      this.screenVideoElements.clear();
     }
 
     // 1. Stop all local tracks (mic + camera)
@@ -2652,7 +2975,7 @@ export class RTCService {
     this.remoteVideoElements.clear();
     this.remoteVideoElement = null;
 
-    // 4. Remove remote audio element
+    // 4. Remove remote audio elements
     if (this.remoteAudioElement) {
       try {
         this.remoteAudioElement.pause();
@@ -2665,6 +2988,21 @@ export class RTCService {
       }
       this.remoteAudioElement = null;
     }
+
+    if (this.remoteDisplayAudioElement) {
+      try {
+        this.remoteDisplayAudioElement.pause();
+        this.remoteDisplayAudioElement.srcObject = null;
+        if (this.remoteDisplayAudioElement.parentNode) {
+          this.remoteDisplayAudioElement.parentNode.removeChild(this.remoteDisplayAudioElement);
+        }
+      } catch (e) {
+        console.warn('[WIBBY WEBRTC] Error removing remote display audio element:', e);
+      }
+      this.remoteDisplayAudioElement = null;
+    }
+    this.remoteDisplayAudioTrack = null;
+    this.remoteAudioTrack = null;
 
     // 5. Close PeerConnection
     this.cleanupPeerConnection();

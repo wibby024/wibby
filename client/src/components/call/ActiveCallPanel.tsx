@@ -1,14 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+
 import { useCall } from '../../context/CallContext';
-import {
-  rtcService,
-  type RealtimeCallTelemetry,
-  type AudioPipelineMode,
-  type VideoQualityMode,
-  type VoiceExperienceMode
-} from '../../services/rtcService';
-import { type VideoCodecPreference } from '../../config/rtcConfig';
-import ErrorBoundary from '../ErrorBoundary';
+import { rtcService } from '../../services/rtcService';
 import './CallModal.css';
 
 function formatCallDuration(seconds: number): string {
@@ -19,582 +12,27 @@ function formatCallDuration(seconds: number): string {
   return `${paddedMins}:${paddedSecs}`;
 }
 
-function CallDiagnosticsModal({
-  telemetry,
-  audioMode,
-  setAudioMode,
-  videoMode,
-  setVideoMode,
-  voiceExperience,
-  setVoiceExperience,
-  videoCodecPref,
-  setVideoCodecPref,
-  enableSdpPacing,
-  setEnableSdpPacing,
-  videoBitrateTarget,
-  setVideoBitrateTarget,
-  isVideo,
-  onClose
-}: {
-  telemetry: RealtimeCallTelemetry | null;
-  audioMode: AudioPipelineMode;
-  setAudioMode: (m: AudioPipelineMode) => void;
-  videoMode: VideoQualityMode;
-  setVideoMode: (m: VideoQualityMode) => void;
-  voiceExperience: VoiceExperienceMode;
-  setVoiceExperience: (m: VoiceExperienceMode) => void;
-  videoCodecPref: VideoCodecPreference;
-  setVideoCodecPref: (pref: VideoCodecPreference) => void;
-  enableSdpPacing: boolean;
-  setEnableSdpPacing: (enabled: boolean) => void;
-  videoBitrateTarget: number;
-  setVideoBitrateTarget: (mbps: number) => void;
-  isVideo: boolean;
-  onClose: () => void;
-}) {
-  return (
-    <div className="call-diagnostics-modal" onClick={(e) => e.stopPropagation()}>
-      <div className="call-diag-header">
-        <div className="call-diag-title-wrap">
-          <span className="call-diag-live-dot" />
-          <h4 className="call-diag-title">Realtime Call Diagnostics</h4>
-        </div>
-        <button
-          type="button"
-          className="call-diag-close-btn"
-          onClick={onClose}
-          title="Close diagnostics"
-          aria-label="Close diagnostics"
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* ------------------------------------------------------------- */}
-      {/* STAGE 1: LOCAL CAMERA ONLY (Test 1 Forensics) */}
-      {/* ------------------------------------------------------------- */}
-      {isVideo && (
-        <div className="call-diag-section">
-          <div className="call-diag-section-title">
-            <span>Stage 1: Local Camera Only (Hardware)</span>
-            <span style={{ fontSize: '9.5px', color: '#10b981' }}>Test 1</span>
-          </div>
-
-          <div className="call-diag-card-grid">
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Hardware Capture</span>
-              <span className="call-diag-card-val">
-                {telemetry?.captureWidth && telemetry?.captureHeight
-                  ? `${telemetry.captureWidth}×${telemetry.captureHeight}`
-                  : '1920×1080'}
-              </span>
-              <span className="call-diag-card-sub">
-                {telemetry?.cameraCapability ? `Max: ${telemetry.cameraCapability}` : `${telemetry?.captureFps || 30} fps`}
-              </span>
-            </div>
-
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Local Pacing (rVFC)</span>
-              <span className="call-diag-card-val">
-                {telemetry?.localPresentedFps !== undefined ? `${telemetry.localPresentedFps} fps` : '30 fps'}
-              </span>
-              <span className="call-diag-card-sub">
-                {telemetry?.localAvgFrameIntervalMs !== undefined ? `${telemetry.localAvgFrameIntervalMs} ms` : '33.3 ms'} • gap: {telemetry?.localMaxFrameGapMs || 33} ms
-              </span>
-            </div>
-
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Capture Motion Status</span>
-              <span className="call-diag-card-val" style={{ color: '#10b981', fontSize: '13px' }}>
-                Smooth Local
-              </span>
-              <span className="call-diag-card-sub">
-                Var: {telemetry?.localFrameIntervalVarianceMs || 0} ms² • Independent
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* STAGE 2: WEBRTC OUTBOUND SENDER (Test 2 Forensics) */}
-      {/* ------------------------------------------------------------- */}
-      {isVideo && (
-        <div className="call-diag-section">
-          <div className="call-diag-section-title">
-            <span>Stage 2: WebRTC Outbound Sender</span>
-            <span style={{ fontSize: '9.5px', color: '#60a5fa' }}>Test 2</span>
-          </div>
-
-          <div className="call-diag-card-grid">
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Send Resolution</span>
-              <span className="call-diag-card-val">
-                {telemetry?.sendWidth && telemetry?.sendHeight
-                  ? `${telemetry.sendWidth}×${telemetry.sendHeight}`
-                  : '1920×1080'}
-              </span>
-              <span className="call-diag-card-sub">
-                1080p Mandatory Target
-              </span>
-            </div>
-
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">FPS: Cam ➔ Enc ➔ Sent</span>
-              <span className="call-diag-card-val">
-                {telemetry?.captureFps || 30} ➔ {telemetry?.encodedFps ?? telemetry?.sendFps ?? 30} ➔ {telemetry?.sentFps ?? telemetry?.sendFps ?? 30}
-              </span>
-              <span className="call-diag-card-sub">
-                {telemetry?.encoderImplementation ? telemetry.encoderImplementation : 'Hardware H.264'}
-              </span>
-            </div>
-
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Outbound Bitrate</span>
-              <span className="call-diag-card-val">
-                {telemetry?.sendBitrateMbps ? `${telemetry.sendBitrateMbps} Mbps` : '0 Mbps'}
-              </span>
-              <span className="call-diag-card-sub">
-                Static: {telemetry?.staticBitrateMbps || '—'}M • Motion: {telemetry?.motionBitrateMbps || '—'}M
-              </span>
-            </div>
-          </div>
-
-          <div className="call-diag-card-grid" style={{ marginTop: '8px' }}>
-            <div className="call-diag-card" style={{ gridColumn: 'span 3' }}>
-              <span className="call-diag-card-label">Quality Limitation & Durations</span>
-              <span className="call-diag-card-val" style={{ fontSize: '13px', textTransform: 'capitalize' }}>
-                Reason: {telemetry?.qualityLimitationReason || 'none'}
-              </span>
-              <span className="call-diag-card-sub">
-                {telemetry?.qualityLimitationDurations || 'none: 100%'}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* STAGE 3: NETWORK & ROUTE (Test 3 Forensics) */}
-      {/* ------------------------------------------------------------- */}
-      {isVideo && (
-        <div className="call-diag-section">
-          <div className="call-diag-section-title">
-            <span>Stage 3: Network & Transport</span>
-            <span style={{ fontSize: '9.5px', color: '#a78bfa' }}>Test 3</span>
-          </div>
-
-          <div className="call-diag-card-grid">
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">RTT & Jitter</span>
-              <span className="call-diag-card-val">
-                {telemetry?.rttMs || 0} ms / {telemetry?.videoJitterMs ? `${telemetry.videoJitterMs.toFixed(1)} ms` : '0 ms'}
-              </span>
-              <span className="call-diag-card-sub">Round-trip / Video jitter</span>
-            </div>
-
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Packet Loss</span>
-              <span className="call-diag-card-val">
-                {(telemetry?.videoPacketLossRate ? telemetry.videoPacketLossRate * 100 : 0).toFixed(1)}%
-              </span>
-              <span className="call-diag-card-sub">{telemetry?.videoPacketsLost || 0} packets lost</span>
-            </div>
-
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Available Bandwidth</span>
-              <span className="call-diag-card-val">
-                {telemetry?.availableOutgoingBitrateKbps ? `${Math.round(telemetry.availableOutgoingBitrateKbps / 1000)}M` : 'Unlimited'}
-              </span>
-              <span className="call-diag-card-sub">
-                Downlink: {telemetry?.availableIncomingBitrateKbps ? `${Math.round(telemetry.availableIncomingBitrateKbps / 1000)}M` : 'Unlimited'}
-              </span>
-            </div>
-          </div>
-
-          <div className="call-diag-card-grid" style={{ marginTop: '8px' }}>
-            <div className="call-diag-card" style={{ gridColumn: 'span 3' }}>
-              <span className="call-diag-card-label">ICE Candidate Route & TURN Status</span>
-              <span className="call-diag-card-val" style={{ fontSize: '12px' }}>
-                Route: {telemetry?.candidatePairRoute || telemetry?.iceCandidateType || 'Direct (host/srflx)'}
-              </span>
-              <span className="call-diag-card-sub" style={{ color: telemetry?.turnStatus?.includes('NOT') ? '#f59e0b' : '#10b981' }}>
-                {telemetry?.turnStatus || 'TURN NOT DEPLOYED (Direct P2P)'}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* STAGE 4: WEBRTC INBOUND RECEIVER (Test 4 Forensics) */}
-      {/* ------------------------------------------------------------- */}
-      {isVideo && (
-        <div className="call-diag-section">
-          <div className="call-diag-section-title">
-            <span>Stage 4: WebRTC Inbound Receiver</span>
-            <span style={{ fontSize: '9.5px', color: '#38bdf8' }}>Test 4</span>
-          </div>
-
-          <div className="call-diag-card-grid">
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Receive Resolution</span>
-              <span className="call-diag-card-val">
-                {telemetry?.receiveWidth && telemetry?.receiveHeight
-                  ? `${telemetry.receiveWidth}×${telemetry.receiveHeight}`
-                  : 'N/A'}
-              </span>
-              <span className="call-diag-card-sub">
-                {telemetry?.receiveBitrateMbps ? `${telemetry.receiveBitrateMbps} Mbps` : '0 Mbps'}
-              </span>
-            </div>
-
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Recv ➔ Decoded ➔ Dropped</span>
-              <span className="call-diag-card-val">
-                {telemetry?.receiveFps || 0} ➔ {telemetry?.decodedFps ?? telemetry?.receiveFps ?? 0} ➔ {telemetry?.droppedFps || 0}
-              </span>
-              <span className="call-diag-card-sub">
-                Total dropped: {telemetry?.framesDropped ?? '0'}
-              </span>
-            </div>
-
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Decoder</span>
-              <span className="call-diag-card-val" style={{ fontSize: '13px' }}>
-                {telemetry?.decoderImplementation || 'Hardware Decoder'}
-              </span>
-              <span className="call-diag-card-sub">
-                Inbound frame pipeline
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* STAGE 5: REMOTE DISPLAY PACING (Test 5 Forensics - rVFC) */}
-      {/* ------------------------------------------------------------- */}
-      {isVideo && (
-        <div className="call-diag-section">
-          <div className="call-diag-section-title">
-            <span>Stage 5: Remote Display Pacing</span>
-            <span style={{ fontSize: '9.5px', color: '#10b981' }}>Test 5 (rVFC)</span>
-          </div>
-
-          <div className="call-diag-card-grid">
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Presented FPS</span>
-              <span className="call-diag-card-val">
-                {telemetry?.presentedFps !== undefined ? `${telemetry.presentedFps} fps` : '30 fps'}
-              </span>
-              <span className="call-diag-card-sub">
-                Target: 30 fps
-              </span>
-            </div>
-
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Frame Interval</span>
-              <span className="call-diag-card-val">
-                {telemetry?.avgFrameIntervalMs !== undefined ? `${telemetry.avgFrameIntervalMs} ms` : '33.3 ms'}
-              </span>
-              <span className="call-diag-card-sub">
-                Variance: {telemetry?.frameIntervalVarianceMs !== undefined ? `${telemetry.frameIntervalVarianceMs} ms²` : '0 ms²'}
-              </span>
-            </div>
-
-            <div className="call-diag-card">
-              <span className="call-diag-card-label">Max Gap & Freezes</span>
-              <span className="call-diag-card-val">
-                {telemetry?.maxFrameGapMs !== undefined ? `${telemetry.maxFrameGapMs} ms` : '33 ms'}
-              </span>
-              <span className="call-diag-card-sub">
-                Freezes: {telemetry?.freezeCount || 0} (Max: {telemetry?.maxFreezeDurationMs || 0}ms)
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* CONTROLLED FORENSIC EXPERIMENTS (A/B TESTING) */}
-      {/* ------------------------------------------------------------- */}
-      {isVideo && (
-        <div className="call-diag-section">
-          <div className="call-diag-section-title">
-            <span>Codec A/B Test (Active: {telemetry?.activeVideoCodec || 'H264'})</span>
-            <span style={{ fontSize: '9.5px', color: '#60a5fa' }}>Guardrail #3</span>
-          </div>
-
-          <div className="call-diag-btn-group">
-            <button
-              type="button"
-              className={`call-diag-btn ${videoCodecPref === 'auto' ? 'active' : ''}`}
-              onClick={() => setVideoCodecPref('auto')}
-            >
-              <span>Auto</span>
-              <span className="call-diag-btn-sub">Hardware H.264 Priority</span>
-            </button>
-            <button
-              type="button"
-              className={`call-diag-btn ${videoCodecPref === 'h264' ? 'active' : ''}`}
-              onClick={() => setVideoCodecPref('h264')}
-            >
-              <span>H.264</span>
-              <span className="call-diag-btn-sub">Hardware Mac</span>
-            </button>
-            <button
-              type="button"
-              className={`call-diag-btn ${videoCodecPref === 'vp8' ? 'active' : ''}`}
-              onClick={() => setVideoCodecPref('vp8')}
-            >
-              <span>VP8</span>
-              <span className="call-diag-btn-sub">Software Libvpx</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {isVideo && (
-        <div className="call-diag-section">
-          <div className="call-diag-section-title">
-            <span>Bitrate Target Experiment (Target: {videoBitrateTarget} Mbps)</span>
-            <span style={{ fontSize: '9.5px', color: '#10b981' }}>GCC Motion Pacing</span>
-          </div>
-
-          <div className="call-diag-btn-group">
-            <button
-              type="button"
-              className={`call-diag-btn ${videoBitrateTarget === 4.5 ? 'active' : ''}`}
-              onClick={() => setVideoBitrateTarget(4.5)}
-            >
-              <span>4.5 Mbps</span>
-              <span className="call-diag-btn-sub">Baseline Motion</span>
-            </button>
-            <button
-              type="button"
-              className={`call-diag-btn ${videoBitrateTarget === 6.0 ? 'active' : ''}`}
-              onClick={() => setVideoBitrateTarget(6.0)}
-            >
-              <span>6.0 Mbps</span>
-              <span className="call-diag-btn-sub">Target Smooth 30fps</span>
-            </button>
-            <button
-              type="button"
-              className={`call-diag-btn ${videoBitrateTarget === 8.0 ? 'active' : ''}`}
-              onClick={() => setVideoBitrateTarget(8.0)}
-            >
-              <span>8.0 Mbps</span>
-              <span className="call-diag-btn-sub">High Budget</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {isVideo && (
-        <div className="call-diag-section">
-          <div className="call-diag-section-title">
-            <span>SDP Bandwidth Pacing Experiment</span>
-            <span style={{ fontSize: '9.5px', color: '#f59e0b' }}>Guardrail #2</span>
-          </div>
-
-          <div className="call-diag-btn-group">
-            <button
-              type="button"
-              className={`call-diag-btn ${enableSdpPacing ? 'active' : ''}`}
-              onClick={() => setEnableSdpPacing(true)}
-            >
-              <span>Enabled</span>
-              <span className="call-diag-btn-sub">4.5M ceiling / 3.0M start</span>
-            </button>
-            <button
-              type="button"
-              className={`call-diag-btn ${!enableSdpPacing ? 'active' : ''}`}
-              onClick={() => setEnableSdpPacing(false)}
-            >
-              <span>Disabled</span>
-              <span className="call-diag-btn-sub">Default WebRTC</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Audio Architecture (Single Output Path & Native Reference) */}
-      <div className="call-diag-section">
-        <div className="call-diag-section-title">
-          <span>Audio Playback Pipeline</span>
-          {audioMode === 'native' && <span className="call-diag-badge-ref">Native Reference Default</span>}
-        </div>
-
-        <div className="call-diag-btn-group">
-          <button
-            type="button"
-            className={`call-diag-btn ${audioMode === 'native' ? 'active' : ''}`}
-            onClick={() => setAudioMode('native')}
-          >
-            <span>Native WebRTC</span>
-            <span className="call-diag-btn-sub">Direct & Unprocessed</span>
-          </button>
-
-          <button
-            type="button"
-            className={`call-diag-btn ${audioMode === 'processed' ? 'active' : ''}`}
-            onClick={() => setAudioMode('processed')}
-          >
-            <span>Voice Engine</span>
-            <span className="call-diag-btn-sub">15kHz Wideband EQ</span>
-          </button>
-        </div>
-
-        <p className="call-diag-info-text">
-          {audioMode === 'native'
-            ? 'Playing directly via native <audio> element. Web Audio speakers path is disconnected (Zero double audio).'
-            : 'Playing through Web Audio 15kHz wideband presence filter and dynamic transparent leveling.'}
-        </p>
-
-        {audioMode === 'processed' && (
-          <div className="call-diag-btn-group" style={{ marginTop: '8px' }}>
-            <button
-              type="button"
-              className={`call-diag-btn ${voiceExperience === 'natural' ? 'active' : ''}`}
-              onClick={() => setVoiceExperience('natural')}
-            >
-              <span>Natural</span>
-            </button>
-            <button
-              type="button"
-              className={`call-diag-btn ${voiceExperience === 'focused' ? 'active' : ''}`}
-              onClick={() => setVoiceExperience('focused')}
-            >
-              <span>Focused</span>
-            </button>
-            <button
-              type="button"
-              className={`call-diag-btn ${voiceExperience === 'spatial' ? 'active' : ''}`}
-              onClick={() => setVoiceExperience('spatial')}
-            >
-              <span>Spatial (HRTF)</span>
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Video Target Selector */}
-      {isVideo && (
-        <div className="call-diag-section">
-          <div className="call-diag-section-title">
-            <span>Video Target Quality (maintain-framerate)</span>
-          </div>
-
-          <div className="call-diag-btn-group">
-            <button
-              type="button"
-              className={`call-diag-btn ${videoMode === 'auto' ? 'active' : ''}`}
-              onClick={() => setVideoMode('auto')}
-            >
-              <span>Auto</span>
-              <span className="call-diag-btn-sub">Adaptive</span>
-            </button>
-            <button
-              type="button"
-              className={`call-diag-btn ${videoMode === '1080p' ? 'active' : ''}`}
-              onClick={() => setVideoMode('1080p')}
-            >
-              <span>1080p</span>
-              <span className="call-diag-btn-sub">4.5 Mbps</span>
-            </button>
-            <button
-              type="button"
-              className={`call-diag-btn ${videoMode === '720p' ? 'active' : ''}`}
-              onClick={() => setVideoMode('720p')}
-            >
-              <span>720p</span>
-              <span className="call-diag-btn-sub">2.8 Mbps</span>
-            </button>
-            <button
-              type="button"
-              className={`call-diag-btn ${videoMode === 'data-saver' ? 'active' : ''}`}
-              onClick={() => setVideoMode('data-saver')}
-            >
-              <span>Saver</span>
-              <span className="call-diag-btn-sub">600 kbps</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Network & Audio Quality Metrics */}
-      <div className="call-diag-section">
-        <div className="call-diag-section-title">
-          <span>Audio & Transport Telemetry</span>
-        </div>
-
-        <table className="call-diag-table">
-          <tbody>
-            <tr>
-              <td>Audio Codec</td>
-              <td>{telemetry?.audioCodec || 'Opus'} @ {telemetry?.audioSampleRate ? `${telemetry.audioSampleRate / 1000} kHz` : '48 kHz'}</td>
-            </tr>
-            <tr>
-              <td>Audio Bitrate</td>
-              <td>{telemetry?.audioBitrateKbps ? `${telemetry.audioBitrateKbps} kbps` : 'N/A'}</td>
-            </tr>
-            <tr>
-              <td>Audio Packet Loss</td>
-              <td>{telemetry ? `${(telemetry.audioPacketLossRate * 100).toFixed(1)}% (${telemetry.audioPacketsLost} lost)` : '0%'}</td>
-            </tr>
-            <tr>
-              <td>Audio Jitter</td>
-              <td>{telemetry?.audioJitterMs ? `${telemetry.audioJitterMs.toFixed(1)} ms` : '0 ms'}</td>
-            </tr>
-            <tr>
-              <td>Round-Trip Time (RTT)</td>
-              <td>{telemetry?.rttMs ? `${telemetry.rttMs} ms` : 'N/A'}</td>
-            </tr>
-            <tr>
-              <td>Quality Limitation</td>
-              <td>{telemetry?.qualityLimitationReason || 'none'}</td>
-            </tr>
-            <tr>
-              <td>ICE Candidate Type</td>
-              <td>{telemetry?.iceCandidateType || 'Direct (host/srflx)'}</td>
-            </tr>
-            {telemetry?.availableOutgoingBitrateKbps ? (
-              <tr>
-                <td>Available Uplink</td>
-                <td>{telemetry.availableOutgoingBitrateKbps} kbps</td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Isolated Memoized Video Stage (Guardrail #5).
- * Strictly isolates remote and local <video> DOM elements from call duration timer,
- * user activity auto-hiding state, and telemetry updates so that video playback
- * remains 100% smooth without React reconciliation churn.
-/**
- * PHASE 9 FINAL UI LOCK: Dual-View Video Call Presentation System.
- * Supports:
- * - VIEW 1: Stacked two-panel desktop presentation (Tara on top, Adi on bottom).
- * - VIEW 2: Large primary remote video + floating movable local PiP.
- * - Both views share persistent video elements (zero unmounting, zero renegotiation).
- * - Background fill uses same live MediaStream, cover, subdued, NO blur, NO duplicate person effect.
- */
 const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   viewMode,
-  aspectMode = 'fit',
+  isScreenSharing,
+  isRemoteScreenSharing,
+  isScreenshareFullscreen,
+  setIsScreenshareFullscreen,
+  hideFloatingTiles,
+  setHideFloatingTiles,
+  toggleFullscreen,
+  isFullscreen,
+  focusedParticipant,
+  setFocusedParticipant,
   remoteVideoRef,
   remoteBgVideoRef,
   localVideoRef,
   localBgVideoRef,
+  screenVideoRef,
   isRemoteCameraOff,
   isCameraOff,
   isCameraUnavailable,
+  isRemoteMuted,
   isConnected,
   isReconnecting,
   reconnectStatusMessage,
@@ -602,19 +40,29 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   partnerName,
   initial,
   avatar,
-  availableCameras,
-  activeCameraDeviceId,
-  onSwitchCamera
+  flipCamera,
+  currentFacingMode
 }: {
-  viewMode: 'stacked' | 'pip';
-  aspectMode?: '4:3' | '1:1' | 'fit' | 'fill' | 'full';
+  viewMode: 'grid' | 'stacked' | 'pip' | 'screenshare';
+  isScreenSharing: boolean;
+  isRemoteScreenSharing: boolean;
+  isScreenshareFullscreen: boolean;
+  setIsScreenshareFullscreen: React.Dispatch<React.SetStateAction<boolean>>;
+  hideFloatingTiles?: boolean;
+  setHideFloatingTiles?: React.Dispatch<React.SetStateAction<boolean>>;
+  toggleFullscreen?: () => Promise<void>;
+  isFullscreen?: boolean;
+  focusedParticipant: 'none' | 'remote' | 'local';
+  setFocusedParticipant: React.Dispatch<React.SetStateAction<'none' | 'remote' | 'local'>>;
   remoteVideoRef: React.RefObject<HTMLVideoElement | null>;
   remoteBgVideoRef: React.RefObject<HTMLVideoElement | null>;
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
   localBgVideoRef: React.RefObject<HTMLVideoElement | null>;
+  screenVideoRef?: React.RefObject<HTMLVideoElement | null>;
   isRemoteCameraOff: boolean;
   isCameraOff: boolean;
   isCameraUnavailable: boolean;
+  isRemoteMuted: boolean;
   isConnected: boolean;
   isReconnecting: boolean;
   reconnectStatusMessage: string | null;
@@ -622,15 +70,47 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   partnerName: string;
   initial: string;
   avatar?: string;
-  availableCameras: MediaDeviceInfo[];
-  activeCameraDeviceId: string | null;
-  onSwitchCamera: (deviceId: string) => void;
+  flipCamera: () => Promise<boolean>;
+  currentFacingMode: 'user' | 'environment';
 }) {
   const localPanelRef = useRef<HTMLDivElement | null>(null);
   const posRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
+  const hasDraggedRef = useRef(false);
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; pipX: number; pipY: number } | null>(null);
+  const [remoteAspect, setRemoteAspect] = useState<number>(16 / 9);
   const [localAspect, setLocalAspect] = useState<number>(16 / 9);
+  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+
+  useEffect(() => {
+    const handleWinResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleWinResize);
+    return () => window.removeEventListener('resize', handleWinResize);
+  }, []);
+
+  // Dynamic aspect ratio calculation from remote camera stream
+  useEffect(() => {
+    const videoEl = remoteVideoRef.current;
+    if (!videoEl) return;
+    const updateAspect = () => {
+      if (videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
+        setRemoteAspect(videoEl.videoWidth / videoEl.videoHeight);
+      }
+    };
+    videoEl.addEventListener('loadedmetadata', updateAspect);
+    videoEl.addEventListener('resize', updateAspect);
+    videoEl.addEventListener('timeupdate', updateAspect);
+    videoEl.addEventListener('play', updateAspect);
+    updateAspect();
+    return () => {
+      videoEl.removeEventListener('loadedmetadata', updateAspect);
+      videoEl.removeEventListener('resize', updateAspect);
+      videoEl.removeEventListener('timeupdate', updateAspect);
+      videoEl.removeEventListener('play', updateAspect);
+    };
+  }, [remoteVideoRef]);
 
   // Dynamic aspect ratio calculation from local camera stream
   useEffect(() => {
@@ -643,41 +123,65 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
     };
     videoEl.addEventListener('loadedmetadata', updateAspect);
     videoEl.addEventListener('resize', updateAspect);
+    videoEl.addEventListener('timeupdate', updateAspect);
+    videoEl.addEventListener('play', updateAspect);
     updateAspect();
     return () => {
       videoEl.removeEventListener('loadedmetadata', updateAspect);
       videoEl.removeEventListener('resize', updateAspect);
+      videoEl.removeEventListener('timeupdate', updateAspect);
+      videoEl.removeEventListener('play', updateAspect);
     };
   }, [localVideoRef]);
+
+  // Update on connection state changes
+  useEffect(() => {
+    if (isConnected) {
+      if (remoteVideoRef.current && remoteVideoRef.current.videoWidth > 0 && remoteVideoRef.current.videoHeight > 0) {
+        setRemoteAspect(remoteVideoRef.current.videoWidth / remoteVideoRef.current.videoHeight);
+      }
+      if (localVideoRef.current && localVideoRef.current.videoWidth > 0 && localVideoRef.current.videoHeight > 0) {
+        setLocalAspect(localVideoRef.current.videoWidth / localVideoRef.current.videoHeight);
+      }
+    }
+  }, [isConnected, remoteVideoRef, localVideoRef]);
+
+  const isLocalPip = viewMode === 'pip' || focusedParticipant === 'remote';
 
   // Handle positioning when entering PiP mode vs Stacked mode
   useEffect(() => {
     if (!localPanelRef.current) return;
-    if (viewMode === 'pip') {
+    if (isLocalPip) {
       const rect = localPanelRef.current.getBoundingClientRect();
-      const pipW = rect.width || 320;
-      const pipH = rect.height || 180;
-      const safeX = Math.max(12, window.innerWidth - pipW - 28);
-      const safeY = Math.max(12, window.innerHeight - pipH - 28);
+      const mobileActive = window.innerWidth <= 768;
+      const pipW = mobileActive ? 108 : (rect.width || 320);
+      const pipH = mobileActive ? 156 : (rect.height || 180);
+      const bottomOffset = mobileActive ? 96 : 28;
+      const rightOffset = mobileActive ? 12 : 28;
+      const safeX = Math.max(10, window.innerWidth - pipW - rightOffset);
+      const safeY = Math.max(mobileActive ? 64 : 12, window.innerHeight - pipH - bottomOffset);
       posRef.current = { x: safeX, y: safeY };
       localPanelRef.current.style.transform = `translate3d(${safeX}px, ${safeY}px, 0)`;
     } else {
-      // In Stacked mode, clear inline transform so it naturally docks as the bottom tile
+      // In Grid or Stacked mode, or when local is focused, clear inline transform so it naturally docks
       localPanelRef.current.style.transform = '';
     }
-  }, [viewMode]);
+  }, [isLocalPip, viewMode, focusedParticipant]);
 
   // Window resize handler: clamps PiP within safe boundaries
   useEffect(() => {
     const handleResize = () => {
-      if (viewMode !== 'pip' || !localPanelRef.current || !posRef.current) return;
+      if (!isLocalPip || !localPanelRef.current || !posRef.current) return;
       const rect = localPanelRef.current.getBoundingClientRect();
-      const pipW = rect.width || 320;
-      const pipH = rect.height || 180;
-      const minX = 12;
-      const minY = 12;
-      const maxX = Math.max(minX, window.innerWidth - pipW - 12);
-      const maxY = Math.max(minY, window.innerHeight - pipH - 12);
+      const mobileActive = window.innerWidth <= 768;
+      const pipW = mobileActive ? 108 : (rect.width || 320);
+      const pipH = mobileActive ? 156 : (rect.height || 180);
+      const minX = 10;
+      const minY = mobileActive ? 64 : 12;
+      const bottomOffset = mobileActive ? 96 : 12;
+      const rightOffset = mobileActive ? 12 : 12;
+      const maxX = Math.max(minX, window.innerWidth - pipW - rightOffset);
+      const maxY = Math.max(minY, window.innerHeight - pipH - bottomOffset);
       const clampedX = Math.max(minX, Math.min(posRef.current.x, maxX));
       const clampedY = Math.max(minY, Math.min(posRef.current.y, maxY));
       posRef.current = { x: clampedX, y: clampedY };
@@ -685,11 +189,11 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [viewMode]);
+  }, [isLocalPip]);
 
   // Drag handlers for PiP mode (zero React re-renders during dragging)
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (viewMode !== 'pip') return;
+    if (!isLocalPip) return;
     if ((e.target as HTMLElement).closest('button')) return;
     if (!localPanelRef.current) return;
 
@@ -701,9 +205,14 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
     } catch {}
 
     const rect = localPanelRef.current.getBoundingClientRect();
+    const mobileActive = window.innerWidth <= 768;
+    const pipW = mobileActive ? 108 : (rect.width || 320);
+    const pipH = mobileActive ? 156 : (rect.height || 180);
+    const bottomOffset = mobileActive ? 96 : 28;
+    const rightOffset = mobileActive ? 12 : 28;
     const currentPos = posRef.current || {
-      x: Math.max(12, window.innerWidth - (rect.width || 320) - 28),
-      y: Math.max(12, window.innerHeight - (rect.height || 180) - 28)
+      x: Math.max(10, window.innerWidth - pipW - rightOffset),
+      y: Math.max(mobileActive ? 64 : 12, window.innerHeight - pipH - bottomOffset)
     };
 
     dragStartRef.current = {
@@ -713,25 +222,33 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
       pipY: currentPos.y
     };
     isDraggingRef.current = true;
+    hasDraggedRef.current = false;
     localPanelRef.current.classList.add('is-dragging');
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (viewMode !== 'pip' || !isDraggingRef.current || !dragStartRef.current || !localPanelRef.current) return;
+    if (!isLocalPip || !isDraggingRef.current || !dragStartRef.current || !localPanelRef.current) return;
 
     const deltaX = e.clientX - dragStartRef.current.pointerX;
     const deltaY = e.clientY - dragStartRef.current.pointerY;
+    if (Math.hypot(deltaX, deltaY) > 6) {
+      hasDraggedRef.current = true;
+    }
+
     const targetX = dragStartRef.current.pipX + deltaX;
     const targetY = dragStartRef.current.pipY + deltaY;
 
     const rect = localPanelRef.current.getBoundingClientRect();
-    const pipW = rect.width || 320;
-    const pipH = rect.height || 180;
+    const mobileActive = window.innerWidth <= 768;
+    const pipW = mobileActive ? 108 : (rect.width || 320);
+    const pipH = mobileActive ? 156 : (rect.height || 180);
 
-    const minX = 12;
-    const minY = 12;
-    const maxX = Math.max(minX, window.innerWidth - pipW - 12);
-    const maxY = Math.max(minY, window.innerHeight - pipH - 12);
+    const minX = 10;
+    const minY = mobileActive ? 64 : 12;
+    const bottomOffset = mobileActive ? 96 : 12;
+    const rightOffset = mobileActive ? 12 : 12;
+    const maxX = Math.max(minX, window.innerWidth - pipW - rightOffset);
+    const maxY = Math.max(minY, window.innerHeight - pipH - bottomOffset);
 
     const clampedX = Math.max(minX, Math.min(targetX, maxX));
     const clampedY = Math.max(minY, Math.min(targetY, maxY));
@@ -752,17 +269,328 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
     } catch {}
   };
 
-  const aspectClass = aspectMode.replace(':', '-');
+  const handleRemoteClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    // On mobile touch viewports, tapping video should not trigger accidental layout swaps
+    if (isMobile) return;
+    setFocusedParticipant(prev => (prev === 'remote' ? 'none' : 'remote'));
+  };
+
+  const handleLocalClick = (e: React.MouseEvent) => {
+    if (hasDraggedRef.current) return;
+    if ((e.target as HTMLElement).closest('button')) return;
+    // On mobile touch viewports, tapping video should not trigger accidental layout swaps
+    if (isMobile) {
+      if (isLocalPip) {
+        setFocusedParticipant(prev => (prev === 'remote' ? 'none' : 'remote'));
+      }
+      return;
+    }
+    setFocusedParticipant(prev => (prev === 'local' ? 'none' : 'local'));
+  };
+
+  if (viewMode === 'screenshare') {
+    const isRemoteSharing = isRemoteScreenSharing;
+    const isLocalSharing = isScreenSharing;
+
+    return (
+      <div className={`call-video-stage view-mode-screenshare ${isScreenshareFullscreen ? 'is-hero-fullscreen' : ''}`}>
+        {/* Hidden background video refs to preserve rtcService bindings */}
+        <video ref={remoteBgVideoRef} className="hidden" aria-hidden="true" muted playsInline />
+        <video ref={localBgVideoRef} className="hidden" aria-hidden="true" muted playsInline />
+
+        <div className="call-stage-presentation-frame">
+          {/* Main Hero: Shared Screen (Uncropped, Crystal 1080p, Black Background, Never Mirrored) */}
+          <div className="call-screenshare-main">
+            {/* Top Left Badge */}
+            <div className="call-screenshare-badge-bar">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
+              <span>{isRemoteSharing ? `${partnerName}'s Screen` : isLocalSharing ? 'Your Screen (Sharing)' : 'Screen Share'}</span>
+              <span className="call-screenshare-hd-pill">1080p Crystal Clear</span>
+            </div>
+
+            {/* Top Right Actions: Toggle Full Screen / Sidebar, Hide/Show Tiles, Browser Fullscreen */}
+            <div className="call-screenshare-top-actions">
+              <button
+                type="button"
+                className="call-screenshare-action-btn"
+                onClick={() => setIsScreenshareFullscreen(prev => !prev)}
+                title={isScreenshareFullscreen ? 'Show both users on right' : 'Expand screen to full view'}
+                aria-label={isScreenshareFullscreen ? 'Show both users on right' : 'Expand screen to full view'}
+              >
+                {isScreenshareFullscreen ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="3" width="13" height="18" rx="2" />
+                      <rect x="17" y="3" width="5" height="8" rx="1.5" />
+                      <rect x="17" y="13" width="5" height="8" rx="1.5" />
+                    </svg>
+                    <span>Sidebar View</span>
+                  </>
+                ) : (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 3 21 3 21 9" />
+                      <polyline points="9 21 3 21 3 15" />
+                      <line x1="21" y1="3" x2="14" y2="10" />
+                      <line x1="3" y1="21" x2="10" y2="14" />
+                    </svg>
+                    <span>Full Screen</span>
+                  </>
+                )}
+              </button>
+
+              {isScreenshareFullscreen && setHideFloatingTiles && (
+                <button
+                  type="button"
+                  className={`call-screenshare-action-btn ${hideFloatingTiles ? 'active' : ''}`}
+                  onClick={() => setHideFloatingTiles(prev => !prev)}
+                  title={hideFloatingTiles ? 'Show floating user tiles' : 'Hide floating user tiles for 100% unobstructed view'}
+                  aria-label={hideFloatingTiles ? 'Show floating user tiles' : 'Hide floating user tiles'}
+                >
+                  {hideFloatingTiles ? (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                      <span>Show Tiles</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                      <span>Hide Tiles</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {toggleFullscreen && (
+                <button
+                  type="button"
+                  className="call-screenshare-action-btn icon-only"
+                  onClick={toggleFullscreen}
+                  title={isFullscreen ? 'Exit browser fullscreen' : 'Browser fullscreen'}
+                  aria-label={isFullscreen ? 'Exit browser fullscreen' : 'Browser fullscreen'}
+                >
+                  {isFullscreen ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="4 14 10 14 10 20" />
+                      <polyline points="20 10 14 10 14 4" />
+                      <line x1="14" y1="10" x2="21" y2="3" />
+                      <line x1="3" y1="21" x2="10" y2="14" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 3 21 3 21 9" />
+                      <polyline points="9 21 3 21 3 15" />
+                      <line x1="21" y1="3" x2="14" y2="10" />
+                      <line x1="3" y1="21" x2="10" y2="14" />
+                    </svg>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {/* Main Shared Screen Presentation: exactly ONE video element */}
+            {isLocalSharing ? (
+              <video
+                ref={screenVideoRef || localVideoRef}
+                className="call-video-fg-live is-screen-share"
+                autoPlay
+                playsInline
+                muted
+              />
+            ) : (
+              <video
+                ref={remoteVideoRef}
+                className="call-video-fg-live is-screen-share"
+                autoPlay
+                playsInline
+                muted
+              />
+            )}
+          </div>
+
+          {/* Right Stacked Column: Both users stacked vertically (floating when full screen) */}
+          <div className={`call-screenshare-sidebar ${isScreenshareFullscreen && hideFloatingTiles ? 'tiles-hidden' : ''}`}>
+            {/* Top Tile: Partner User */}
+            <div className="call-sidebar-user-tile remote">
+              {isRemoteSharing ? (
+                // If partner is sharing, their avatar & status card goes here
+                <div className="call-video-placeholder">
+                  <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
+                    {isConnected && isRemoteSpeaking && <div className="call-pulse-ring speaking" />}
+                    <div className={`call-avatar ${isRemoteSpeaking ? 'avatar-speaking' : ''}`} style={{ width: 50, height: 50, fontSize: 20 }}>
+                      {avatar ? <img src={avatar} alt={partnerName} /> : <span>{initial}</span>}
+                    </div>
+                  </div>
+                  <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>{partnerName}</span>
+                  <span style={{ fontSize: 11, color: '#c4b5fd' }}>🖥️ Sharing screen</span>
+                </div>
+              ) : (
+                // If partner is NOT sharing (local is sharing), partner's live camera video goes here!
+                <>
+                  <video
+                    ref={remoteVideoRef}
+                    className={`call-video-fg-live ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
+                    autoPlay
+                    playsInline
+                    muted
+                  />
+                  {(isRemoteCameraOff || !isConnected) && (
+                    <div className="call-video-placeholder">
+                      <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
+                        <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
+                          {avatar ? <img src={avatar} alt={partnerName} /> : <span>{initial}</span>}
+                        </div>
+                      </div>
+                      <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>{partnerName}</span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Partner Badge */}
+              <div className="call-panel-identity-label" style={{ bottom: 8, left: 8, padding: '3px 8px', fontSize: 11 }}>
+                <span className={`call-identity-dot ${isConnected ? 'online' : 'reconnecting'}`} />
+                <span className="call-identity-name">{partnerName}</span>
+                {isRemoteSpeaking && isConnected && !isRemoteMuted && (
+                  <span className="call-speaking-wave-tag" title="Speaking" style={{ marginLeft: 4 }}>
+                    <span className="call-wave-bar b1" />
+                    <span className="call-wave-bar b2" />
+                    <span className="call-wave-bar b3" />
+                  </span>
+                )}
+                {isRemoteMuted && (
+                  <span className="call-muted-tag" title="Muted" style={{ marginLeft: 4, color: '#f87171' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+                    </svg>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Bottom Tile: You */}
+            <div className="call-sidebar-user-tile local">
+              {isLocalSharing ? (
+                // If local is sharing, local user's info card goes here
+                <div className="call-video-placeholder">
+                  <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
+                    <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
+                      <span>Y</span>
+                    </div>
+                  </div>
+                  <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>You</span>
+                  <span style={{ fontSize: 11, color: '#a78bfa' }}>🖥️ Sharing screen</span>
+                </div>
+              ) : (
+                // If local is NOT sharing (remote is sharing), your live camera goes here (mirrored selfie)
+                <>
+                  <video
+                    ref={localVideoRef}
+                    className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
+                    autoPlay
+                    playsInline
+                    muted
+                  />
+                  {(isCameraOff || isCameraUnavailable) && (
+                    <div className="call-video-placeholder">
+                      <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
+                        <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
+                          <span>Y</span>
+                        </div>
+                      </div>
+                      <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>You</span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Local Badge & Flip Camera */}
+              <div className="call-panel-identity-label" style={{ bottom: 8, left: 8, right: 8, display: 'flex', justifyContent: 'space-between', padding: '3px 8px', fontSize: 11 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span className="call-identity-dot online" />
+                  <span className="call-identity-name">You</span>
+                </div>
+                {!isLocalSharing && !isCameraOff && !isCameraUnavailable && (
+                  <button
+                    type="button"
+                    className="call-panel-switch-cam-btn"
+                    style={{ width: 22, height: 22 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      flipCamera();
+                    }}
+                    title={currentFacingMode === 'user' ? 'Switch camera' : 'Front camera'}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="23 4 23 10 17 10" />
+                      <polyline points="1 20 1 14 7 14" />
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`call-video-stage view-mode-${viewMode} aspect-${aspectClass}`}>
+    <div className={`call-video-stage view-mode-${viewMode} ${focusedParticipant !== 'none' ? 'has-focused-participant' : ''}`}>
       <div className="call-stage-presentation-frame">
-        {/* REMOTE PARTICIPANT (Tara) */}
-        <div className="call-video-panel remote-panel" aria-label={`Live video of ${partnerName}`}>
+        {/* REMOTE PARTICIPANT (Phone or Laptop) */}
+        <div
+          className={`call-video-panel remote-panel ${
+            isRemoteScreenSharing ? 'is-screen-share' : ''
+          } ${
+            focusedParticipant === 'remote'
+              ? 'is-focused-main'
+              : focusedParticipant === 'local'
+              ? 'is-pip-window'
+              : ''
+          }`}
+          style={isMobile ? undefined : { aspectRatio: `${remoteAspect}` }}
+          onClick={handleRemoteClick}
+          aria-label={`Live video of ${partnerName}`}
+        >
+          {/* Focus Hint on Hover */}
+          <div className={`call-panel-focus-hint ${focusedParticipant === 'remote' ? 'exit' : ''}`}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              {focusedParticipant === 'remote' ? (
+                <>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </>
+              ) : (
+                <>
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </>
+              )}
+            </svg>
+            <span>{focusedParticipant === 'remote' ? 'Exit full video' : 'Click for full video'}</span>
+          </div>
+
           {/* Layer 1: Ambient live video background (Same live stream, cover, subdued, NO blur) */}
           <video
             ref={remoteBgVideoRef}
-            className={`call-video-bg-live ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
+            className={`call-video-bg-live ${isRemoteScreenSharing || isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
             autoPlay
             playsInline
             muted
@@ -770,12 +598,12 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
           />
 
           {/* Vignette mask to blend boundaries and prevent duplicate person effect */}
-          <div className={`call-video-vignette-overlay ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`} />
+          <div className={`call-video-vignette-overlay ${isRemoteScreenSharing || isRemoteCameraOff || !isConnected ? 'hidden' : ''}`} />
 
           {/* Layer 2: Main Remote Video (100% sharp, uncropped, native aspect ratio) */}
           <video
             ref={remoteVideoRef}
-            className={`call-video-fg-live remote-main ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
+            className={`call-video-fg-live remote-main ${isRemoteScreenSharing ? 'is-screen-share' : ''} ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
             autoPlay
             playsInline
             muted
@@ -809,32 +637,68 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
           <div className="call-panel-identity-label top-user">
             <span className={`call-identity-dot ${isConnected ? 'online' : 'reconnecting'}`} />
             <span className="call-identity-name">{partnerName}</span>
-            {isRemoteSpeaking && isConnected && (
+            {isRemoteSpeaking && isConnected && !isRemoteMuted && (
               <span className="call-speaking-wave-tag" title="Speaking">
                 <span className="call-wave-bar b1" />
                 <span className="call-wave-bar b2" />
                 <span className="call-wave-bar b3" />
               </span>
             )}
+            {isRemoteMuted && (
+              <span className="call-muted-tag" title="Remote user muted" style={{ marginLeft: '6px', color: '#f87171', display: 'flex', alignItems: 'center' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+              </span>
+            )}
           </div>
         </div>
 
-        {/* LOCAL PARTICIPANT (Adi / You) */}
+        {/* LOCAL PARTICIPANT (You) */}
         <div
           ref={localPanelRef}
-          className={`call-video-panel local-panel ${viewMode === 'pip' ? 'is-pip-window' : 'is-stacked-tile'}`}
-          style={viewMode === 'pip' ? { aspectRatio: `${localAspect}` } : undefined}
-          onPointerDown={viewMode === 'pip' ? handlePointerDown : undefined}
-          onPointerMove={viewMode === 'pip' ? handlePointerMove : undefined}
-          onPointerUp={viewMode === 'pip' ? handlePointerUp : undefined}
-          onPointerCancel={viewMode === 'pip' ? handlePointerUp : undefined}
+          className={`call-video-panel local-panel ${
+            isScreenSharing ? 'is-screen-share' : ''
+          } ${
+            focusedParticipant === 'local'
+              ? 'is-focused-main'
+              : isLocalPip
+              ? 'is-pip-window'
+              : viewMode === 'grid'
+              ? 'is-grid-tile'
+              : 'is-stacked-tile'
+          }`}
+          style={isMobile || isLocalPip ? undefined : { aspectRatio: `${localAspect}` }}
+          onClick={handleLocalClick}
+          onPointerDown={isLocalPip ? handlePointerDown : undefined}
+          onPointerMove={isLocalPip ? handlePointerMove : undefined}
+          onPointerUp={isLocalPip ? handlePointerUp : undefined}
+          onPointerCancel={isLocalPip ? handlePointerUp : undefined}
           aria-label="Your live video preview"
-          role={viewMode === 'pip' ? 'region' : undefined}
+          role={isLocalPip ? 'region' : undefined}
         >
+          {/* Focus Hint on Hover */}
+          <div className={`call-panel-focus-hint ${focusedParticipant === 'local' ? 'exit' : ''}`}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              {focusedParticipant === 'local' ? (
+                <>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </>
+              ) : (
+                <>
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </>
+              )}
+            </svg>
+            <span>{focusedParticipant === 'local' ? 'Exit full video' : 'Click for full video'}</span>
+          </div>
+
           {/* In Stacked Mode: Ambient live video background (Same live stream, cover, subdued, mirrored, NO blur) */}
           <video
             ref={localBgVideoRef}
-            className={`call-video-bg-live local ${isCameraOff || isCameraUnavailable || viewMode === 'pip' ? 'hidden' : ''}`}
+            className={`call-video-bg-live local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isScreenSharing ? 'is-screen-share' : ''} ${isCameraOff || isCameraUnavailable || isLocalPip ? 'hidden' : ''}`}
             autoPlay
             playsInline
             muted
@@ -842,12 +706,12 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
           />
 
           {/* Vignette mask for stacked mode */}
-          <div className={`call-video-vignette-overlay ${isCameraOff || isCameraUnavailable || viewMode === 'pip' ? 'hidden' : ''}`} />
+          <div className={`call-video-vignette-overlay ${isScreenSharing || isCameraOff || isCameraUnavailable || isLocalPip ? 'hidden' : ''}`} />
 
-          {/* Main Local Video (100% sharp, mirrored, complete native frame) */}
+          {/* Main Local Video (100% sharp, complete native frame; un-mirrored when screen sharing or rear camera) */}
           <video
             ref={localVideoRef}
-            className={`call-video-fg-live local-main ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
+            className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isScreenSharing ? 'is-screen-share' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
             autoPlay
             playsInline
             muted
@@ -855,7 +719,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
 
           {/* Camera Off / Unavailable Placeholder */}
           {(isCameraOff || isCameraUnavailable) && (
-            <div className={`call-video-placeholder ${viewMode === 'pip' ? 'in-pip' : ''}`}>
+            <div className={`call-video-placeholder ${isLocalPip ? 'in-pip' : ''}`}>
               <div className="call-avatar-wrapper">
                 <div className="call-avatar">
                   <span>Y</span>
@@ -869,24 +733,22 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
           )}
 
           {/* Local Identity Badge, Camera Switch, Drag Handle */}
-          <div className={`call-panel-identity-label ${viewMode === 'pip' ? 'pip-header' : 'bottom-user'}`}>
+          <div className={`call-panel-identity-label ${isLocalPip ? 'pip-header' : 'bottom-user'}`}>
             <div className="call-pip-badge">
               <span className="call-identity-dot online" />
               <span className="call-identity-name">You</span>
             </div>
             <div className="call-panel-actions">
-              {availableCameras.length > 1 && !isCameraOff && !isCameraUnavailable && (
+              {!isCameraOff && !isCameraUnavailable && (
                 <button
                   type="button"
                   className="call-panel-switch-cam-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    const currentIndex = availableCameras.findIndex(c => c.deviceId === activeCameraDeviceId);
-                    const nextIndex = (currentIndex + 1) % availableCameras.length;
-                    onSwitchCamera(availableCameras[nextIndex].deviceId);
+                    flipCamera();
                   }}
-                  title="Switch camera"
-                  aria-label="Switch camera"
+                  title={currentFacingMode === 'user' ? 'Switch to rear camera' : 'Switch to front camera'}
+                  aria-label={currentFacingMode === 'user' ? 'Switch to rear camera' : 'Switch to front camera'}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="23 4 23 10 17 10" />
@@ -895,7 +757,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                   </svg>
                 </button>
               )}
-              {viewMode === 'pip' && (
+              {isLocalPip && (
                 <div className="call-pip-drag-handle" title="Drag to move">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                     <circle cx="8" cy="6" r="2" />
@@ -915,19 +777,21 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   );
 });
 
+
 export default function ActiveCallPanel() {
+
   const {
     activeCall,
     callState,
     toggleMute,
     toggleCamera,
-    switchCamera,
-    captureSnapshot,
+    flipCamera,
     isCameraOff,
     isRemoteCameraOff,
     isCameraUnavailable,
-    availableCameras,
-    activeCameraDeviceId,
+    isRemoteMuted,
+    remoteMuteNotification,
+    currentFacingMode,
     reconnectStatusMessage,
     hangup,
     voiceExperience,
@@ -938,21 +802,9 @@ export default function ActiveCallPanel() {
     availableOutputDevices,
     selectedOutputDeviceId,
     setAudioOutputDevice,
-    audioPipelineMode,
-    setAudioPipelineMode,
-    videoQualityMode,
-    setVideoQualityMode,
-    realtimeTelemetry,
-    showDiagnosticsPanel,
-    setShowDiagnosticsPanel,
-    videoCodecPreference,
-    setVideoCodecPreference,
-    enableSdpBandwidthPacing,
-    setEnableSdpBandwidthPacing,
-    videoBitrateTargetMbps,
-    setVideoBitrateTargetMbps,
     // Phase 10: Screen Sharing
     isScreenSharing,
+    isRemoteScreenSharing,
     startScreenSharing,
     stopScreenSharing
   } = useCall();
@@ -962,13 +814,34 @@ export default function ActiveCallPanel() {
   const localBgVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteBgVideoRef = useRef<HTMLVideoElement | null>(null);
+  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [viewMode, setViewMode] = useState<'stacked' | 'pip'>('stacked');
-  const [aspectMode, setAspectMode] = useState<'4:3' | '1:1' | 'fit' | 'fill' | 'full'>('fit');
+  const [viewMode, setViewMode] = useState<'grid' | 'stacked' | 'pip' | 'screenshare'>('stacked');
+  const [isScreenshareFullscreen, setIsScreenshareFullscreen] = useState(false);
+  const [hideFloatingTiles, setHideFloatingTiles] = useState(false);
+  const [focusedParticipant, setFocusedParticipant] = useState<'none' | 'remote' | 'local'>('none');
   const [showControls, setShowControls] = useState(true);
-  const [snapshotToast, setSnapshotToast] = useState(false);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Auto-switch to screenshare layout when either participant shares screen
+  useEffect(() => {
+    if (isScreenSharing || isRemoteScreenSharing) {
+      setViewMode('screenshare');
+      setFocusedParticipant('none');
+    } else {
+      setViewMode(prev => (prev === 'screenshare' ? 'stacked' : prev));
+      setIsScreenshareFullscreen(false);
+      setHideFloatingTiles(false);
+    }
+  }, [isScreenSharing, isRemoteScreenSharing]);
 
   const isConnected = callState === 'CONNECTED';
   const isReconnecting = callState === 'RECONNECTING';
@@ -1002,18 +875,48 @@ export default function ActiveCallPanel() {
       if (remoteVideoRef.current) {
         rtcService.bindRemoteVideoElement(remoteVideoRef.current);
       }
+      if (isScreenSharing && screenVideoRef.current) {
+        rtcService.bindScreenVideoElement(screenVideoRef.current);
+      }
+      rtcService.triggerVideoPlayback();
     }
     const localEl = localVideoRef.current;
     const localBgEl = localBgVideoRef.current;
     const remoteEl = remoteVideoRef.current;
     const remoteBgEl = remoteBgVideoRef.current;
+    const screenEl = screenVideoRef.current;
     return () => {
       if (localEl) rtcService.unbindLocalVideoElement(localEl);
       if (localBgEl) rtcService.unbindLocalVideoElement(localBgEl);
       if (remoteEl) rtcService.unbindRemoteVideoElement(remoteEl);
       if (remoteBgEl) rtcService.unbindRemoteVideoElement(remoteBgEl);
+      if (screenEl) rtcService.unbindScreenVideoElement(screenEl);
     };
-  }, [activeCall?.callType, callState]);
+  }, [activeCall?.callType, callState, viewMode, isScreenSharing, isRemoteScreenSharing, isScreenshareFullscreen, focusedParticipant]);
+
+  // Imperatively attach screen share stream to hero video element as soon as available
+  useEffect(() => {
+    if (isScreenSharing && screenVideoRef.current) {
+      const stream = rtcService.getScreenStream();
+      if (stream) {
+        if (screenVideoRef.current.srcObject !== stream) {
+          screenVideoRef.current.srcObject = stream;
+        }
+        screenVideoRef.current.play().catch(() => {});
+      }
+    }
+  }, [isScreenSharing, viewMode]);
+
+  // Imperatively trigger video playback when connection stabilizes or camera states change
+  // This is required to fix black video in Safari when removing 'display: none' (hidden class)
+  useEffect(() => {
+    if (isConnected && activeCall?.callType === 'video') {
+      const timerId = setTimeout(() => {
+        rtcService.triggerVideoPlayback();
+      }, 50);
+      return () => clearTimeout(timerId);
+    }
+  }, [isConnected, activeCall?.callType, isCameraOff, isRemoteCameraOff, isCameraUnavailable, viewMode, isScreenSharing, isRemoteScreenSharing, isScreenshareFullscreen]);
 
   // Fullscreen change listener
   useEffect(() => {
@@ -1067,23 +970,11 @@ export default function ActiveCallPanel() {
     }
   };
 
-  const handleTakeSnapshot = async () => {
-    const blob = await captureSnapshot();
-    if (blob) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `wibby-call-snapshot-${Date.now()}.jpg`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setSnapshotToast(true);
-      setTimeout(() => setSnapshotToast(false), 2500);
-    }
-  };
-
   if (!activeCall) return null;
 
   const partnerName = activeCall.remoteUser.name || 'Partner';
+  const partnerUsername = (activeCall.remoteUser as any).username ? `@${(activeCall.remoteUser as any).username}` : '';
+
   const initial = partnerName.charAt(0).toUpperCase();
   const isVideo = activeCall.callType === 'video';
 
@@ -1104,14 +995,25 @@ export default function ActiveCallPanel() {
       >
         <MemoizedVideoStage
           viewMode={viewMode}
-          aspectMode={aspectMode}
+          isScreenSharing={isScreenSharing}
+          isRemoteScreenSharing={isRemoteScreenSharing}
+          isScreenshareFullscreen={isScreenshareFullscreen}
+          setIsScreenshareFullscreen={setIsScreenshareFullscreen}
+          hideFloatingTiles={hideFloatingTiles}
+          setHideFloatingTiles={setHideFloatingTiles}
+          toggleFullscreen={toggleFullscreen}
+          isFullscreen={isFullscreen}
+          focusedParticipant={focusedParticipant}
+          setFocusedParticipant={setFocusedParticipant}
           remoteVideoRef={remoteVideoRef}
           remoteBgVideoRef={remoteBgVideoRef}
           localVideoRef={localVideoRef}
           localBgVideoRef={localBgVideoRef}
+          screenVideoRef={screenVideoRef}
           isRemoteCameraOff={isRemoteCameraOff}
           isCameraOff={isCameraOff}
           isCameraUnavailable={isCameraUnavailable}
+          isRemoteMuted={isRemoteMuted}
           isConnected={isConnected}
           isReconnecting={isReconnecting}
           reconnectStatusMessage={reconnectStatusMessage}
@@ -1119,15 +1021,15 @@ export default function ActiveCallPanel() {
           partnerName={partnerName}
           initial={initial}
           avatar={activeCall.remoteUser.avatar || undefined}
-          availableCameras={availableCameras}
-          activeCameraDeviceId={activeCameraDeviceId}
-          onSwitchCamera={switchCamera}
+          flipCamera={flipCamera}
+          currentFacingMode={currentFacingMode}
         />
 
           {/* Top Bar Header (Auto-Hiding) */}
           <div className={`call-video-top-bar ${showControls ? 'visible' : 'hidden'}`}>
             <div className="call-video-header-info">
               <span className="call-video-partner-name">{partnerName}</span>
+              {partnerUsername && <span className="call-video-partner-handle" style={{ opacity: 0.75, fontSize: '0.85em', marginLeft: '4px' }}>{partnerUsername}</span>}
               <span className="call-status-divider">•</span>
               <span className="call-duration">{formatCallDuration(activeCall.duration)}</span>
               <span className="call-status-divider">•</span>
@@ -1169,78 +1071,22 @@ export default function ActiveCallPanel() {
             </div>
 
             <div className="call-video-top-actions">
-              {/* Presentation Aspect Ratio Switcher (Bug #2) */}
-              <div className="call-aspect-switcher" role="group" aria-label="Video presentation size">
-                {(['4:3', '1:1', 'fit', 'fill', 'full'] as const).map(mode => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className={`call-aspect-btn ${aspectMode === mode ? 'active' : ''}`}
-                    onClick={() => setAspectMode(mode)}
-                    title={`Switch presentation to ${mode}`}
-                  >
-                    {mode === 'fit' ? 'Fit' : mode === 'fill' ? 'Fill' : mode === 'full' ? 'Full' : mode}
-                  </button>
-                ))}
-              </div>
-
-              {/* Developer Diagnostics Button (Keeps technical stats developer-only) */}
-              {isConnected && (
+              {/* If focused, show Split View button to exit full video */}
+              {focusedParticipant !== 'none' && (
                 <button
                   type="button"
-                  className={`call-quality-badge-btn ${showDiagnosticsPanel ? 'active' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowDiagnosticsPanel(!showDiagnosticsPanel);
-                  }}
-                  title="Developer Diagnostics & Quality Telemetry"
-                  aria-label="Developer Diagnostics & Quality Telemetry"
+                  className="call-restore-split-btn"
+                  onClick={() => setFocusedParticipant('none')}
+                  title="Exit full video and return to split view"
+                  aria-label="Return to split view"
                 >
-                  <span className={`call-quality-dot ${callQuality}`} />
-                  <span>
-                    {realtimeTelemetry?.sendWidth && realtimeTelemetry?.sendHeight
-                      ? `${realtimeTelemetry.sendHeight}p`
-                      : callQuality === 'excellent' ? '1080p' : 'HD'}
-                  </span>
-                </button>
-              )}
-
-              {/* Snapshot Button */}
-              {isConnected && (
-                <button
-                  type="button"
-                  className="call-icon-btn"
-                  onClick={handleTakeSnapshot}
-                  title="Take snapshot photo"
-                  aria-label="Take snapshot"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                    <circle cx="12" cy="13" r="4" />
-                  </svg>
-                </button>
-              )}
-
-              {/* View Layout Toggle Button */}
-              <button
-                type="button"
-                className={`call-icon-btn ${viewMode === 'pip' ? 'active' : ''}`}
-                onClick={() => setViewMode(prev => prev === 'stacked' ? 'pip' : 'stacked')}
-                title={viewMode === 'stacked' ? 'Switch to Main + PiP view' : 'Switch to Stacked view'}
-                aria-label={viewMode === 'stacked' ? 'Switch to Main + PiP view' : 'Switch to Stacked view'}
-              >
-                {viewMode === 'stacked' ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="18" height="8" rx="2" />
                     <rect x="3" y="13" width="18" height="8" rx="2" />
                   </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="20" height="18" rx="2" />
-                    <rect x="13" y="12" width="7" height="7" rx="1.5" fill="currentColor" fillOpacity="0.3" />
-                  </svg>
-                )}
-              </button>
+                  <span>Split View</span>
+                </button>
+              )}
 
               {/* Fullscreen Button */}
               <button
@@ -1282,28 +1128,7 @@ export default function ActiveCallPanel() {
             </div>
           </div>
 
-          {/* Realtime Call Diagnostics & Quality Modal (Developer-Only) */}
-          {showDiagnosticsPanel && (
-            <ErrorBoundary fallback={null}>
-              <CallDiagnosticsModal
-                telemetry={realtimeTelemetry}
-                audioMode={audioPipelineMode}
-                setAudioMode={setAudioPipelineMode}
-                videoMode={videoQualityMode}
-                setVideoMode={setVideoQualityMode}
-                voiceExperience={voiceExperience}
-                setVoiceExperience={setVoiceExperience}
-                videoCodecPref={videoCodecPreference}
-                setVideoCodecPref={setVideoCodecPreference}
-                enableSdpPacing={enableSdpBandwidthPacing}
-                setEnableSdpPacing={setEnableSdpBandwidthPacing}
-                videoBitrateTarget={videoBitrateTargetMbps}
-                setVideoBitrateTarget={setVideoBitrateTargetMbps}
-                isVideo={true}
-                onClose={() => setShowDiagnosticsPanel(false)}
-              />
-            </ErrorBoundary>
-          )}
+          
 
           {/* Dedicated In-Call Connection Status Overlay Card (Phase 9 Final) */}
           {isReconnecting && (
@@ -1344,37 +1169,81 @@ export default function ActiveCallPanel() {
             </div>
           )}
 
-          {/* Snapshot saved toast notification */}
-          {snapshotToast && (
-            <div className="call-snapshot-toast" role="status">
-              📸 Snapshot saved to downloads
+
+          {/* Remote Mute Notification Banner (Req 16) */}
+          {remoteMuteNotification && (
+            <div className="call-status-toast muted-toast" role="status">
+              <span>🎙️ {remoteMuteNotification}</span>
             </div>
           )}
 
           {/* Bottom Floating Control Bar (Auto-Hiding) */}
           <div className={`call-video-controls-bar ${showControls ? 'visible' : 'hidden'}`}>
-            {/* View Layout Toggle Button (Phase 9 Final UI Lock) */}
+            {/* View Layout Toggle Button */}
             <div className="call-control-item">
               <button
                 type="button"
-                className={`call-btn view-ctrl ${viewMode === 'pip' ? 'active' : ''}`}
-                onClick={() => setViewMode(prev => prev === 'stacked' ? 'pip' : 'stacked')}
-                title={viewMode === 'stacked' ? 'Switch to Main + PiP view' : 'Switch to Stacked view'}
-                aria-label={viewMode === 'stacked' ? 'Switch to Main + PiP view' : 'Switch to Stacked view'}
+                className={`call-btn view-ctrl ${viewMode !== 'stacked' || focusedParticipant !== 'none' ? 'active' : ''}`}
+                onClick={() => {
+                  setFocusedParticipant('none');
+                  if (isScreenSharing || isRemoteScreenSharing) {
+                    setViewMode(prev => (prev === 'screenshare' ? 'stacked' : prev === 'stacked' ? 'grid' : 'screenshare'));
+                  } else if (isMobile) {
+                    setViewMode(prev => (prev === 'stacked' ? 'pip' : 'stacked'));
+                  } else {
+                    setViewMode(prev => (prev === 'stacked' ? 'grid' : prev === 'grid' ? 'pip' : 'stacked'));
+                  }
+                }}
+                title={`Switch layout (Current: ${
+                  focusedParticipant !== 'none'
+                    ? 'Full Video'
+                    : viewMode === 'screenshare'
+                    ? 'Screen Share'
+                    : viewMode === 'stacked'
+                    ? 'Stacked'
+                    : viewMode === 'grid'
+                    ? 'Side-by-Side'
+                    : 'Main + PiP'
+                })`}
+                aria-label="Switch layout"
               >
-                {viewMode === 'stacked' ? (
+                {viewMode === 'screenshare' && (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="13" height="18" rx="2" />
+                    <rect x="17" y="3" width="5" height="8" rx="1.5" />
+                    <rect x="17" y="13" width="5" height="8" rx="1.5" />
+                  </svg>
+                )}
+                {viewMode === 'stacked' && (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="18" height="8" rx="2" />
                     <rect x="3" y="13" width="18" height="8" rx="2" />
                   </svg>
-                ) : (
+                )}
+                {viewMode === 'grid' && (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="8" height="18" rx="2" />
+                    <rect x="13" y="3" width="8" height="18" rx="2" />
+                  </svg>
+                )}
+                {viewMode === 'pip' && (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="3" width="20" height="18" rx="2" />
                     <rect x="13" y="12" width="7" height="7" rx="1.5" fill="currentColor" fillOpacity="0.3" />
                   </svg>
                 )}
               </button>
-              <span className="call-btn-label">{viewMode === 'stacked' ? 'Stacked' : 'Main + PiP'}</span>
+              <span className="call-btn-label">
+                {focusedParticipant !== 'none'
+                  ? 'Full Video'
+                  : viewMode === 'screenshare'
+                  ? 'Screen'
+                  : viewMode === 'stacked'
+                  ? 'Stacked'
+                  : viewMode === 'grid'
+                  ? 'Side by Side'
+                  : 'Main + PiP'}
+              </span>
             </div>
 
             {/* Camera Toggle Button */}
@@ -1401,6 +1270,29 @@ export default function ActiveCallPanel() {
               </button>
               <span className="call-btn-label">{isCameraOff ? 'Camera off' : 'Camera on'}</span>
             </div>
+
+            {/* Flip / Switch Camera Button — always visible in video calls */}
+            {!isCameraOff && !isCameraUnavailable && (
+              <div className="call-control-item">
+                <button
+                  type="button"
+                  className="call-btn switch-cam-ctrl"
+                  onClick={() => flipCamera()}
+                  title={currentFacingMode === 'user' ? 'Switch to rear camera' : 'Switch to front camera'}
+                  aria-label={currentFacingMode === 'user' ? 'Switch to rear camera' : 'Switch to front camera'}
+                >
+                  {/* Camera flip icon */}
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 7h-3a2 2 0 0 1-2-2V2" />
+                    <path d="M9 2H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5" />
+                    <path d="M14 2v3a2 2 0 0 0 2 2h4" />
+                    <circle cx="10" cy="13" r="3" />
+                    <path d="M16 10l2 2-2 2" />
+                  </svg>
+                </button>
+                <span className="call-btn-label">{currentFacingMode === 'user' ? 'Rear' : 'Front'}</span>
+              </div>
+            )}
 
             {/* Screen Share Button (Phase 10 - Supported browsers only) */}
             {isScreenShareSupported && (
@@ -1495,17 +1387,7 @@ export default function ActiveCallPanel() {
       <div className="call-card">
         {/* Top Bar: Diagnostics & Minimize to Floating Capsule */}
         <div className="call-card-top-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-          {isConnected ? (
-            <button
-              type="button"
-              className={`call-quality-badge-btn ${showDiagnosticsPanel ? 'active' : ''}`}
-              onClick={() => setShowDiagnosticsPanel(!showDiagnosticsPanel)}
-              title="Quality Diagnostics"
-            >
-              <span className={`call-quality-dot ${callQuality}`} />
-              <span>Diagnostics</span>
-            </button>
-          ) : <div />}
+          
 
           <button
             type="button"
@@ -1523,28 +1405,7 @@ export default function ActiveCallPanel() {
           </button>
         </div>
 
-        {/* Realtime Call Diagnostics & Quality Modal */}
-        {showDiagnosticsPanel && (
-          <ErrorBoundary fallback={null}>
-            <CallDiagnosticsModal
-              telemetry={realtimeTelemetry}
-              audioMode={audioPipelineMode}
-              setAudioMode={setAudioPipelineMode}
-              videoMode={videoQualityMode}
-              setVideoMode={setVideoQualityMode}
-              voiceExperience={voiceExperience}
-              setVoiceExperience={setVoiceExperience}
-              videoCodecPref={videoCodecPreference}
-              setVideoCodecPref={setVideoCodecPreference}
-              enableSdpPacing={enableSdpBandwidthPacing}
-              setEnableSdpPacing={setEnableSdpBandwidthPacing}
-              videoBitrateTarget={videoBitrateTargetMbps}
-              setVideoBitrateTarget={setVideoBitrateTargetMbps}
-              isVideo={false}
-              onClose={() => setShowDiagnosticsPanel(false)}
-            />
-          </ErrorBoundary>
-        )}
+        
 
         {/* Reconnecting Status Notification Bar */}
         {isReconnecting && (
@@ -1567,6 +1428,11 @@ export default function ActiveCallPanel() {
         </div>
 
         <h2 id="active-call-title" className="call-name">{partnerName}</h2>
+        {partnerUsername && (
+          <div className="call-partner-handle" style={{ fontSize: '0.9rem', color: 'var(--wibby-text-muted, rgba(255,255,255,0.7))', marginTop: '-2px', marginBottom: '8px' }}>
+            {partnerUsername}
+          </div>
+        )}
 
         <div className={`call-status-badge ${isConnected ? 'connected' : isReconnecting ? 'reconnecting' : 'connecting'}`}>
           {isReconnecting ? (
@@ -1578,10 +1444,28 @@ export default function ActiveCallPanel() {
                 <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
               </svg>
               <span className="call-duration">{formatCallDuration(activeCall.duration)}</span>
-              <span className="call-status-divider">•</span>
-              <span className={`call-speaking-tag ${isRemoteSpeaking ? 'active' : ''}`}>
-                {isRemoteSpeaking ? 'Speaking' : 'Listening'}
-              </span>
+              {isRemoteMuted ? (
+                <>
+                  <span className="call-status-divider">•</span>
+                  <span className="call-remote-muted-badge" title={`${partnerName} is muted`}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <line x1="8" y1="23" x2="16" y2="23" />
+                    </svg>
+                    <span>Muted</span>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="call-status-divider">•</span>
+                  <span className={`call-speaking-tag ${isRemoteSpeaking ? 'active' : ''}`}>
+                    {isRemoteSpeaking ? 'Speaking' : 'Listening'}
+                  </span>
+                </>
+              )}
               <span className="call-status-divider">•</span>
               <span className={`call-quality-dot ${callQuality}`} title={`Audio Quality: ${callQuality}`}>
                 {callQuality === 'excellent' && 'HD'}

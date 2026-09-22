@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { formatFileSize, validateClientFile, ACCEPT_PATTERNS, type MediaCategory } from '../config/media';
 import { uploadMedia, type UploadProgressEvent, type UploadMediaHandle } from '../services/mediaService';
+import { generateUUID } from '../utils/uuid';
 import './MediaPreviewModal.css';
 
 export interface InitialMediaFile {
@@ -45,7 +46,7 @@ export default function MediaPreviewModal({
     return initialFiles.map(f => {
       const isMedia = f.category === 'image' || f.category === 'video';
       return {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         file: f.file,
         category: f.category,
         objectUrl: isMedia ? URL.createObjectURL(f.file) : undefined,
@@ -155,7 +156,7 @@ export default function MediaPreviewModal({
 
       const isMedia = validation.category === 'image' || validation.category === 'video';
       newItems.push({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         file,
         category: validation.category,
         objectUrl: isMedia ? URL.createObjectURL(file) : undefined,
@@ -209,7 +210,7 @@ export default function MediaPreviewModal({
       setCurrentUploadIndex(i);
       setItems(prev => prev.map((item, idx) => idx === i ? { ...item, status: 'uploading', progress: 0 } : item));
 
-      const clientMessageId = crypto.randomUUID();
+      const clientMessageId = generateUUID();
       // Attach caption to the first item
       const itemCaption = (i === 0) ? caption.trim() : '';
 

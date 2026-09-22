@@ -5,6 +5,7 @@ import { getDb } from '../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
 import { registerCallHandlers } from './callHandler.js';
 import { registerTogetherHandlers } from './togetherHandler.js';
+import { registerGameHandlers } from './gameHandler.js';
 
 // Singleton io instance for use elsewhere if needed
 let ioInstance: SocketIOServer | null = null;
@@ -111,6 +112,9 @@ export function initializeSocket(httpServer: HttpServer) {
 
     // Register Together Mode Handlers
     registerTogetherHandlers(io, socket, userSockets);
+
+    // Register Mini-Game Handlers (Req 21)
+    registerGameHandlers(io, socket, userSockets);
 
     // Auto-join all conversation rooms for this user upon connection to prevent race conditions
     (async () => {
@@ -234,6 +238,29 @@ export function initializeSocket(httpServer: HttpServer) {
         }
       } catch (err) {
         console.error('Error processing read-ack:', err);
+      }
+    });
+
+    // Shared theme family sync (Requirement 10 & 17)
+    socket.on('conversation:theme-family', async (data: { conversationId: string; themeFamily: string }) => {
+      try {
+        if (!data?.conversationId || !data?.themeFamily) return;
+        const db = getDb();
+        const conv = await db.collection('conversations').findOne({ _id: new ObjectId(data.conversationId) });
+        if (!conv || !conv.members.includes(uid)) return;
+
+        await db.collection('conversations').updateOne(
+          { _id: new ObjectId(data.conversationId) },
+          { $set: { themeFamily: data.themeFamily, updatedAt: new Date() } }
+        );
+
+        io.to(`conversation:${data.conversationId}`).emit('conversation:theme-family-update', {
+          conversationId: data.conversationId,
+          themeFamily: data.themeFamily,
+          updatedBy: uid
+        });
+      } catch (err) {
+        console.error('Error handling conversation:theme-family:', err);
       }
     });
 

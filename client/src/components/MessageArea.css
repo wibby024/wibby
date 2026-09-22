@@ -828,7 +828,7 @@
 .chat-drop-title {
   font-size: 20px;
   font-weight: 700;
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
   letter-spacing: -0.01em;
 }
 
@@ -888,7 +888,7 @@
   height: 32px;
   border-radius: 50%;
   background: rgba(124, 58, 237, 0.2);
-  color: var(--primary-light, #c4b5fd);
+  color: var(--wibby-primary-light, #a78bfa);
   flex-shrink: 0;
 }
 
@@ -906,13 +906,24 @@
 .message-call-title {
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--text-primary, #f3f4f6);
+  color: inherit;
+}
+
+.message-wrapper.partner .message-call-title {
+  color: var(--wibby-text);
 }
 
 .message-call-duration {
   font-size: 11.5px;
-  color: var(--text-muted, #9ca3af);
   font-variant-numeric: tabular-nums;
+}
+
+.message-wrapper.partner .message-call-duration {
+  color: var(--wibby-text-muted);
+}
+
+.message-wrapper.own .message-call-duration {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* Pinned Messages Top Banner */
@@ -1075,8 +1086,8 @@
 /* Location Bubble (Live & Static Mini Map Widget) */
 .message-location-bubble-container {
   width: 100%;
-  max-width: 340px;
-  min-width: 260px;
+  max-width: min(340px, 100%);
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1566,6 +1577,27 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 480px) {
+  .message-area.has-messages {
+    padding: 0.875rem 0.625rem;
+  }
+  .message-wrapper {
+    max-width: 88%;
+  }
+  .message-location-bubble-container {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .bubble-file-card {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .bubble-image-wrap,
+  .bubble-video-wrap {
+    max-width: 100%;
   }
 }
 

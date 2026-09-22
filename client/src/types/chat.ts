@@ -58,6 +58,7 @@ export interface Message {
   mediaKey?: string;
   mimeType?: string;
   fileName?: string;
+  caption?: string | null;
   fileSize?: number;
   duration?: number | null;
   waveform?: number[] | null;
@@ -66,6 +67,7 @@ export interface Message {
   updatedAt?: string;
   editedAt?: string | null;
   deletedAt?: string | null;
+  deletedFor?: string[];
   deletedForEveryone?: boolean;
   deletedForSelf?: boolean;
   replyToMessageId?: string | null;
@@ -119,7 +121,16 @@ export interface TogetherSession {
   version?: number;
 }
 
+export type ThemeFamily =
+  | 'classic'
+  | 'sunset'
+  | 'ocean'
+  | 'emerald'
+  | 'rose'
+  | 'midnight';
+
 export type ChatThemePreset = 
+  | ThemeFamily
   | 'ig-classic'
   | 'ig-cyberpunk'
   | 'ig-ocean'
@@ -134,3 +145,20 @@ export type ChatThemePreset =
   | 'emerald-forest' 
   | 'rose-quartz' 
   | 'slate-minimal';
+
+export type GameType = 'tictactoe' | 'dotsandboxes' | 'wordimposter';
+
+export interface GameState {
+  gameId: string;
+  conversationId: string;
+  gameType: GameType;
+  players: { [uid: string]: { name?: string; symbol?: string; color?: string } };
+  playerOrder: string[];
+  currentTurn: string;
+  status: 'waiting' | 'in_progress' | 'won' | 'draw' | 'declined' | 'ended';
+  winnerId?: string | null;
+  scores: { [uid: string]: number };
+  stateData: any;
+  updatedAt: string;
+}
+

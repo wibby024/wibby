@@ -8,7 +8,9 @@ export const MEDIA_LIMITS = {
     'image/jpeg',
     'image/png',
     'image/webp',
-    'image/gif'
+    'image/gif',
+    'image/heic',
+    'image/heif'
   ],
 
   ALLOWED_VIDEO_MIMES: [
@@ -112,10 +114,10 @@ export function getBestAudioRecorderMimeType(): string {
 }
 
 export const ACCEPT_PATTERNS = {
-  image: 'image/*,.jpg,.jpeg,.png,.webp,.gif,.JPG,.JPEG,.PNG,.WEBP,.GIF',
+  image: 'image/*,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.JPG,.JPEG,.PNG,.WEBP,.GIF,.HEIC,.HEIF',
   video: 'video/*,.mp4,.webm,.mov,.MP4,.WEBM,.MOV',
   file: '.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.PDF,.TXT,.DOC,.DOCX,.XLS,.XLSX,.PPT,.PPTX,.ZIP,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip,application/x-zip-compressed',
-  all: 'image/*,video/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,.mov,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip,application/x-zip-compressed'
+  all: 'image/*,video/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.mp4,.webm,.mov,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip,application/x-zip-compressed'
 };
 
 export function validateClientFile(file: File, requestedCategory?: MediaCategory): { valid: boolean; category: MediaCategory; error?: string } {
@@ -126,8 +128,8 @@ export function validateClientFile(file: File, requestedCategory?: MediaCategory
   const mime = file.type ? file.type.toLowerCase().trim() : '';
   const ext = '.' + (file.name.split('.').pop() || '').toLowerCase().trim();
 
-  const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-  const imageMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/pjpeg', 'image/x-png', 'image/webp', 'image/gif'];
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif'];
+  const imageMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/pjpeg', 'image/x-png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
   const videoExtensions = ['.mp4', '.webm', '.mov', '.qt'];
   const videoMimes = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'];
   const audioExtensions = ['.webm', '.ogg', '.mp4', '.m4a', '.aac', '.wav', '.mp3'];
@@ -154,11 +156,19 @@ export function validateClientFile(file: File, requestedCategory?: MediaCategory
   }
 
   if (!detectedCategory) {
-    return {
-      valid: false,
-      category: requestedCategory || 'file',
-      error: 'Unsupported file type. Supported: Photos (PNG, JPG, WEBP, GIF), Videos (MP4, WEBM, MOV), Voice notes (WebM, MP4, AAC, OGG), Documents (PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, ZIP)'
-    };
+    // iOS / Android workaround: some browsers omit MIME type for HEIC/HEIF and
+    // other native camera formats. If the user selected via a typed picker (Photo,
+    // Video, Document), trust that category rather than rejecting the file.
+    if (requestedCategory) {
+      console.log(`[WIBBY MEDIA] Unknown mime "${mime}" with ext "${ext}", trusting requestedCategory "${requestedCategory}"`);
+      detectedCategory = requestedCategory;
+    } else {
+      return {
+        valid: false,
+        category: 'file',
+        error: 'Unsupported file type. Supported: Photos (PNG, JPG, WEBP, GIF, HEIC), Videos (MP4, WEBM, MOV), Voice notes (WebM, MP4, AAC, OGG), Documents (PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, ZIP)'
+      };
+    }
   }
 
   // If user requested a specific category (e.g. Photo button), check for compatibility

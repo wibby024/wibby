@@ -1,24 +1,64 @@
+/* ============================================
+   Watch Together Player - Unified 16:9 Layout
+   ============================================ */
+
 .together-dock {
   background: var(--wibby-surface);
   border: 1px solid var(--wibby-border);
-  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
-  margin: 0.75rem 1.25rem;
   overflow: hidden;
-  transition: all 0.25s var(--ease-out);
-  animation: dockSlideDown 0.25s var(--ease-out);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
   z-index: 100;
 }
 
+/* 1. ONE Standard Layout (Docked seamlessly in chat flow above messages) */
+.together-dock.standard {
+  position: relative;
+  width: calc(100% - 1.5rem);
+  max-width: 780px;
+  margin: 0.65rem auto 0.5rem auto;
+  border-radius: var(--radius-xl);
+  flex-shrink: 0;
+  animation: dockSlideDown 0.25s var(--ease-out);
+}
+
 @keyframes dockSlideDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
+/* 2. Minimized Floating Draggable PiP (Goes to either left or right side) */
 .together-dock.minimized {
-  margin-bottom: 0.25rem;
+  position: fixed;
+  z-index: 1000;
+  width: 290px;
+  max-width: calc(100vw - 28px);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--wibby-border);
+  transition: left 0.25s cubic-bezier(0.16, 1, 0.3, 1), top 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+  touch-action: none;
+  user-select: none;
 }
 
+.together-dock.minimized.dragging {
+  transition: none !important;
+  cursor: grabbing !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75), 0 0 0 1.5px var(--wibby-primary);
+}
+
+/* Prevent iframe from eating pointer events during drag */
+.together-dock.minimized.dragging iframe,
+.together-dock.minimized.dragging video {
+  pointer-events: none !important;
+}
+
+/* Header Bar */
 .together-dock-header {
   display: flex;
   align-items: center;
@@ -28,10 +68,36 @@
   border-bottom: 1px solid var(--wibby-border);
 }
 
+.together-dock-header.minimized-header {
+  cursor: grab;
+  padding: 0.45rem 0.75rem;
+}
+
+.together-dock.dragging .together-dock-header.minimized-header {
+  cursor: grabbing;
+}
+
 .together-dock-title-wrap {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.together-drag-grip {
+  font-size: 1.15rem;
+  color: var(--wibby-text-muted);
+  cursor: grab;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  letter-spacing: -1px;
+  padding-right: 2px;
+}
+
+.together-dock.dragging .together-drag-grip {
+  cursor: grabbing;
+  color: var(--wibby-primary);
 }
 
 .together-badge {
@@ -39,19 +105,24 @@
   font-weight: 700;
   color: var(--wibby-primary);
   background: var(--wibby-primary-subtle);
-  padding: 0.25rem 0.625rem;
+  padding: 0.2rem 0.55rem;
   border-radius: var(--radius-full);
+  white-space: nowrap;
 }
 
 .together-sync-status {
   font-size: 0.75rem;
   color: var(--wibby-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .together-dock-controls {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  flex-shrink: 0;
 }
 
 .together-ctrl-btn {
@@ -63,6 +134,9 @@
   justify-content: center;
   font-size: 0.8125rem;
   color: var(--wibby-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
   transition: var(--transition-fast);
 }
 
@@ -71,12 +145,21 @@
   color: var(--wibby-text);
 }
 
+.together-ctrl-btn.side-swap-btn {
+  font-size: 0.95rem;
+}
+
 .together-ctrl-btn.close-btn:hover {
   color: var(--wibby-danger);
 }
 
+/* Body */
 .together-dock-body {
   padding: 0.75rem;
+}
+
+.together-dock-body.minimized-body {
+  padding: 0.45rem;
 }
 
 .together-url-form {
@@ -97,15 +180,18 @@
 .together-url-input:focus {
   border-color: var(--wibby-primary);
   box-shadow: 0 0 0 3px var(--wibby-primary-glow);
+  outline: none;
 }
 
 .together-start-btn {
   padding: 0.625rem 1.25rem;
   background: var(--wibby-primary);
   color: #fff;
+  border: none;
   border-radius: var(--radius-md);
   font-size: 0.875rem;
   font-weight: 600;
+  cursor: pointer;
   transition: var(--transition-fast);
 }
 
@@ -118,36 +204,61 @@
   cursor: not-allowed;
 }
 
-.together-player-frame-wrap {
+.together-player-content-wrap {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
 .change-media-form {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+/* ============================================
+   EXACT 16:9 Video Ratio Protection
+   ============================================ */
+.together-player-frame-wrap {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000000;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.together-player-frame-wrap.full-frame {
+  max-height: 440px;
+}
+
+.together-player-frame-wrap.mini-frame {
+  max-height: 164px;
 }
 
 .together-iframe,
 .together-video-player {
   width: 100%;
-  height: 260px;
+  height: 100%;
+  aspect-ratio: 16 / 9;
   border: none;
-  border-radius: var(--radius-md);
-  background: #000;
+  background: #000000;
+  display: block;
   object-fit: contain;
 }
 
+/* Sync Action Bar */
 .together-sync-action-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem 0.25rem;
 }
 
 .together-seek-btn {
-  padding: 0.4rem 0.65rem;
+  padding: 0.38rem 0.65rem;
   background: var(--wibby-surface-hover);
   color: var(--wibby-text);
   border: 1px solid var(--wibby-border);
@@ -164,8 +275,14 @@
   color: var(--wibby-primary);
 }
 
+.together-seek-btn.mini {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  flex: 1;
+}
+
 .together-sync-play-btn {
-  padding: 0.4rem 0.875rem;
+  padding: 0.38rem 0.95rem;
   background: var(--wibby-primary-subtle);
   color: var(--wibby-primary);
   border: 1px solid transparent;
@@ -181,14 +298,60 @@
   color: #fff;
 }
 
+.together-sync-play-btn.mini {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  flex: 1.2;
+}
+
+.together-mini-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.2rem 0;
+}
+
 .together-host-tag {
   font-size: 0.75rem;
   color: var(--wibby-text-muted);
   white-space: nowrap;
 }
 
+/* Empty Hint for Minimized Pill */
+.together-mini-empty-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.78rem;
+  color: var(--wibby-text-muted);
+  cursor: pointer;
+  background: var(--wibby-chat-bg);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+.together-mini-empty-hint:hover {
+  background: var(--wibby-surface-hover);
+  color: var(--wibby-text);
+}
+
+.together-mini-expand-text {
+  background: var(--wibby-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Mobile Responsive */
 @media (max-width: 640px) {
-  .together-dock {
+  .together-dock.standard {
+    width: calc(100% - 1rem);
     margin: 0.5rem;
     border-radius: var(--radius-lg);
   }
@@ -197,9 +360,8 @@
     padding: 0.5rem;
   }
 
-  .together-iframe,
-  .together-video-player {
-    height: 200px;
+  .together-dock.minimized {
+    width: calc(100vw - 32px);
+    max-width: 280px;
   }
 }
-

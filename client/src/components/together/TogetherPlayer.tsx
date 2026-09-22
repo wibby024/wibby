@@ -45,6 +45,12 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose }:
   const [changeUrlInput, setChangeUrlInput] = useState('');
   const [syncStatus, setSyncStatus] = useState('Sync ready');
 
+  // Draggable Mini-Player Coordinates & Snapping State
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [snappedSide, setSnappedSide] = useState<'left' | 'right'>('right');
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const isLocalActionRef = useRef(false);
@@ -52,6 +58,20 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose }:
   // Position & playback clock tracking
   const currentPosRef = useRef<number>(0);
   const playStartTimestampRef = useRef<number | null>(null);
+
+  const dragStartRef = useRef<{
+    startX: number;
+    startY: number;
+    initialX: number;
+    initialY: number;
+    moved: boolean;
+  }>({
+    startX: 0,
+    startY: 0,
+    initialX: 0,
+    initialY: 0,
+    moved: false
+  });
 
   const sendYouTubeCommand = useCallback((func: 'playVideo' | 'pauseVideo' | 'seekTo', args: any[] = []) => {
     if (iframeRef.current && iframeRef.current.contentWindow) {
@@ -189,13 +209,155 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose }:
     socket.on('together:action', handleAction);
     socket.on('together:ended', handleEnded);
 
+    // Re-sync YouTube playback when user switches back to this tab
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && iframeRef.current) {
+        setTimeout(() => {
+          const pos = getCurrentPosition();
+          sendYouTubeCommand('seekTo', [pos, true]);
+          if (isPlaying) {
+            sendYouTubeCommand('playVideo');
+          }
+        }, 400);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       socket.off('together:started', handleState);
       socket.off('together:state', handleState);
       socket.off('together:action', handleAction);
       socket.off('together:ended', handleEnded);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [socket, conversationId, partnerName, onClose, user?.uid, sendYouTubeCommand]);
+  }, [socket, conversationId, partnerName, onClose, user?.uid, sendYouTubeCommand, getCurrentPosition, isPlaying]);
+
+  // Default position for minimized card (docked to bottom-right or bottom-left)
+  const getDefaultPosition = useCallback((side: 'left' | 'right' = 'right') => {
+    if (typeof window === 'undefined') return { x: 20, y: 120 };
+    const cardW = Math.min(290, window.innerWidth - 32);
+    const cardH = session ? 230 : 54;
+    const padding = 16;
+    const bottomComposerSpace = 92;
+
+    const x = side === 'left' ? padding : window.innerWidth - cardW - padding;
+    const y = Math.max(padding + 60, window.innerHeight - cardH - bottomComposerSpace);
+    return { x, y };
+  }, [session]);
+
+  const handleToggleMinimize = () => {
+    setIsMinimized(prev => {
+      const next = !prev;
+      if (next && !position) {
+        setPosition(getDefaultPosition(snappedSide));
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSide = () => {
+    setSnappedSide(prev => {
+      const nextSide = prev === 'right' ? 'left' : 'right';
+      const elW = containerRef.current?.offsetWidth || 290;
+      const padding = 16;
+      const nextX = nextSide === 'left' ? padding : window.innerWidth - elW - padding;
+      setPosition(p => ({
+        x: nextX,
+        y: p ? p.y : (window.innerHeight - 280)
+      }));
+      return nextSide;
+    });
+  };
+
+  // Draggable Pointer Events
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (!isMinimized) return;
+    if ((e.target as HTMLElement).closest('button, input, a')) return;
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+    const el = containerRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const curX = position ? position.x : rect.left;
+    const curY = position ? position.y : rect.top;
+
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: curX,
+      initialY: curY,
+      moved: false
+    };
+
+    setIsDragging(true);
+    el.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging || !isMinimized) return;
+
+    const dx = e.clientX - dragStartRef.current.startX;
+    const dy = e.clientY - dragStartRef.current.startY;
+
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      dragStartRef.current.moved = true;
+    }
+
+    const el = containerRef.current;
+    const currentW = el?.offsetWidth || 290;
+    const currentH = el?.offsetHeight || 200;
+
+    const padding = 12;
+    const maxX = window.innerWidth - currentW - padding;
+    const maxY = window.innerHeight - currentH - padding;
+
+    const newX = Math.max(padding, Math.min(maxX, dragStartRef.current.initialX + dx));
+    const newY = Math.max(padding + 50, Math.min(maxY, dragStartRef.current.initialY + dy));
+
+    setPosition({ x: newX, y: newY });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!isDragging || !isMinimized) return;
+    setIsDragging(false);
+
+    const el = containerRef.current;
+    if (el && el.hasPointerCapture(e.pointerId)) {
+      el.releasePointerCapture(e.pointerId);
+    }
+
+    // Snap to left or right side smoothly
+    if (position) {
+      const elW = el?.offsetWidth || 290;
+      const centerX = position.x + elW / 2;
+      const screenCenterX = window.innerWidth / 2;
+      const snapLeft = centerX < screenCenterX;
+      const padding = 16;
+      const snappedX = snapLeft ? padding : window.innerWidth - elW - padding;
+      setSnappedSide(snapLeft ? 'left' : 'right');
+      setPosition(prev => prev ? { x: snappedX, y: prev.y } : null);
+    }
+  };
+
+  // Adjust on window resize
+  useEffect(() => {
+    if (!isMinimized) return;
+    const handleResize = () => {
+      if (position && containerRef.current) {
+        const elW = containerRef.current.offsetWidth || 290;
+        const elH = containerRef.current.offsetHeight || 200;
+        const padding = 16;
+        const maxX = window.innerWidth - elW - padding;
+        const maxY = window.innerHeight - elH - padding;
+        const newX = snappedSide === 'left' ? padding : maxX;
+        const newY = Math.max(padding + 50, Math.min(maxY, position.y));
+        setPosition({ x: newX, y: newY });
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isMinimized, position, snappedSide]);
 
   const handleStartSession = (e: React.FormEvent) => {
     e.preventDefault();
@@ -312,69 +474,113 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose }:
   const isHost = hostUid === user?.uid;
 
   return (
-    <div className={`together-dock ${isMinimized ? 'minimized' : ''}`}>
-      <div className="together-dock-header">
+    <div
+      ref={containerRef}
+      className={`together-dock ${isMinimized ? 'minimized' : 'standard'} ${isDragging ? 'dragging' : ''} ${snappedSide}`}
+      style={isMinimized && position ? { left: `${position.x}px`, top: `${position.y}px` } : undefined}
+      onPointerDown={isMinimized ? handlePointerDown : undefined}
+      onPointerMove={isMinimized ? handlePointerMove : undefined}
+      onPointerUp={isMinimized ? handlePointerUp : undefined}
+      onPointerCancel={isMinimized ? handlePointerUp : undefined}
+    >
+      {/* Header Bar */}
+      <div className={`together-dock-header ${isMinimized ? 'minimized-header' : ''}`}>
         <div className="together-dock-title-wrap">
-          <span className="together-badge">🍿 Together Mode</span>
-          <span className="together-sync-status">{syncStatus}</span>
+          {isMinimized && (
+            <span className="together-drag-grip" title="Drag to move or dock to left/right">
+              ⠿
+            </span>
+          )}
+          <span className="together-badge">🍿 {isMinimized ? 'Together' : 'Watch Together'}</span>
+          <span className="together-sync-status">
+            {isMinimized ? (session ? (isPlaying ? '▶ Playing' : '⏸ Paused') : 'Link mode') : syncStatus}
+          </span>
         </div>
 
         <div className="together-dock-controls">
-          {session && (
+          {!isMinimized && session && (
             <button
               type="button"
               className="together-ctrl-btn"
               onClick={() => setShowChangeMedia(prev => !prev)}
               title={showChangeMedia ? 'Cancel change' : 'Change Video'}
+              aria-label="Change video"
             >
               🔄
             </button>
           )}
+
+          {isMinimized && (
+            <button
+              type="button"
+              className="together-ctrl-btn side-swap-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleSide();
+              }}
+              title={snappedSide === 'right' ? 'Dock to Left Side' : 'Dock to Right Side'}
+              aria-label="Dock to opposite side"
+            >
+              {snappedSide === 'right' ? '⇤' : '⇥'}
+            </button>
+          )}
+
           <button
             type="button"
             className="together-ctrl-btn"
-            onClick={() => setIsMinimized(prev => !prev)}
-            title={isMinimized ? 'Expand' : 'Minimize'}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleMinimize();
+            }}
+            title={isMinimized ? 'Expand Video Player' : 'Minimize to side (Draggable)'}
+            aria-label={isMinimized ? 'Expand player' : 'Minimize player'}
           >
-            {isMinimized ? '▲' : '▼'}
+            {isMinimized ? '🗖' : '🗕'}
           </button>
+
           <button
             type="button"
             className="together-ctrl-btn close-btn"
-            onClick={handleEndSession}
-            title="End Session"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEndSession();
+            }}
+            title="Close Watch Together"
+            aria-label="Close session"
           >
             ✕
           </button>
         </div>
       </div>
 
-      {!isMinimized && (
-        <div className="together-dock-body">
-          {session ? (
-            <div className="together-player-frame-wrap">
-              {showChangeMedia && (
-                <form onSubmit={handleChangeMedia} className="together-url-form change-media-form">
-                  <input
-                    type="url"
-                    className="together-url-input"
-                    placeholder="Paste new YouTube or video link..."
-                    value={changeUrlInput}
-                    onChange={e => setChangeUrlInput(e.target.value)}
-                    autoFocus
-                  />
-                  <button type="submit" className="together-start-btn" disabled={!changeUrlInput.trim()}>
-                    Update Media
-                  </button>
-                </form>
-              )}
+      {/* Body */}
+      <div className={`together-dock-body ${isMinimized ? 'minimized-body' : ''}`}>
+        {session ? (
+          <div className="together-player-content-wrap">
+            {!isMinimized && showChangeMedia && (
+              <form onSubmit={handleChangeMedia} className="together-url-form change-media-form">
+                <input
+                  type="url"
+                  className="together-url-input"
+                  placeholder="Paste new YouTube or video link..."
+                  value={changeUrlInput}
+                  onChange={e => setChangeUrlInput(e.target.value)}
+                  autoFocus
+                />
+                <button type="submit" className="together-start-btn" disabled={!changeUrlInput.trim()}>
+                  Update Media
+                </button>
+              </form>
+            )}
 
+            {/* Video Frame: EXACT 16:9 Aspect Ratio in Both Full and Minimized Modes */}
+            <div className={`together-player-frame-wrap ${isMinimized ? 'mini-frame' : 'full-frame'}`}>
               {session.mediaType === 'direct' ? (
                 <video
                   ref={videoRef}
                   src={session.mediaUrl}
                   className="together-video-player"
-                  controls
+                  controls={!isMinimized}
                   playsInline
                   onPlay={() => {
                     if (!isLocalActionRef.current && socket) {
@@ -421,11 +627,14 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose }:
                   src={session.mediaUrl}
                   className="together-iframe"
                   title="Together Media Player"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
                 />
               )}
+            </div>
 
+            {/* Action Bar */}
+            {!isMinimized ? (
               <div className="together-sync-action-bar">
                 <button
                   type="button"
@@ -455,8 +664,37 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose }:
                   {isHost ? '🎮 Synced Host' : `🎮 Synced with ${partnerName}`}
                 </span>
               </div>
-            </div>
-          ) : (
+            ) : (
+              <div className="together-mini-action-bar">
+                <button
+                  type="button"
+                  className="together-seek-btn mini"
+                  onClick={() => handleSeekRelative(-10)}
+                  title="Rewind 10s"
+                >
+                  ⏪
+                </button>
+                <button
+                  type="button"
+                  className="together-sync-play-btn mini"
+                  onClick={handleTogglePlay}
+                  title={isPlaying ? 'Pause Both' : 'Play Both'}
+                >
+                  {isPlaying ? '⏸' : '▶'}
+                </button>
+                <button
+                  type="button"
+                  className="together-seek-btn mini"
+                  onClick={() => handleSeekRelative(10)}
+                  title="Forward 10s"
+                >
+                  ⏩
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          !isMinimized ? (
             <form onSubmit={handleStartSession} className="together-url-form">
               <input
                 type="url"
@@ -470,9 +708,18 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose }:
                 Watch Together
               </button>
             </form>
-          )}
-        </div>
-      )}
+          ) : (
+            <div
+              className="together-mini-empty-hint"
+              onClick={() => setIsMinimized(false)}
+              title="Click to enter video URL"
+            >
+              <span>Paste video link to watch together</span>
+              <button type="button" className="together-mini-expand-text">Open ➔</button>
+            </div>
+          )
+        )}
+      </div>
     </div>
   );
 }

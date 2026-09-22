@@ -29,7 +29,27 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [profile, setProfile] = useState<UserProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem('wibby_user_profile')
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed) {
+          const rawName = parsed.displayName || parsed.display_name;
+          const isBadName = !rawName || rawName === 'Unknown' || rawName === 'unknown';
+          return {
+            ...parsed,
+            displayName: isBadName
+              ? (parsed.username && parsed.username !== 'unknown' ? parsed.username : 'User')
+              : rawName
+          };
+        }
+      }
+      return null
+    } catch {
+      return null
+    }
+  })
   const [loading, setLoading] = useState(true)
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
 
@@ -43,13 +63,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       if (response.ok) {
         const data = await response.json()
-        setProfile(data)
-      } else {
-        setProfile(null)
+        const resolvedDisplayName = (data.displayName && data.displayName !== 'Unknown' && data.displayName !== 'unknown')
+          ? data.displayName
+          : (data.display_name && data.display_name !== 'Unknown' && data.display_name !== 'unknown')
+            ? data.display_name
+            : (firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'User'));
+
+        const resolvedUsername = (data.username && data.username !== 'unknown')
+          ? data.username
+          : (firebaseUser.displayName?.toLowerCase().replace(/\s+/g, '_') || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'user'));
+
+        const normalizedProfile: UserProfile = {
+          ...data,
+          displayName: resolvedDisplayName,
+          username: resolvedUsername,
+          avatarUrl: data.avatarUrl || firebaseUser.photoURL || null,
+          bio: data.bio || ''
+        }
+        setProfile(normalizedProfile)
+        try {
+          localStorage.setItem('wibby_user_profile', JSON.stringify(normalizedProfile))
+        } catch {}
       }
     } catch (err) {
       console.error('Failed to fetch profile', err)
-      setProfile(null)
     }
   }
 
@@ -65,20 +102,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsPasswordRecovery(true)
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser)
+      setLoading(false)
       if (firebaseUser) {
-        await fetchProfile(firebaseUser)
+        fetchProfile(firebaseUser)
       } else {
         setProfile(null)
+        try {
+          localStorage.removeItem('wibby_user_profile')
+        } catch {}
       }
-      setLoading(false)
     })
 
     return () => unsubscribe()
   }, [])
 
   const signOut = async () => {
+    try {
+      localStorage.removeItem('wibby_user_profile')
+      if (user?.uid) {
+        localStorage.removeItem(`wibby-paired-${user.uid}`)
+        localStorage.removeItem(`wibby-partner-${user.uid}`)
+        localStorage.removeItem(`wibby-conv-${user.uid}`)
+      }
+    } catch {}
+    setProfile(null)
     await firebaseSignOut(auth)
   }
 

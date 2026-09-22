@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatMessageTime } from '../utils/time';
 import { formatFileSize, formatAudioDuration } from '../config/media';
 import { downloadMediaFile } from '../services/mediaService';
+import { generateUUID } from '../utils/uuid';
 import MessageComposer from './MessageComposer';
 import MessageContextMenu from './MessageContextMenu';
 import MessageActionBar from './MessageActionBar';
@@ -82,6 +83,8 @@ export function normalizeMessage(raw: any): Message {
     updatedAt: raw.updatedAt || undefined,
     editedAt: raw.editedAt || null,
     deletedAt: raw.deletedAt || null,
+    deletedFor: Array.isArray(raw.deletedFor) ? raw.deletedFor : [],
+    deletedForEveryone: !!raw.deletedAt,
     status: raw.status || 'sent',
     replyToMessageId,
     forwardedFromMessageId,
@@ -601,11 +604,14 @@ interface MessageAreaProps {
   conversationId: string;
   partner?: {
     display_name?: string;
+    displayName?: string;
     username?: string;
+    email?: string;
   };
+  onOpenGame?: () => void;
 }
 
-export default function MessageArea({ conversationId, partner }: MessageAreaProps) {
+export default function MessageArea({ conversationId, partner, onOpenGame }: MessageAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [contextMenu, setContextMenu] = useState<{ msgId: string, x: number, y: number } | null>(null);
@@ -633,7 +639,11 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const chatDragCounterRef = useRef<number>(0);
 
-  const partnerName = partner?.display_name || partner?.username || 'Partner';
+  const rawPartnerName = partner?.display_name || partner?.displayName;
+  const isBadPartnerName = !rawPartnerName || rawPartnerName === 'Unknown' || rawPartnerName === 'unknown';
+  const partnerName = !isBadPartnerName
+    ? rawPartnerName
+    : (partner?.username && partner.username !== 'unknown' ? partner.username : (partner?.email ? partner.email.split('@')[0] : 'Partner'));
 
   // Prevent browser default behavior of opening dropped files
   useEffect(() => {
@@ -778,8 +788,23 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
       });
       const data = await response.json();
       if (response.ok) {
-        setMessages((data.messages || []).map(normalizeMessage));
+        const loaded = (data.messages || []).map(normalizeMessage);
+        setMessages(loaded);
         setTimeout(scrollToBottom, 100);
+
+        // Bulk delivery-ack: for any partner messages that are still 'sent' (not yet delivered),
+        // emit acks so the sender sees double ticks. We do this once after the initial load.
+        if (socket && socket.connected) {
+          const undelivered = loaded.filter(
+            (m: Message) => m.senderId !== user?.uid && (m.status === 'sent' || !m.status)
+          );
+          undelivered.forEach((m: Message) => {
+            socket.emit('message:delivery-ack', {
+              messageId: m._id,
+              conversationId
+            });
+          });
+        }
       }
     } catch (err) {
       console.error('Failed to fetch messages:', err);
@@ -905,9 +930,15 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
 
     const handleDeleteEvent = (data: { messageId: string, conversationId: string, everyone?: boolean, deletedAt?: string }) => {
       if (data.conversationId !== conversationId) return;
-      setMessages(prev => prev.map(msg => 
-        msg._id === data.messageId ? { ...msg, deletedAt: data.deletedAt || new Date().toISOString(), text: 'This message was deleted' } : msg
-      ));
+      if (data.everyone === false) {
+        // Delete for me: remove message completely from local view (Req 09)
+        setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
+      } else {
+        // Delete for everyone: update with deleted placeholder
+        setMessages(prev => prev.map(msg => 
+          msg._id === data.messageId ? { ...msg, deletedAt: data.deletedAt || new Date().toISOString(), text: 'This message was deleted' } : msg
+        ));
+      }
     };
 
     const handlePollUpdate = (data: { messageId: string; poll: PollData }) => {
@@ -1078,7 +1109,7 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
   const handleSend = async (text: string, forwardedFromMessageId?: string, mediaProps?: Partial<Message>) => {
     if (!user || !conversationId) return;
 
-    const tempId = crypto.randomUUID();
+    const tempId = generateUUID();
     const tempMsg: Message = {
       _id: tempId,
       clientMessageId: tempId,
@@ -1147,7 +1178,7 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
   const handleSendSpecial = async (specialData: { type: string; poll?: any; location?: any; contact?: any; sticker?: any }) => {
     if (!user || !conversationId) return;
 
-    const tempId = crypto.randomUUID();
+    const tempId = generateUUID();
     const tempMsg: Message = {
       _id: tempId,
       clientMessageId: tempId,
@@ -1386,24 +1417,23 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
     if (!user || !conversationId) return;
     closeContextMenu();
 
+    // Compute the final emoji to send FIRST, from the current snapshot — before the optimistic update mutates state
+    const currentMsg = messages.find(msg => msg._id === msgId);
+    const existingUserReaction = (currentMsg?.reactions || []).find(r => r.senderId === user.uid);
+    const isToggleOff = existingUserReaction?.emoji === emoji;
+    const finalEmojiToSubmit = isToggleOff ? null : emoji;
+
+    // Optimistic UI update
     setMessages(prev => prev.map(m => {
       if (m._id === msgId) {
-        const userReaction = (m.reactions || []).find(r => r.senderId === user.uid);
-        const isToggleOff = userReaction?.emoji === emoji;
-        const finalEmoji = isToggleOff ? null : emoji;
-        
         const otherReactions = (m.reactions || []).filter(r => r.senderId !== user.uid);
         return {
           ...m,
-          reactions: finalEmoji ? [...otherReactions, { senderId: user.uid, emoji: finalEmoji }] : otherReactions
+          reactions: finalEmojiToSubmit ? [...otherReactions, { senderId: user.uid, emoji: finalEmojiToSubmit }] : otherReactions
         };
       }
       return m;
     }));
-
-    const m = messages.find(msg => msg._id === msgId);
-    const userReaction = (m?.reactions || []).find(r => r.senderId === user.uid);
-    const finalEmojiToSubmit = (userReaction?.emoji === emoji) ? null : emoji;
 
     try {
       const token = await user.getIdToken();
@@ -1420,9 +1450,14 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
     }
   };
 
-  const handleDelete = async (msgId: string, everyone = true) => {
+  const handleDelete = async (msgId: string, everyone = false) => {
     if (!user || !conversationId) return;
     closeContextMenu();
+
+    if (!everyone) {
+      // Delete for me: immediately hide from local view
+      setMessages(prev => prev.filter(m => m._id !== msgId));
+    }
 
     try {
       const token = await user.getIdToken();
@@ -1481,11 +1516,17 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
   const handleEditClick = useCallback((msgId: string) => {
     const msg = messages.find(m => m._id === msgId);
     if (msg && (!msg.type || msg.type === 'text')) {
+      const msgAge = Date.now() - new Date(msg.createdAt).getTime();
+      if (msgAge > 120000) {
+        showToast('Messages can only be edited within 2 minutes');
+        closeContextMenu();
+        return;
+      }
       setEditingMessage({ id: msgId, text: msg.text || '' });
       setReplyingTo(null);
       closeContextMenu();
     }
-  }, [messages, closeContextMenu]);
+  }, [messages, closeContextMenu, showToast]);
 
   const cancelReplyOrEdit = useCallback(() => {
     setReplyingTo(null);
@@ -1495,7 +1536,7 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
   const handleBulkDelete = async () => {
     if (!window.confirm(`Delete ${selectedMessages.size} messages?`)) return;
     for (const msgId of selectedMessages) {
-      await handleDelete(msgId);
+      await handleDelete(msgId, false);
     }
     setIsSelectMode(false);
     setSelectedMessages(new Set());
@@ -1589,6 +1630,8 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
 
   const pinnedMsg = messages.slice().reverse().find(m => m.isPinned);
 
+  const visibleMessages = messages.filter(msg => !user?.uid || !msg.deletedFor?.includes(user.uid));
+
   return (
     <div 
       className="chat-area-container"
@@ -1638,7 +1681,7 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
         </div>
       )}
 
-      {messages.length === 0 ? (
+      {visibleMessages.length === 0 ? (
         <div className="message-area empty">
           <div className="empty-state">
             <div className="empty-state-decor">
@@ -1673,10 +1716,10 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
           setHoveredMessageId(null);
         }}>
           <div className="message-list">
-            {messages.map((msg, index) => {
+            {visibleMessages.map((msg, index) => {
               const isOwn = msg.senderId === user?.uid;
-              const prevMsg = messages[index - 1];
-              const nextMsg = messages[index + 1];
+              const prevMsg = visibleMessages[index - 1];
+              const nextMsg = visibleMessages[index + 1];
 
               const GROUPING_TIME_LIMIT = 5 * 60 * 1000;
               const isSameSenderAsPrev = prevMsg && prevMsg.senderId === msg.senderId;
@@ -1908,6 +1951,7 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
           onTyping={handleTyping}
           droppedFiles={droppedFilesForComposer}
           onClearDroppedFiles={() => setDroppedFilesForComposer(null)}
+          onOpenGame={onOpenGame}
         />
       )}
       
@@ -1920,7 +1964,11 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
           isPinned={Boolean(activeMessage.isPinned)}
           onClose={closeContextMenu}
           onReply={() => handleReplyClick(activeMessage._id)}
-          onEdit={(!activeMessage.type || activeMessage.type === 'text') ? () => handleEditClick(activeMessage._id) : undefined}
+          onEdit={(
+            activeMessage.senderId === user?.uid &&
+            (!activeMessage.type || activeMessage.type === 'text') &&
+            (Date.now() - new Date(activeMessage.createdAt).getTime() <= 120000)
+          ) ? () => handleEditClick(activeMessage._id) : undefined}
           onCopy={() => handleCopy(activeMessage._id)}
           onForward={() => handleForward(activeMessage._id)}
           onStar={() => handleToggleStar(activeMessage._id)}
@@ -1929,7 +1977,7 @@ export default function MessageArea({ conversationId, partner }: MessageAreaProp
             setSelectedInfoMsg(activeMessage);
             closeContextMenu();
           }}
-          onDelete={() => handleDelete(activeMessage._id)}
+          onDelete={() => handleDelete(activeMessage._id, false)}
           onSelect={() => {
             setIsSelectMode(true);
             setSelectedMessages(new Set([activeMessage._id]));

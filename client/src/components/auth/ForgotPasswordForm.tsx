@@ -71,21 +71,39 @@ export default function ForgotPasswordForm({ onLogin }: ForgotPasswordFormProps)
       <form className="auth-form" onSubmit={handleSubmit}>
         <label>
           Username
-          <input
-            type="text"
-            placeholder="@username"
-            value={username}
-            onChange={(event) => setUsername(event.target.value.replace(/\s/g, ''))}
-            autoComplete="username"
-            required
-          />
+          <div className="auth-input-wrap">
+            <span className="auth-input-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </span>
+            <input
+              type="text"
+              placeholder="@username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value.replace(/\s/g, ''))}
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              required
+            />
+          </div>
         </label>
 
-        {error && <div className="auth-error">{error}</div>}
-        {success && <div className="auth-success">{success}</div>}
+        {error && <div className="auth-error" role="alert">{error}</div>}
+        {success && <div className="auth-success" role="status">{success}</div>}
 
         <button className="auth-primary-button" disabled={loading}>
-          {loading ? 'Sending link…' : 'Send reset link'}
+          {loading ? (
+            <>
+              <span className="auth-btn-spinner" aria-hidden="true" />
+              Sending link…
+            </>
+          ) : (
+            'Send reset link'
+          )}
         </button>
       </form>
 

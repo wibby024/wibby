@@ -44,12 +44,56 @@ router.get('/profile', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user;
   try {
     const db = getDb();
-    const existing = await db.collection('users').findOne({ firebaseUid: user.uid });
-    if (!existing) {
-      res.status(404).json({ error: 'Profile not found' });
-      return;
+    let existing = await db.collection('users').findOne({ firebaseUid: user.uid });
+    
+    // Check if user exists by email (e.g. registered with email or re-authenticated)
+    if (!existing && user.email) {
+      existing = await db.collection('users').findOne({ email: user.email.toLowerCase() });
+      if (existing) {
+        await db.collection('users').updateOne(
+          { _id: existing._id },
+          { $set: { firebaseUid: user.uid, updatedAt: new Date() } }
+        );
+      }
     }
-    res.json(existing);
+
+    // If still not found, auto-create a user profile document from Firebase user token data
+    if (!existing) {
+      const emailPrefix = user.email ? user.email.split('@')[0] : '';
+      const rawUsername = (emailPrefix || `user_${user.uid.slice(0, 6)}`).replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+      const cleanName = user.name || (emailPrefix ? emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1) : 'Wibby User');
+      
+      const newUser = {
+        firebaseUid: user.uid,
+        username: rawUsername || `user_${Date.now()}`,
+        email: user.email || '',
+        displayName: cleanName,
+        display_name: cleanName,
+        avatarUrl: user.picture || null,
+        bio: '',
+        customStatus: '',
+        privacy: {
+          lastSeen: 'partner',
+          readReceipts: true,
+          typingIndicator: true,
+          storyVisibility: 'partner'
+        },
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      const insertRes = await db.collection('users').insertOne(newUser);
+      existing = { _id: insertRes.insertedId, ...newUser };
+    }
+
+    const resolvedDisplayName = existing.displayName || existing.display_name || existing.username || 'You';
+    const profileResponse = {
+      ...existing,
+      displayName: resolvedDisplayName,
+      display_name: resolvedDisplayName
+    };
+
+    res.json(profileResponse);
   } catch (error) {
     console.error('Error fetching profile:', error);
     res.status(500).json({ error: 'Failed to fetch profile' });
@@ -168,18 +212,35 @@ router.post('/profile', requireAuth, async (req: Request, res: Response) => {
     const parsed = profileSchema.parse(req.body);
     const db = getDb();
     
+    const cleanUsername = parsed.username.replace(/^@+/, '').toLowerCase();
+    const cleanDisplayName = parsed.displayName.trim();
+
     // Check if user already exists
     const existing = await db.collection('users').findOne({ firebaseUid: user.uid });
     if (existing) {
-      res.json(existing);
+      await db.collection('users').updateOne(
+        { _id: existing._id },
+        {
+          $set: {
+            displayName: cleanDisplayName,
+            display_name: cleanDisplayName,
+            username: cleanUsername,
+            email: parsed.email.trim().toLowerCase(),
+            updatedAt: new Date()
+          }
+        }
+      );
+      const updated = await db.collection('users').findOne({ _id: existing._id });
+      res.json(updated);
       return;
     }
     
     const newUser = {
       firebaseUid: user.uid,
-      username: parsed.username.toLowerCase(),
-      email: parsed.email,
-      displayName: parsed.displayName,
+      username: cleanUsername,
+      email: parsed.email.trim().toLowerCase(),
+      displayName: cleanDisplayName,
+      display_name: cleanDisplayName,
       avatarUrl: null,
       bio: '',
       customStatus: '',
@@ -318,7 +379,7 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
 
 const resolveLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: process.env.NODE_ENV === 'production' ? 50 : 200,
   message: { error: 'Too many lookup attempts, please try again later' }
 });
 
@@ -331,8 +392,31 @@ router.post('/resolve-username', resolveLimiter, async (req: Request, res: Respo
   
   try {
     const db = getDb();
-    const normalizedUsername = username.trim().toLowerCase();
-    const existing = await db.collection('users').findOne({ username: normalizedUsername });
+    const raw = username.trim();
+    const clean = raw.replace(/^@+/, '').toLowerCase();
+    const lowerRaw = raw.toLowerCase();
+
+    // Look for matching user by username (clean or @), or by email, prioritizing docs with valid email
+    let existing = await db.collection('users').findOne({
+      $or: [
+        { username: clean },
+        { username: `@${clean}` },
+        { email: clean },
+        { email: lowerRaw }
+      ],
+      email: { $exists: true, $type: 'string', $ne: '' }
+    });
+
+    if (!existing) {
+      existing = await db.collection('users').findOne({
+        $or: [
+          { username: clean },
+          { username: `@${clean}` },
+          { email: clean },
+          { email: lowerRaw }
+        ]
+      });
+    }
     
     if (!existing) {
       res.status(404).json({ error: 'Invalid username or password' });

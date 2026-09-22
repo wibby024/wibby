@@ -11,6 +11,7 @@ interface AttachmentMenuProps {
   onSelectPoll?: () => void;
   onSelectLocation?: () => void;
   onSelectContact?: () => void;
+  onSelectGame?: () => void;
   onBrowseAll: () => void;
   onFilesDropped: (files: File[]) => void;
   onClose: () => void;
@@ -26,6 +27,7 @@ export default function AttachmentMenu({
   onSelectPoll,
   onSelectLocation,
   onSelectContact,
+  onSelectGame,
   onBrowseAll,
   onFilesDropped,
   onClose
@@ -281,6 +283,23 @@ export default function AttachmentMenu({
               <span className="quick-btn-emoji">👤</span>
             </div>
             <span className="quick-btn-label">Contact</span>
+          </button>
+        )}
+
+        {onSelectGame && (
+          <button
+            className="attachment-quick-btn game-btn"
+            onClick={() => {
+              onClose();
+              onSelectGame();
+            }}
+            type="button"
+            tabIndex={0}
+          >
+            <div className="quick-btn-icon-bg game-bg">
+              <span className="quick-btn-emoji">🎮</span>
+            </div>
+            <span className="quick-btn-label">Game</span>
           </button>
         )}
       </div>

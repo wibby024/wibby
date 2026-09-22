@@ -5,7 +5,7 @@
 .mini-map-widget {
   position: relative;
   width: 100%;
-  min-width: 260px;
+  min-width: 0;
   max-width: 380px;
   border-radius: var(--radius-lg, 16px);
   overflow: hidden;
@@ -335,12 +335,16 @@
 }
 
 .mini-map-stop-live-btn {
-  padding: 4px 9px;
+  padding: 6px 12px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.35);
   color: #EF4444;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s;
@@ -352,12 +356,16 @@
 }
 
 .mini-map-open-link {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--wibby-primary-light, #a78bfa);
   text-decoration: none;
-  padding: 4px 6px;
-  border-radius: 4px;
+  padding: 6px 10px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
   transition: background 0.15s;
 }
 

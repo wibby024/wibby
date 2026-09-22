@@ -2,10 +2,10 @@
 
 .call-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
   background: rgba(10, 10, 15, 0.75);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -13,7 +13,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)) 16px;
+  box-sizing: border-box;
   animation: callFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -24,19 +25,29 @@
 
 .call-card {
   width: 100%;
-  max-width: 360px;
-  background: var(--bg-surface, #1e1b2e);
-  border: 1px solid var(--border-color, rgba(167, 139, 250, 0.15));
+  max-width: 370px;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  background: var(--wibby-surface);
+  border: 1px solid var(--wibby-border);
   box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.6), 0 0 32px rgba(124, 58, 237, 0.15);
   border-radius: 24px;
-  padding: 32px 24px 28px;
+  padding: 30px 22px 26px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   position: relative;
-  overflow: hidden;
+  box-sizing: border-box;
   animation: callCardPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.call-card::-webkit-scrollbar {
+  display: none;
 }
 
 .call-card-top-bar {
@@ -51,7 +62,7 @@
 .call-minimize-btn {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--text-muted, #9ca3af);
+  color: var(--wibby-text-muted);
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -144,7 +155,7 @@
 .call-name {
   font-size: 20px;
   font-weight: 700;
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
   margin: 0 0 6px 0;
   letter-spacing: -0.01em;
 }
@@ -158,7 +169,7 @@
   border-radius: 20px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--primary-light, #c4b5fd);
+  color: var(--wibby-primary-light, #a78bfa);
   margin-bottom: 28px;
 }
 
@@ -181,6 +192,8 @@
 .call-duration {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .call-status-divider {
@@ -215,7 +228,7 @@
 .call-speaking-tag {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--text-muted, #9ca3af);
+  color: var(--wibby-text-muted);
   transition: color 0.2s ease;
 }
 
@@ -262,7 +275,7 @@
   gap: 5px;
   border: none;
   background: transparent;
-  color: var(--text-muted, #9ca3af);
+  color: var(--wibby-text-muted);
   font-size: 12px;
   font-weight: 500;
   padding: 4px 11px;
@@ -272,7 +285,7 @@
 }
 
 .call-voice-exp-btn:hover {
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -293,13 +306,13 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
   padding: 4px 12px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--wibby-text-muted);
 }
 
 .call-device-select {
   background: transparent;
   border: none;
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
   font-size: 11.5px;
   outline: none;
   cursor: pointer;
@@ -356,7 +369,7 @@
 
 .call-btn.mute {
   background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
@@ -371,7 +384,7 @@
   font-size: 11px;
   font-weight: 500;
   margin-top: 6px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--wibby-text-muted);
 }
 
 /* Toast alert for call errors */
@@ -458,9 +471,15 @@
    ============================================================ */
 
 .call-video-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   padding: 0;
   background: #07060b;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .call-video-overlay.is-fullscreen {
@@ -469,8 +488,8 @@
 }
 
 .call-video-stage {
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   position: relative;
   overflow: hidden;
   background: #07060b;
@@ -478,6 +497,58 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+}
+
+/* -------------------------------------------------------------
+   VIEW 0: SIDE-BY-SIDE / GRID VIEW (Desktop & Responsive)
+   User 1 (Remote) on left, User 2 (Local) on right (equal size)
+   Full uncropped video presentation in respected side-by-side grid
+   ------------------------------------------------------------- */
+.call-video-stage.view-mode-grid {
+  padding: 68px 24px 84px 24px;
+}
+
+.call-video-stage.view-mode-grid .call-stage-presentation-frame {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  width: min(1440px, 94vw);
+  height: min(720px, calc(100vh - 150px));
+  max-height: 100%;
+  margin: auto;
+  position: relative;
+  align-items: stretch;
+}
+
+.call-video-stage.view-mode-grid .call-video-panel {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  border-radius: 18px;
+  background: #0c0a14;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .call-video-stage.view-mode-grid {
+    padding: 60px 12px 80px 12px;
+  }
+  .call-video-stage.view-mode-grid .call-stage-presentation-frame {
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    gap: 10px;
+  }
+  .call-video-stage.view-mode-grid .call-video-panel {
+    border-radius: 14px;
+  }
 }
 
 /* -------------------------------------------------------------
@@ -492,10 +563,12 @@
 .call-video-stage.view-mode-stacked .call-stage-presentation-frame {
   display: flex;
   flex-direction: column;
+  align-items: center; /* Horizontally center each natural aspect-ratio card */
+  justify-content: center;
   gap: 14px;
-  width: min(880px, 92vw);
-  height: min(820px, calc(100vh - 150px));
-  max-height: 100%;
+  width: 100%;
+  height: min(880px, calc(100vh - 140px));
+  max-height: calc(100vh - 140px);
   margin: auto;
   position: relative;
 }
@@ -503,21 +576,40 @@
 .call-video-stage.view-mode-stacked .call-video-panel {
   flex: 1 1 0;
   min-height: 0;
-  width: 100%;
-  border-radius: 18px;
-  background: #0c0a14;
+  height: 100%;
+  max-height: calc((100vh - 165px) / 2);
+  width: auto;
+  max-width: min(94vw, 1200px);
+  border-radius: 12px;
+  background: #000;
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.call-video-stage.view-mode-stacked .call-video-panel:hover {
+  transform: scale(1.008);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+@media (min-width: 900px) {
+  .call-video-stage.view-mode-stacked .call-stage-presentation-frame {
+    flex-direction: column;
+    width: 100%;
+    height: min(880px, calc(100vh - 130px));
+    gap: 14px;
+  }
 }
 
 @media (max-width: 640px) {
   .call-video-stage.view-mode-stacked {
-    padding: 60px 12px 80px 12px;
+    padding: 60px 10px 80px 10px;
   }
   .call-video-stage.view-mode-stacked .call-stage-presentation-frame {
     width: 100%;
@@ -525,7 +617,8 @@
     gap: 10px;
   }
   .call-video-stage.view-mode-stacked .call-video-panel {
-    border-radius: 14px;
+    border-radius: 10px;
+    max-height: calc((100vh - 150px) / 2);
   }
 }
 
@@ -597,14 +690,346 @@
   transition: none;
 }
 
-@media (max-width: 640px) {
-  .call-video-panel.local-panel.is-pip-window {
-    width: clamp(140px, 36vw, 180px);
-    min-width: 120px;
-    border-radius: 12px;
-    border-width: 1.5px;
+/* -------------------------------------------------------------
+   VIEW 3: SCREEN SHARE + USERS ON RIGHT (STACKED)
+   Shared screen is main hero on left / center.
+   Both participants stacked vertically on the right sidebar.
+   Can be toggled to Full Screen or Screen + Sidebar.
+   ------------------------------------------------------------- */
+.call-video-stage.view-mode-screenshare {
+  padding: 68px 20px 84px 20px;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.call-video-stage.view-mode-screenshare .call-stage-presentation-frame {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 16px;
+  width: min(1840px, 96vw);
+  height: calc(100vh - 120px);
+  max-height: calc(100vh - 120px);
+  margin: auto;
+  position: relative;
+}
+
+/* Hero Fullscreen variation within screenshare mode */
+.call-video-stage.view-mode-screenshare.is-hero-fullscreen {
+  padding: 0;
+}
+
+.call-video-stage.view-mode-screenshare.is-hero-fullscreen .call-stage-presentation-frame {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  gap: 0;
+}
+
+/* Main Shared Screen Container */
+.call-screenshare-main {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  border-radius: 16px;
+  background: #040407;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.call-video-stage.view-mode-screenshare.is-hero-fullscreen .call-screenshare-main {
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  background: #000;
+}
+
+.call-screenshare-main video {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.call-screenshare-main video.is-screen-share {
+  transform: none !important;
+  -webkit-transform: none !important;
+}
+
+/* Right Stacked Column for Both Users */
+.call-screenshare-sidebar {
+  width: clamp(240px, 22vw, 320px);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.call-screenshare-sidebar.tiles-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(20px);
+}
+
+.call-screenshare-sidebar .call-sidebar-user-tile {
+  flex: 1 1 0;
+  min-height: 0;
+  border-radius: 14px;
+  background: #0e0d16;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.call-screenshare-sidebar .call-sidebar-user-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.call-screenshare-sidebar .call-sidebar-user-tile.local video {
+  transform: scaleX(-1); /* Local selfie camera remains mirrored */
+}
+
+/* Floating overlay for users when screenshare is full screen */
+.call-video-stage.view-mode-screenshare.is-hero-fullscreen .call-screenshare-sidebar {
+  position: fixed;
+  top: 72px;
+  right: 20px;
+  z-index: 40;
+  width: clamp(190px, 16vw, 250px);
+  height: auto;
+  max-height: calc(100vh - 160px);
+  background: transparent;
+  pointer-events: auto;
+}
+
+.call-video-stage.view-mode-screenshare.is-hero-fullscreen .call-sidebar-user-tile {
+  height: 135px;
+  aspect-ratio: 16 / 9;
+  flex: none;
+  background: rgba(14, 13, 22, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+  border-radius: 14px;
+}
+
+/* Screenshare Badge Header */
+.call-screenshare-badge-bar {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 9999px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.call-screenshare-hd-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(167, 139, 250, 0.25);
+  color: #c4b5fd;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.call-screenshare-top-actions {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.call-screenshare-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.call-screenshare-action-btn:hover {
+  background: rgba(124, 58, 237, 0.35);
+  border-color: rgba(167, 139, 250, 0.4);
+  transform: translateY(-1px);
+}
+
+.call-screenshare-action-btn.active {
+  background: rgba(124, 58, 237, 0.5);
+  border-color: rgba(167, 139, 250, 0.6);
+  color: #fff;
+}
+
+.call-screenshare-action-btn.icon-only {
+  padding: 6px 8px;
+}
+
+@media (max-width: 768px) {
+  .call-video-stage.view-mode-screenshare {
+    padding: 60px 10px 80px 10px;
+  }
+  .call-video-stage.view-mode-screenshare .call-stage-presentation-frame {
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    gap: 10px;
+  }
+  .call-screenshare-sidebar {
+    width: 100%;
+    height: 120px;
+    flex-direction: row;
+    gap: 10px;
+  }
+  .call-screenshare-sidebar .call-sidebar-user-tile {
+    flex: 1 1 0;
+    height: 100%;
   }
 }
+
+/* -------------------------------------------------------------
+   FOCUSED FULL-VIDEO STAGE (Click to view full video at maximum quality)
+   ------------------------------------------------------------- */
+.call-video-stage.has-focused-participant .call-stage-presentation-frame {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.call-video-stage.has-focused-participant .call-video-panel.is-focused-main {
+  width: auto !important;
+  max-width: min(96vw, 1600px) !important;
+  height: min(900px, calc(100vh - 120px)) !important;
+  max-height: calc(100vh - 120px) !important;
+  flex: none !important;
+  border-radius: 14px;
+  background: #000;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: auto;
+  position: relative;
+  cursor: pointer;
+  animation: callFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.call-video-stage.has-focused-participant .call-video-panel.is-focused-main:hover {
+  box-shadow: 0 20px 54px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+/* Remote PiP window when local is focused */
+.call-video-panel.remote-panel.is-pip-window {
+  position: fixed;
+  bottom: 96px;
+  right: 28px;
+  z-index: 30;
+  width: clamp(220px, 20vw, 320px);
+  max-height: 48vh;
+  border-radius: 14px;
+  background: #000;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.call-video-panel.remote-panel.is-pip-window:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: scale(1.02);
+}
+
+/* Focus Hint Badge on Video Panels */
+.call-panel-focus-hint {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.call-video-panel:hover .call-panel-focus-hint {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.call-panel-focus-hint.exit {
+  opacity: 0.85;
+}
+.call-video-panel:hover .call-panel-focus-hint.exit {
+  opacity: 1;
+}
+
 
 /* -------------------------------------------------------------
    VIDEO LAYERING: AMBIENT LIVE FILL & NATIVE FOREGROUND
@@ -666,6 +1091,46 @@
   transform: scaleX(-1); /* Mirrored selfie */
 }
 
+/* Rear / Environment Camera Unmirroring */
+.call-video-fg-live.local-main.is-rear-camera,
+.call-video-bg-live.local.is-rear-camera,
+.call-video-bg-live.is-rear-camera {
+  transform: none !important;
+  -webkit-transform: none !important;
+}
+
+/* Screen Share Un-mirroring & Clear Rendering - NEVER EVER MIRRORED */
+.call-video-fg-live.is-screen-share,
+.call-video-fg-live.local-main.is-screen-share,
+.call-video-panel.is-screen-share .call-video-fg-live,
+.call-video-panel.is-screen-share .call-video-fg-live.local-main,
+.call-video-bg-live.is-screen-share,
+.call-video-panel.is-screen-share .call-video-bg-live,
+.is-screen-share .call-video-fg-live,
+.is-screen-share .call-video-fg-live.local-main,
+.call-screenshare-main video,
+.call-screenshare-main video.is-screen-share,
+.call-screenshare-main .call-video-fg-live,
+.call-screenshare-main .call-video-fg-live.local-main,
+video.is-screen-share {
+  transform: none !important;
+  -webkit-transform: none !important;
+}
+
+.call-video-panel.is-screen-share {
+  background: #000 !important;
+}
+
+.call-video-panel.is-screen-share .call-video-vignette-overlay,
+.call-video-panel.is-screen-share .call-video-bg-live {
+  display: none !important;
+}
+
+.call-video-panel.is-screen-share .call-video-fg-live {
+  filter: none !important;
+  object-fit: contain !important;
+}
+
 .call-video-fg-live.hidden {
   display: none;
 }
@@ -674,7 +1139,7 @@
 .call-video-panel.local-panel.is-pip-window .call-video-fg-live.local-main {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain; /* Full uncropped video in PiP window */
   filter: none;
 }
 
@@ -818,6 +1283,26 @@
   align-items: center;
   gap: 2.5px;
   margin-left: 4px;
+}
+
+.call-remote-muted-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+  border-radius: 9999px;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  font-weight: 500;
+  margin-left: 6px;
+}
+
+.call-status-toast.muted-toast {
+  background: rgba(30, 27, 46, 0.92);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
 }
 
 .call-wave-bar {
@@ -1068,19 +1553,28 @@
   transform: scale(1.08);
 }
 
-/* Presentation Aspect Ratio Switcher (Bug #2) */
-.call-aspect-switcher {
+/* Presentation Video Rules (Always preserves full uncropped video) */
+.call-video-stage .call-video-fg-live {
+  object-fit: contain;
+}
+
+/* Layout Switcher (Side by Side / Stacked / PiP) */
+.call-layout-switcher {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(18, 16, 28, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 9999px;
   padding: 2px;
   gap: 2px;
 }
 
-.call-aspect-btn {
+.call-layout-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.7);
@@ -1093,98 +1587,101 @@
   line-height: 1.2;
 }
 
-.call-aspect-btn:hover {
+.call-layout-btn:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.12);
 }
 
-.call-aspect-btn.active {
+.call-layout-btn.active {
   background: #7c3aed;
   color: #fff;
   box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
 }
 
-/* Aspect Presentation Mode Frame & Video Rules */
-.call-video-stage.aspect-4-3 .call-stage-presentation-frame {
-  max-width: min(880px, calc((100vh - 150px) * (4 / 3)), 92vw);
-  max-height: min(820px, calc(100vh - 150px));
+.call-restore-split-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(124, 58, 237, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+  transition: all 0.15s ease;
+  line-height: 1.2;
 }
 
-.call-video-stage.aspect-4-3 .call-video-fg-live {
-  object-fit: cover;
+.call-restore-split-btn:hover {
+  background: #7c3aed;
+  transform: scale(1.04);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.55);
 }
 
-.call-video-stage.aspect-1-1 .call-stage-presentation-frame {
-  max-width: min(720px, calc(100vh - 150px), 88vw);
-  max-height: min(720px, calc(100vh - 150px));
-  aspect-ratio: 1 / 1;
+@media (max-width: 720px) {
+  .call-layout-btn span {
+    display: none;
+  }
+  .call-layout-btn {
+    padding: 6px 8px;
+  }
 }
 
-.call-video-stage.aspect-1-1 .call-video-fg-live {
-  object-fit: cover;
-}
-
-.call-video-stage.aspect-fit .call-video-fg-live {
-  object-fit: contain;
-}
-
-.call-video-stage.aspect-fill .call-video-fg-live {
-  object-fit: cover;
-}
-
-.call-video-stage.aspect-full .call-stage-presentation-frame {
-  width: 100% !important;
-  max-width: 100% !important;
-  height: 100% !important;
-  max-height: 100% !important;
-}
-
-.call-video-stage.aspect-full .call-video-fg-live {
-  object-fit: cover;
-}
-
-/* Auto-Hiding Bottom Floating Controls Bar (Hand-drawn layout: bottom-left) */
+/* Auto-Hiding Bottom Floating Controls Bar */
 .call-video-controls-bar {
   position: absolute;
   bottom: 24px;
-  left: 28px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 20px;
+  gap: 12px;
+  padding: 10px 18px;
   border-radius: 9999px;
-  background: rgba(20, 17, 32, 0.88);
+  background: rgba(20, 17, 32, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(167, 139, 250, 0.28);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65), 0 0 24px rgba(124, 58, 237, 0.2);
-  z-index: 25;
+  z-index: 50;
   transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
 }
 
 .call-video-controls-bar.hidden {
   opacity: 0;
-  transform: translateY(16px);
+  transform: translate(-50%, 16px);
   pointer-events: none;
 }
 
 .call-video-controls-bar.visible {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
 }
 
-@media (max-width: 640px) {
-  .call-video-controls-bar {
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 20px;
-  }
-  .call-video-controls-bar.hidden {
-    transform: translate(-50%, 16px);
-  }
-  .call-video-controls-bar.visible {
-    transform: translate(-50%, 0);
-  }
+.call-video-controls-bar .call-control-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.call-video-controls-bar .call-btn {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 50%;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.call-video-controls-bar .call-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
 .call-control-item {
@@ -1195,7 +1692,7 @@
 
 .call-btn.view-ctrl {
   background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
@@ -1226,7 +1723,7 @@
 /* Phase 10: Screen Share Button */
 .call-btn.screen-share {
   background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
   border: 1px solid rgba(255, 255, 255, 0.15);
   transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
 }
@@ -1380,7 +1877,7 @@
 
 .call-recovery-subtitle {
   font-size: 11.5px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--wibby-text-muted);
 }
 
 .call-recovery-actions {
@@ -1699,38 +2196,406 @@
   color: #34d399;
 }
 
-/* Responsive Call Styling */
-@media (max-width: 480px) {
-  .call-card {
-    max-width: 100%;
-    border-radius: 20px;
-    padding: 28px 16px 24px;
+/* ============================================================
+   Comprehensive Mobile & Responsive Calling Experience
+   ============================================================ */
+
+@media (max-width: 768px) {
+  /* Video Call Overlay & Stage */
+  .call-video-overlay {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
   }
 
-  .call-diagnostics-modal {
-    left: 12px;
-    right: 12px;
-    width: auto;
-    max-width: none;
-    top: 64px;
+  .call-video-stage {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    box-sizing: border-box;
+    overflow: hidden !important;
   }
 
-  .call-video-pip-container {
-    width: 105px;
-    height: 140px;
-    bottom: 96px;
-    right: 16px;
+  .call-stage-presentation-frame {
+    overflow: hidden !important;
+  }
+
+  /* Video Call Top Bar */
+  .call-video-top-bar {
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px 12px;
+  }
+
+  .call-video-header-info {
+    gap: 6px;
+    font-size: 13px;
+    min-width: 0;
+    max-width: calc(100vw - 160px);
+    overflow: hidden;
+  }
+
+  .call-video-partner-name {
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 110px;
+  }
+
+  .call-video-top-bar .call-layout-switcher {
+    display: none; /* Layout switcher is already accessible in the bottom controls pill */
+  }
+
+  .call-video-top-actions {
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .call-icon-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .call-icon-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .call-restore-split-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  /* Video Stage View Modes (Stacked, Grid, Screenshare, PiP) */
+  .call-video-stage.view-mode-stacked {
+    padding: calc(52px + env(safe-area-inset-top, 0px)) 8px calc(76px + env(safe-area-inset-bottom, 0px)) 8px;
+  }
+
+  .call-video-stage.view-mode-stacked .call-stage-presentation-frame {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .call-video-stage.view-mode-stacked .call-video-panel {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: calc(50% - 4px) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    aspect-ratio: unset !important;
     border-radius: 14px;
   }
 
-  .call-video-controls-bar {
-    bottom: 20px;
-    gap: 14px;
-    padding: 10px 18px;
+  .call-video-stage.view-mode-grid {
+    padding: calc(52px + env(safe-area-inset-top, 0px)) 8px calc(76px + env(safe-area-inset-bottom, 0px)) 8px;
   }
 
-  .call-video-top-bar {
-    padding: 16px;
+  .call-video-stage.view-mode-grid .call-stage-presentation-frame {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    flex-direction: column;
+    gap: 8px;
+    box-sizing: border-box;
+  }
+
+  .call-video-stage.view-mode-grid .call-video-panel {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: calc(50% - 4px) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    aspect-ratio: unset !important;
+    border-radius: 14px;
+  }
+
+  .call-video-stage.view-mode-screenshare {
+    padding: calc(52px + env(safe-area-inset-top, 0px)) 6px calc(76px + env(safe-area-inset-bottom, 0px)) 6px;
+  }
+
+  .call-video-stage.view-mode-screenshare .call-stage-presentation-frame {
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    gap: 8px;
+    box-sizing: border-box;
+  }
+
+  .call-screenshare-main {
+    flex: 1 1 0;
+    min-height: 0;
+    width: 100%;
+    border-radius: 12px;
+  }
+
+  .call-screenshare-sidebar {
+    width: 100%;
+    height: 80px;
+    flex-direction: row;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .call-screenshare-sidebar .call-sidebar-user-tile {
+    flex: 1 1 0;
+    height: 100%;
+    min-width: 0;
+    border-radius: 10px;
+  }
+
+  /* Mobile Video Rendering & Camera View Enhancements */
+  .call-video-stage .call-video-fg-live {
+    object-fit: cover !important;
+  }
+
+  /* Screenshare must ALWAYS be fully visible, uncropped, and centered */
+  .call-video-stage .call-video-fg-live.is-screen-share,
+  .call-video-panel.is-screen-share .call-video-fg-live,
+  .call-screenshare-main .call-video-fg-live {
+    object-fit: contain !important;
+  }
+
+  /* Completely eliminate duplicate ghosting & dark vignette smudges on mobile */
+  .call-video-stage .call-video-bg-live,
+  .call-video-vignette-overlay {
+    display: none !important;
+  }
+
+  /* Suppress hover focus hints on touch screens */
+  .call-panel-focus-hint {
+    display: none !important;
+  }
+
+  /* Mobile PiP Window: Crisp 108px x 156px floating video tile */
+  .call-video-panel.local-panel.is-pip-window,
+  .call-video-panel.remote-panel.is-pip-window {
+    width: 108px !important;
+    height: 156px !important;
+    min-width: 108px !important;
+    max-width: 108px !important;
+    min-height: 156px !important;
+    max-height: 156px !important;
+    border-radius: 14px !important;
+    border: 2px solid rgba(255, 255, 255, 0.28) !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.3) !important;
+    overflow: hidden !important;
+    aspect-ratio: unset !important;
+  }
+
+  .call-video-panel.local-panel.is-pip-window .call-video-fg-live,
+  .call-video-panel.remote-panel.is-pip-window .call-video-fg-live {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+  }
+
+  .call-video-panel.is-pip-window.is-screen-share .call-video-fg-live {
+    object-fit: contain !important;
+  }
+
+  .is-pip-window .call-panel-identity-label.pip-header {
+    padding: 4px 6px !important;
+  }
+
+  .is-pip-window .call-pip-badge {
+    padding: 2px 6px !important;
+    font-size: 10px !important;
+    gap: 4px !important;
+  }
+
+  .is-pip-window .call-pip-drag-handle {
+    display: none !important;
+  }
+
+  /* When a participant is focused full screen on mobile */
+  .call-video-stage.has-focused-participant .call-video-panel.is-focused-main {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    border-radius: 0 !important;
+    border: none !important;
+  }
+
+  .call-panel-identity-label {
+    top: 8px;
+    left: 8px;
+    padding: 3px 8px;
+    font-size: 11px;
+    gap: 5px;
+  }
+
+  /* Bottom Controls Floating Pill */
+  .call-video-controls-bar {
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    gap: 8px;
+    padding: 8px 12px;
+    max-width: calc(100vw - 16px);
+    width: auto;
+  }
+
+  .call-video-controls-bar.hidden {
+    transform: translate(-50%, calc(16px + env(safe-area-inset-bottom, 0px)));
+  }
+
+  .call-video-controls-bar.visible {
+    transform: translate(-50%, 0);
+  }
+
+  .call-video-controls-bar .call-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 50%;
+    padding: 0;
+    display: grid;
+    place-items: center;
+  }
+
+  .call-video-controls-bar .call-btn svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .call-video-controls-bar .call-btn-label {
+    display: none; /* Hide labels on mobile to keep a sleek, compact floating action bar */
+  }
+}
+
+/* Small mobile devices (iPhone SE, narrow Android) */
+@media (max-width: 380px) {
+  .call-video-controls-bar {
+    gap: 6px;
+    padding: 6px 8px;
+    max-width: calc(100vw - 10px);
+  }
+
+  .call-video-controls-bar .call-btn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  .call-video-controls-bar .call-btn svg {
+    width: 17px;
+    height: 17px;
+  }
+}
+
+/* Voice Call & Modal Responsive Rules */
+@media (max-width: 640px) {
+  .call-overlay {
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 12px calc(12px + env(safe-area-inset-bottom, 0px)) 12px;
+  }
+
+  .call-card {
+    max-width: 360px;
+    width: 100%;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 22px 16px 20px;
+    border-radius: 20px;
+  }
+
+  .call-avatar-wrapper {
+    width: 76px;
+    height: 76px;
+    margin-bottom: 12px;
+  }
+
+  .call-avatar {
+    width: 68px;
+    height: 68px;
+    font-size: 26px;
+  }
+
+  .call-name {
+    font-size: 19px;
+    margin-bottom: 2px;
+  }
+
+  .call-partner-handle {
+    font-size: 0.82rem;
+    margin-bottom: 8px;
+  }
+
+  .call-status-badge {
+    margin-bottom: 12px;
+    padding: 4px 10px;
+    font-size: 11.5px;
+  }
+
+  .call-voice-exp-selector {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 14px;
+    padding: 2px;
+    gap: 3px;
+  }
+
+  .call-voice-exp-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 4px 5px;
+    font-size: 10.5px;
+    justify-content: center;
+    gap: 3px;
+  }
+
+  .call-voice-exp-btn svg {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+  }
+
+  .call-voice-exp-btn span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .call-device-selector-wrap {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 16px;
+    justify-content: center;
+  }
+
+  .call-device-select {
+    max-width: calc(100% - 24px);
+    font-size: 11px;
+  }
+
+  .call-card .call-actions {
+    gap: 20px;
+  }
+
+  .call-card .call-actions .call-btn {
+    width: 58px;
+    height: 58px;
+    min-width: 58px;
+    min-height: 58px;
+  }
+
+  .call-card .call-actions .call-btn svg {
+    width: 24px;
+    height: 24px;
   }
 
   .call-recovery-banner {
@@ -1742,6 +2607,57 @@
   .call-recovery-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+}
+
+/* Short height viewports / Mobile landscape */
+@media (max-height: 600px) {
+  .call-card {
+    padding: 14px 14px 12px;
+    border-radius: 16px;
+  }
+
+  .call-avatar-wrapper {
+    width: 54px;
+    height: 54px;
+    margin-bottom: 6px;
+  }
+
+  .call-avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+
+  .call-name {
+    font-size: 16px;
+    margin-bottom: 2px;
+  }
+
+  .call-status-badge {
+    margin-bottom: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .call-voice-exp-selector {
+    margin-bottom: 8px;
+  }
+
+  .call-device-selector-wrap {
+    margin-bottom: 10px;
+  }
+
+  .call-card .call-actions .call-btn {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  .call-card .call-actions .call-btn svg {
+    width: 20px;
+    height: 20px;
   }
 }
 

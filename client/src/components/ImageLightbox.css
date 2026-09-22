@@ -31,8 +31,8 @@
   height: 86vh;
   max-width: 1400px;
   max-height: 90vh;
-  background: var(--bg-surface, #131022);
-  border: 1px solid var(--border-color, rgba(168, 85, 247, 0.35));
+  background: var(--wibby-surface);
+  border: 1px solid var(--wibby-border);
   border-radius: 18px;
   box-shadow: 0 25px 70px rgba(0, 0, 0, 0.85), 0 0 1px rgba(255, 255, 255, 0.15);
   overflow: hidden;
@@ -53,8 +53,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  background: var(--bg-surface-header, rgba(24, 20, 37, 0.85));
-  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  background: var(--wibby-surface);
+  border-bottom: 1px solid var(--wibby-border);
   gap: 16px;
   flex-shrink: 0;
 }
@@ -62,7 +62,7 @@
 .image-lightbox-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -79,7 +79,7 @@
 .image-lightbox-btn {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
   padding: 8px;
   border-radius: 10px;
   cursor: pointer;
@@ -90,7 +90,7 @@
 }
 
 .image-lightbox-btn:hover {
-  background: var(--bg-surface-hover, rgba(168, 85, 247, 0.2));
+  background: var(--wibby-primary-subtle);
   color: var(--color-primary-light, #c084fc);
   border-color: rgba(168, 85, 247, 0.4);
   transform: translateY(-1px);
@@ -207,14 +207,14 @@
 
 .image-lightbox-footer {
   padding: 14px 20px;
-  background: var(--bg-surface-footer, rgba(24, 20, 37, 0.85));
-  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  background: var(--wibby-surface);
+  border-top: 1px solid var(--wibby-border);
   flex-shrink: 0;
 }
 
 .image-lightbox-caption {
   font-size: 14px;
-  color: var(--text-primary, #f3f4f6);
+  color: var(--wibby-text);
   line-height: 1.4;
   word-break: break-word;
 }

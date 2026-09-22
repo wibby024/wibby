@@ -19,7 +19,7 @@ export default function ChatSearchModal({
 }: ChatSearchModalProps) {
   const { user } = useAuth();
   const [query, setQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'media' | 'files' | 'links'>('all');
+  const [filterType, setFilterType] = useState<'media' | 'files' | 'links' | 'calls'>('calls');
   const [results, setResults] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -32,7 +32,7 @@ export default function ChatSearchModal({
         const token = await user.getIdToken();
         let url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations/${conversationId}/messages/search?`;
         if (query.trim()) url += `q=${encodeURIComponent(query.trim())}&`;
-        if (filterType !== 'all') url += `type=${filterType}&`;
+        url += `type=${filterType}&`;
 
         const res = await fetch(url, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -73,7 +73,7 @@ export default function ChatSearchModal({
             <input
               type="text"
               className="search-text-input"
-              placeholder="Search messages, links, files..."
+              placeholder="Search messages, links, files, calls..."
               value={query}
               onChange={e => setQuery(e.target.value)}
               autoFocus
@@ -88,28 +88,28 @@ export default function ChatSearchModal({
         {/* Filter Tabs */}
         <div className="search-filter-chips">
           <button
-            className={`filter-chip ${filterType === 'all' ? 'active' : ''}`}
-            onClick={() => setFilterType('all')}
+            className={`filter-chip ${filterType === 'calls' ? 'active' : ''}`}
+            onClick={() => setFilterType('calls')}
           >
-            All
+            Call History
           </button>
           <button
             className={`filter-chip ${filterType === 'media' ? 'active' : ''}`}
             onClick={() => setFilterType('media')}
           >
-            🖼️ Media
-          </button>
-          <button
-            className={`filter-chip ${filterType === 'files' ? 'active' : ''}`}
-            onClick={() => setFilterType('files')}
-          >
-            📄 Files
+            Media
           </button>
           <button
             className={`filter-chip ${filterType === 'links' ? 'active' : ''}`}
             onClick={() => setFilterType('links')}
           >
-            🔗 Links
+            Links
+          </button>
+          <button
+            className={`filter-chip ${filterType === 'files' ? 'active' : ''}`}
+            onClick={() => setFilterType('files')}
+          >
+            Docs/Files
           </button>
         </div>
 
@@ -132,7 +132,7 @@ export default function ChatSearchModal({
                   }}
                 >
                   <div className="result-type-icon">
-                    {msg.type === 'image' ? '🖼️' : msg.type === 'video' ? '🎥' : msg.type === 'file' ? '📄' : msg.type === 'audio' ? '🎙️' : '💬'}
+                    {msg.type === 'call' ? '📞' : msg.type === 'image' ? '🖼️' : msg.type === 'video' ? '🎥' : msg.type === 'file' ? '📄' : msg.type === 'audio' ? '🎙️' : '💬'}
                   </div>
                   <div className="result-content-wrap">
                     <div className="result-top-line">
@@ -140,7 +140,7 @@ export default function ChatSearchModal({
                       <span className="result-time">{formatLastSeen(msg.createdAt)}</span>
                     </div>
                     <p className="result-snippet">
-                      {highlightMatch(msg.text || msg.fileName || `[${msg.type}]`, query)}
+                      {highlightMatch(msg.text || msg.caption || msg.fileName || `[${msg.type}]`, query)}
                     </p>
                   </div>
                 </div>

@@ -67,33 +67,37 @@ export const VIDEO_MEDIA_CONSTRAINTS: MediaTrackConstraints = {
 };
 
 /**
- * 4K UHD Camera Capture Constraint (Highest practical hardware quality when supported).
- * Used for capture downsampled to 1080p transmission.
- */
-export const CAMERA_4K_CONSTRAINTS: MediaTrackConstraints = {
-  width: { ideal: 3840, max: 3840 },
-  height: { ideal: 2160, max: 2160 },
-  frameRate: { ideal: 30, max: 30 },
-  facingMode: 'user'
-};
-
-/**
- * Mandatory 1080p Full HD Camera Constraint.
+ * Device Camera Constraints matching CameraCaptureModal.tsx.
+ * Uses ideal 1080p target with facingMode: 'user', allowing the browser
+ * to natively access the physical device camera without overconstraint errors.
  */
 export const CAMERA_1080P_CONSTRAINTS: MediaTrackConstraints = {
-  width: { ideal: 1920, max: 1920 },
-  height: { ideal: 1080, max: 1080 },
-  frameRate: { ideal: 30, max: 30 },
-  facingMode: 'user'
+  facingMode: 'user',
+  width: { ideal: 1920 },
+  height: { ideal: 1080 }
 };
 
-/**
- * Production camera constraints: targets 4K if supported by physical sensor,
- * otherwise captures native 1080p. NO 720p/540p/480p fallback in production.
- */
+export const DEVICE_CAMERA_CONSTRAINTS: MediaTrackConstraints = CAMERA_1080P_CONSTRAINTS;
+
 export const PRODUCTION_CAMERA_CONSTRAINTS: MediaTrackConstraints[] = [
-  CAMERA_4K_CONSTRAINTS,
-  CAMERA_1080P_CONSTRAINTS
+  // 1. Primary device camera constraint (matches CameraCaptureModal ideal 1080p)
+  CAMERA_1080P_CONSTRAINTS,
+  // 2. High-definition 720p fallback
+  {
+    facingMode: 'user',
+    width: { ideal: 1280 },
+    height: { ideal: 720 }
+  },
+  // 3. Ideal facing mode fallback (crucial for mobile devices with varying resolutions)
+  {
+    facingMode: { ideal: 'user' }
+  },
+  // 4. Exact facing mode fallback
+  {
+    facingMode: 'user'
+  },
+  // 5. Any camera on device
+  {}
 ];
 
 export const STEPPED_VIDEO_CONSTRAINTS: MediaTrackConstraints[] = [

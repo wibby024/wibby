@@ -13,7 +13,9 @@ export const MEDIA_LIMITS = {
     'image/jpeg',
     'image/png',
     'image/webp',
-    'image/gif'
+    'image/gif',
+    'image/heic',
+    'image/heif'
   ] as const,
 
   ALLOWED_VIDEO_MIMES: [
@@ -101,7 +103,7 @@ export function determineMediaType(mimeType: string, fileName: string): MediaTyp
   }
 
   // 3. Image extensions
-  const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif'];
   if (imageExtensions.includes(ext)) {
     return 'image';
   }

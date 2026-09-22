@@ -21,7 +21,9 @@ export default function FloatingCallCapsule() {
     toggleCamera,
     expandCall,
     toggleMute,
-    hangup
+    hangup,
+    isScreenSharing,
+    isRemoteScreenSharing
   } = useCall();
 
   const miniRemoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -322,7 +324,7 @@ export default function FloatingCallCapsule() {
           {/* Layer 2: Remote Main Video (Same Live MediaStream, object-fit: contain, complete frame) */}
           <video
             ref={miniRemoteVideoRef}
-            className={`mini-video-element remote ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
+            className={`mini-video-element remote ${isRemoteScreenSharing ? 'is-screen-share' : ''} ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
             autoPlay
             playsInline
             muted
@@ -367,7 +369,7 @@ export default function FloatingCallCapsule() {
             {/* Layer 2: Local PiP Main Video (Same Live MediaStream, object-fit: contain, complete frame) */}
             <video
               ref={miniLocalVideoRef}
-              className={`mini-video-element local ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
+              className={`mini-video-element local ${isScreenSharing ? 'is-screen-share' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
               autoPlay
               playsInline
               muted

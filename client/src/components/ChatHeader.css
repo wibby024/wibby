@@ -462,6 +462,22 @@
 
 /* ---- Responsive ---- */
 
+/* On mobile ≤640px: hide Watch Together, Games, and Search from top bar.
+   These remain fully accessible via the More (⋮) dropdown menu. */
+@media (max-width: 640px) {
+  .header-action-btn.desktop-only {
+    display: none;
+  }
+
+  /* Truncate partner name on small screens */
+  .chat-header-name {
+    max-width: 130px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 @media (max-width: 768px) {
   .chat-header-menu {
     display: grid;
@@ -472,3 +488,36 @@
     height: calc(var(--header-height) + env(safe-area-inset-top, 0px));
   }
 }
+
+@media (max-width: 400px) {
+  .chat-header {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .chat-header-user {
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .chat-header-info {
+    min-width: 0;
+  }
+
+  .chat-header-name {
+    max-width: 95px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chat-header-actions {
+    gap: 2px;
+  }
+
+  .header-action-btn {
+    width: 36px;
+    height: 36px;
+  }
+}
+

@@ -25,6 +25,7 @@ interface MessageComposerProps {
   onTyping?: (isTyping: boolean) => void;
   droppedFiles?: File[] | null;
   onClearDroppedFiles?: () => void;
+  onOpenGame?: () => void;
 }
 
 export default function MessageComposer({ 
@@ -38,7 +39,8 @@ export default function MessageComposer({
   onEdit,
   onTyping,
   droppedFiles,
-  onClearDroppedFiles
+  onClearDroppedFiles,
+  onOpenGame
 }: MessageComposerProps) {
   const [message, setMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -498,6 +500,7 @@ export default function MessageComposer({
           onSelectPoll={() => setShowPollModal(true)}
           onSelectLocation={() => setShowLocationModal(true)}
           onSelectContact={() => setShowContactModal(true)}
+          onSelectGame={onOpenGame}
           onBrowseAll={() => allFileInputRef.current?.click()}
           onFilesDropped={(files) => handleFilesSelected(files)}
           onClose={() => setShowAttachmentMenu(false)}

@@ -65,9 +65,13 @@ interface CallContextType {
   toggleMute: () => void;
   toggleCamera: () => void;
   switchCamera: (deviceId: string) => Promise<boolean>;
+  flipCamera: () => Promise<boolean>;
+  currentFacingMode: 'user' | 'environment';
   captureSnapshot: () => Promise<Blob | null>;
   isCameraOff: boolean;
   isRemoteCameraOff: boolean;
+  isRemoteMuted: boolean;
+  remoteMuteNotification: string | null;
   isCameraUnavailable: boolean;
   availableCameras: MediaDeviceInfo[];
   activeCameraDeviceId: string | null;
@@ -92,8 +96,6 @@ interface CallContextType {
   videoQualityMode: VideoQualityMode;
   setVideoQualityMode: (mode: VideoQualityMode) => Promise<void>;
   realtimeTelemetry: RealtimeCallTelemetry | null;
-  showDiagnosticsPanel: boolean;
-  setShowDiagnosticsPanel: (show: boolean) => void;
   videoCodecPreference: VideoCodecPreference;
   setVideoCodecPreference: (pref: VideoCodecPreference) => Promise<void>;
   enableSdpBandwidthPacing: boolean;
@@ -102,6 +104,7 @@ interface CallContextType {
   setVideoBitrateTargetMbps: (mbps: number) => Promise<void>;
   // Phase 10: Screen Sharing
   isScreenSharing: boolean;
+  isRemoteScreenSharing: boolean;
   startScreenSharing: () => Promise<void>;
   stopScreenSharing: () => Promise<void>;
 }
@@ -127,9 +130,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   // Video State (Phase 9)
   const [isCameraOff, setIsCameraOff] = useState<boolean>(false);
   const [isRemoteCameraOff, setIsRemoteCameraOff] = useState<boolean>(false);
+  const [isRemoteMuted, setIsRemoteMuted] = useState<boolean>(false);
+  const [remoteMuteNotification, setRemoteMuteNotification] = useState<string | null>(null);
   const [isCameraUnavailable, setIsCameraUnavailable] = useState<boolean>(false);
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const [activeCameraDeviceId, setActiveCameraDeviceId] = useState<string | null>(null);
+  const [currentFacingMode, setCurrentFacingMode] = useState<'user' | 'environment'>('user');
 
   // Recovery State
   const [recoverableCall, setRecoverableCall] = useState<RecoverableCallInfo | null>(null);
@@ -161,38 +167,23 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [audioPipelineMode, setAudioPipelineModeState] = useState<AudioPipelineMode>('native');
   const [videoQualityMode, setVideoQualityModeState] = useState<VideoQualityMode>('auto');
   const [realtimeTelemetry, setRealtimeTelemetry] = useState<RealtimeCallTelemetry | null>(null);
-  const [showDiagnosticsPanel, setShowDiagnosticsPanel] = useState<boolean>(false);
   const [videoCodecPreference, setVideoCodecPreferenceState] = useState<VideoCodecPreference>(() =>
     (rtcService.getVideoCodecPreference() || 'auto') as VideoCodecPreference
   );
 
   // Phase 10: Screen Sharing
   const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
+  const [isRemoteScreenSharing, setIsRemoteScreenSharing] = useState<boolean>(false);
   const [enableSdpBandwidthPacing, setEnableSdpBandwidthPacingState] = useState<boolean>(true);
   const [videoBitrateTargetMbps, setVideoBitrateTargetMbpsState] = useState<number>(6.0);
 
-  const showDiagnosticsPanelRef = useRef(false);
-  showDiagnosticsPanelRef.current = showDiagnosticsPanel;
-
   useEffect(() => {
     rtcService.setOnTelemetryCallback((telemetry) => {
-      // Guardrail #5: Strictly isolate React re-rendering.
-      // Only push telemetry into React state when developer diagnostics panel is actively open!
-      if (showDiagnosticsPanelRef.current) {
-        setRealtimeTelemetry(telemetry);
-      }
+      setRealtimeTelemetry(telemetry);
     });
     return () => {
       rtcService.setOnTelemetryCallback(null);
     };
-  }, []);
-
-  const setShowDiagnosticsPanelCallback = useCallback((show: boolean) => {
-    setShowDiagnosticsPanel(show);
-    if (show) {
-      const latest = rtcService.getLatestTelemetry();
-      if (latest) setRealtimeTelemetry(latest);
-    }
   }, []);
 
   const setAudioPipelineMode = useCallback((mode: AudioPipelineMode) => {
@@ -232,6 +223,23 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isStartingCallRef = useRef(false);
   const inviteCountRef = useRef<Record<string, number>>({});
+  const callRecoverableReceivedRef = useRef(false);
+
+  // Stale call ID guard: if sessionStorage has a call ID from a prior session
+  // but the server never sends call:recoverable, clear it after 10s to prevent ghost "active call" banner.
+  useEffect(() => {
+    const storedId = sessionStorage.getItem('wibby_active_call_id');
+    if (!storedId) return;
+
+    const timer = setTimeout(() => {
+      if (!callRecoverableReceivedRef.current && callStateRef.current === 'IDLE') {
+        console.log('[WIBBY CALL] Stale session call ID found but no recovery received — clearing.');
+        sessionStorage.removeItem('wibby_active_call_id');
+      }
+    }, 10_000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // Incoming call ringtone controller
   useEffect(() => {
@@ -351,15 +359,26 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     if (rtcService.isScreenSharingActive()) {
       rtcService.stopScreenSharing().catch(() => {});
       setIsScreenSharing(false);
+      if (socket && activeCallRef.current) {
+        socket.emit('call:screenshare-toggle', {
+          callId: activeCallRef.current.callId,
+          sessionId: sessionIdRef.current,
+          isSharing: false
+        });
+      }
     }
+    setIsRemoteScreenSharing(false);
     rtcService.cleanup();
     setCallQuality('excellent');
     setIsMinimized(false);
     setIsRemoteSpeaking(false);
     setIsCameraOff(false);
     setIsRemoteCameraOff(false);
+    setIsRemoteMuted(false);
+    setRemoteMuteNotification(null);
     setIsCameraUnavailable(false);
     setReconnectStatusMessage(null);
+    setRecoverableCall(null);
     sessionIdRef.current = null;
     sessionStorage.removeItem('wibby_active_call_id');
 
@@ -489,6 +508,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       reconnectUntil: number;
     }) => {
       console.log('[WIBBY CALL] Received call:recoverable:', data);
+      callRecoverableReceivedRef.current = true;
       const storedCallId = sessionStorage.getItem('wibby_active_call_id');
 
       // If user had this exact call in current tab before refresh/drop, auto-resume
@@ -603,8 +623,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       const currentCall = activeCallRef.current;
       if (!currentCall || currentCall.callId !== data.callId) return;
 
+      const wasConnected = callStateRef.current === 'CONNECTED' || rtcService.isConnected();
       try {
-        setCallState('CONNECTING');
+        if (!wasConnected) {
+          setCallState('CONNECTING');
+        }
         await rtcService.setRemoteDescription(data.sdp);
         const answer = await rtcService.createAnswer();
         socket.emit('call:answer', {
@@ -612,6 +635,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           sessionId: sessionIdRef.current,
           sdp: answer
         });
+        if (wasConnected || rtcService.isConnected()) {
+          setCallState('CONNECTED');
+        }
       } catch (err: any) {
         console.error('[WIBBY CALL] Error handling offer:', err);
         showTransientError('Failed to connect call media.', 4000, err);
@@ -627,6 +653,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
       try {
         await rtcService.setRemoteDescription(data.sdp);
+        if (rtcService.isConnected() && callStateRef.current !== 'CONNECTED') {
+          setCallState('CONNECTED');
+        }
       } catch (err: any) {
         console.error('[WIBBY CALL] Error setting remote description (answer):', err);
         showTransientError('Failed to finalize media connection.', 4000, err);
@@ -683,6 +712,17 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     };
 
     // 10. Remote Camera Toggle (Phase 9)
+
+    const handleRemoteMute = (data: { callId: string; isMuted: boolean }) => {
+      console.log('[WIBBY CALL] Received call:mute:', data);
+      if (activeCallRef.current?.callId !== data.callId) return;
+      setIsRemoteMuted(data.isMuted);
+      setRemoteMuteNotification(data.isMuted ? "Microphone off" : null);
+      if (data.isMuted) {
+        setTimeout(() => setRemoteMuteNotification(null), 3000);
+      }
+    };
+
     const handleCameraToggle = (data: { callId: string; isCameraOff: boolean }) => {
       console.log('[WIBBY CALL] Received call:camera-toggle:', data);
       if (activeCallRef.current?.callId !== data.callId) return;
@@ -738,6 +778,16 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       sessionStorage.removeItem('wibby_active_call_id');
     };
 
+    // 14. Remote Screen Sharing Toggle (Phase 10)
+    const handleRemoteScreenShareToggle = (data: { callId: string; userId?: string; isSharing: boolean }) => {
+      console.log('[WIBBY CALL] Peer screen share toggle received:', data);
+      const currentUid = auth.currentUser?.uid;
+      if (data.userId && currentUid && String(data.userId) === String(currentUid)) {
+        return;
+      }
+      setIsRemoteScreenSharing(data.isSharing);
+    };
+
     socket.on('call:invite', handleCallInvite);
     socket.on('call:ringing', handleCallRinging);
     socket.on('call:accepted', handleCallAccepted);
@@ -747,10 +797,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     socket.on('call:ended', handleCallEnded);
     socket.on('call:busy', handleCallBusy);
     socket.on('call:failed', handleCallFailed);
+    socket.on('call:mute', handleRemoteMute);
     socket.on('call:camera-toggle', handleCameraToggle);
     socket.on('call:peer-reconnecting', handlePeerReconnecting);
     socket.on('call:peer-reconnected', handlePeerReconnected);
     socket.on('call:session-superseded', handleSessionSuperseded);
+    socket.on('call:screenshare-toggle', handleRemoteScreenShareToggle);
 
     return () => {
       socket.off('call:invite', handleCallInvite);
@@ -762,10 +814,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       socket.off('call:ended', handleCallEnded);
       socket.off('call:busy', handleCallBusy);
       socket.off('call:failed', handleCallFailed);
+      socket.off('call:mute', handleRemoteMute);
       socket.off('call:camera-toggle', handleCameraToggle);
       socket.off('call:peer-reconnecting', handlePeerReconnecting);
       socket.off('call:peer-reconnected', handlePeerReconnected);
       socket.off('call:session-superseded', handleSessionSuperseded);
+      socket.off('call:screenshare-toggle', handleRemoteScreenShareToggle);
     };
   }, [socket, resetCallState, clearError, showTransientError, clearTimer]);
 
@@ -783,6 +837,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     rtcService.setOnScreenSharingEndedCallback(() => {
       setIsScreenSharing(false);
+      if (socket && activeCallRef.current) {
+        socket.emit('call:screenshare-toggle', {
+          callId: activeCallRef.current.callId,
+          sessionId: sessionIdRef.current,
+          isSharing: false
+        });
+      }
       // If a pending stop offer was generated (display audio was removed), emit it now
       const pendingOffer = (rtcService as any)._pendingStopOffer;
       if (pendingOffer && socket && activeCallRef.current) {
@@ -841,8 +902,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         freshSessionId
       );
 
-      // 3. Set Outgoing Calling State
-      const partnerName = partner?.displayName || partner?.display_name || partner?.name || partner?.username || 'Partner';
+      const rawPartnerName = partner?.displayName || partner?.display_name || partner?.name;
+      const partnerName = (rawPartnerName && rawPartnerName !== 'Unknown' && rawPartnerName !== 'unknown')
+        ? rawPartnerName
+        : (partner?.username && partner.username !== 'unknown' ? partner.username : 'Partner');
       const partnerAvatar = partner?.avatarUrl || partner?.avatar || null;
       const newCall: ActiveCall = {
         callId,
@@ -866,6 +929,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       setIsCameraOff(cameraUnavailable);
       setIsCameraUnavailable(cameraUnavailable);
       setIsRemoteCameraOff(false);
+      setIsRemoteMuted(false);
+      setRemoteMuteNotification(null);
       setCallState('OUTGOING_CALLING');
 
       // 4. Emit call invite to server
@@ -1047,6 +1112,19 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const success = await rtcService.switchCamera(deviceId);
     if (success) {
       setActiveCameraDeviceId(deviceId);
+      setCurrentFacingMode(rtcService.getFacingMode());
+    }
+    return success;
+  };
+
+  /**
+   * Action: Flip Camera (front <-> rear) using facingMode toggle.
+   * Works on mobile (physical camera switch) and desktop (graceful fallback).
+   */
+  const flipCamera = async (): Promise<boolean> => {
+    const success = await rtcService.flipCamera();
+    if (success) {
+      setCurrentFacingMode(rtcService.getFacingMode());
     }
     return success;
   };
@@ -1079,6 +1157,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const result = await rtcService.startScreenSharing(handleNegotiationOffer);
     if (result === 'started') {
       setIsScreenSharing(true);
+      if (socket && activeCallRef.current) {
+        socket.emit('call:screenshare-toggle', {
+          callId: activeCallRef.current.callId,
+          sessionId: sessionIdRef.current,
+          isSharing: true
+        });
+      }
     }
     // 'cancelled' and 'error' are intentionally silent — call continues normally
   };
@@ -1091,6 +1176,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const stopScreenSharing = async () => {
     await rtcService.stopScreenSharing();
     setIsScreenSharing(false);
+    if (socket && activeCallRef.current) {
+      socket.emit('call:screenshare-toggle', {
+        callId: activeCallRef.current.callId,
+        sessionId: sessionIdRef.current,
+        isSharing: false
+      });
+    }
     // Emit re-offer if display audio sender was removed (stored as _pendingStopOffer)
     const pendingOffer = (rtcService as any)._pendingStopOffer;
     if (pendingOffer && socket && activeCallRef.current) {
@@ -1189,6 +1281,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   return (
     <CallContext.Provider
       value={{
+        isRemoteMuted,
+        remoteMuteNotification,
         callState,
         activeCall,
         callType: activeCall?.callType || 'voice',
@@ -1201,12 +1295,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         toggleMute,
         toggleCamera,
         switchCamera,
+        flipCamera,
         captureSnapshot,
         isCameraOff,
         isRemoteCameraOff,
         isCameraUnavailable,
         availableCameras,
         activeCameraDeviceId,
+        currentFacingMode,
         reconnectStatusMessage,
         errorMessage,
         clearError,
@@ -1228,8 +1324,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         videoQualityMode,
         setVideoQualityMode,
         realtimeTelemetry,
-        showDiagnosticsPanel,
-        setShowDiagnosticsPanel: setShowDiagnosticsPanelCallback,
         videoCodecPreference,
         setVideoCodecPreference,
         enableSdpBandwidthPacing,
@@ -1238,6 +1332,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         setVideoBitrateTargetMbps,
         // Phase 10: Screen Sharing
         isScreenSharing,
+        isRemoteScreenSharing,
         startScreenSharing,
         stopScreenSharing
       }}

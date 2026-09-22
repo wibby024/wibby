@@ -304,6 +304,7 @@ export function registerCallHandlers(
           conversationId: data.conversationId,
           callerId: uid,
           callerName,
+          callerUsername: callerUser?.username || '',
           callerAvatar,
           callType
         });
@@ -494,6 +495,28 @@ export function registerCallHandlers(
     }
   });
 
+  // 8b. Screen Share Toggle relay
+  socket.on('call:screenshare-toggle', (data: { callId: string; isSharing: boolean; sessionId?: string }) => {
+    try {
+      if (!data?.callId) return;
+      const session = activeCalls.get(data.callId);
+      if (!session) return;
+
+      if (!isSessionValid(session, data.sessionId)) return;
+
+      const targetId = session.callerId === uid ? session.calleeId : session.callerId;
+      console.log(`[WIBBY CALL] Screen share toggle for callId=${data.callId}, user=${uid}, isSharing=${data.isSharing}`);
+
+      socket.to(`user:${targetId}`).emit('call:screenshare-toggle', {
+        callId: data.callId,
+        userId: uid,
+        isSharing: Boolean(data.isSharing)
+      });
+    } catch (err) {
+      console.error('[WIBBY CALL] Error in call:screenshare-toggle:', err);
+    }
+  });
+
   // 9. Check Recoverable Calls (Session Rehydration query)
   socket.on('call:check-recoverable', async () => {
     try {
@@ -558,6 +581,20 @@ export function registerCallHandlers(
       }
     } catch (err) {
       console.error('[WIBBY CALL] Error in call:check-recoverable:', err);
+    }
+  });
+
+  // 9b. Verify Active Call Liveness (Req 04: client reconnect check)
+  socket.on('call:verify-active', async (data: { callId: string }) => {
+    try {
+      if (!data?.callId) return;
+      const session = activeCalls.get(data.callId);
+      if (!session || (session.status as string) === 'ended') {
+        console.log(`[WIBBY CALL] call:verify-active: call ${data.callId} is no longer active. Notifying user ${uid}`);
+        socket.emit('call:ended', { callId: data.callId, reason: 'Call already ended or expired' });
+      }
+    } catch (err) {
+      console.error('[WIBBY CALL] Error in call:verify-active:', err);
     }
   });
 
@@ -721,11 +758,18 @@ export function registerCallHandlers(
         }
       } else {
         const db = getDb();
-        await db.collection('calls').updateOne(
+        const callDoc = await db.collection('calls').findOneAndUpdate(
           { callId: data.callId, $or: [{ callerId: uid }, { calleeId: uid }] },
-          { $set: { status: 'completed', endedAt: new Date(), endReason: 'dismissed' } }
+          { $set: { status: 'completed', endedAt: new Date(), endReason: 'dismissed' } },
+          { returnDocument: 'after' }
         );
         userActiveCall.delete(uid);
+        if (callDoc) {
+          const partnerId = (callDoc as any).callerId === uid ? (callDoc as any).calleeId : (callDoc as any).callerId;
+          if (partnerId) {
+            userActiveCall.delete(partnerId);
+          }
+        }
       }
     } catch (err) {
       console.error('[WIBBY CALL] Error in call:dismiss-recoverable:', err);

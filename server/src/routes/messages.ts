@@ -159,16 +159,34 @@ router.get('/search', async (req: Request, res: Response) => {
       query.senderId = sender;
     }
 
-    if (typeFilter === 'media') {
+    const normalizedFilter = typeFilter?.toLowerCase();
+    if (normalizedFilter === 'media') {
       query.type = { $in: ['image', 'video'] };
-    } else if (typeFilter === 'file') {
-      query.type = { $in: ['file', 'audio'] };
-    } else if (typeFilter === 'link') {
+    } else if (normalizedFilter === 'file' || normalizedFilter === 'files') {
+      query.type = { $in: ['file', 'audio', 'document'] };
+    } else if (normalizedFilter === 'link' || normalizedFilter === 'links') {
       query.text = { $regex: 'https?://', $options: 'i' };
+    } else if (normalizedFilter === 'call' || normalizedFilter === 'calls') {
+      query.type = 'call';
     }
 
     if (queryStr) {
-      query.text = { $regex: queryStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+      const escapedQuery = queryStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const textRegex = { $regex: escapedQuery, $options: 'i' };
+
+      if (normalizedFilter === 'link' || normalizedFilter === 'links') {
+        // Must contain both the query string and a URL pattern
+        query.$and = [
+          { text: { $regex: 'https?://', $options: 'i' } },
+          { text: textRegex }
+        ];
+      } else {
+        query.$or = [
+          { text: textRegex },
+          { caption: textRegex },
+          { fileName: textRegex }
+        ];
+      }
     }
 
     const messages = await db.collection('messages')
@@ -637,6 +655,80 @@ router.post('/disappearing', async (req: Request, res: Response) => {
   }
 });
 
+// Shared Theme Family setting (Requirement 10 & 17)
+router.post('/theme', async (req: Request, res: Response) => {
+  try {
+    const conversationId = req.params.conversationId as string;
+    const { themeFamily } = req.body;
+    const user = (req as any).user;
+    const db = getDb();
+
+    if (!themeFamily || typeof themeFamily !== 'string') {
+      return res.status(400).json({ error: 'Invalid theme family' });
+    }
+
+    await db.collection('conversations').updateOne(
+      { _id: new ObjectId(conversationId) },
+      { $set: { themeFamily, updatedAt: new Date() } }
+    );
+
+    const io = getIo();
+    if (io) {
+      io.to(`conversation:${conversationId}`).emit('conversation:theme-family-update', {
+        conversationId,
+        themeFamily,
+        updatedBy: user?.uid || ''
+      });
+    }
+
+    res.json({ success: true, themeFamily });
+  } catch (error) {
+    console.error('Theme family update error:', error);
+    res.status(500).json({ error: 'Failed to update theme family' });
+  }
+});
+
+// Call History endpoint (Req 13)
+router.get('/calls', async (req: Request, res: Response) => {
+  try {
+    const conversationId = req.params.conversationId as string;
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const db = getDb();
+    const convId = new ObjectId(conversationId);
+
+    const calls = await db.collection('calls')
+      .find({
+        $or: [
+          { conversationId: convId },
+          { conversationId: conversationId }
+        ]
+      })
+      .sort({ startedAt: -1 })
+      .limit(limit)
+      .toArray();
+
+    const serializedCalls = calls.map(c => ({
+      id: c._id.toString(),
+      callId: c.callId,
+      conversationId: c.conversationId.toString(),
+      callerId: c.callerId,
+      calleeId: c.calleeId,
+      callType: c.callType || 'voice',
+      status: c.status,
+      startedAt: c.startedAt,
+      connectedAt: c.connectedAt,
+      endedAt: c.endedAt,
+      duration: c.duration || 0,
+      endReason: c.endReason
+    }));
+
+    res.json(serializedCalls);
+  } catch (error) {
+    console.error('Call history fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch call history' });
+  }
+});
+
 router.post('/:messageId/reactions', requireAuth, verifyMembership, async (req: Request, res: Response) => {
   try {
     const conversationId = req.params.conversationId as string;
@@ -698,6 +790,12 @@ router.patch('/:messageId', requireAuth, verifyMembership, async (req: Request, 
 
     if (!existingMsg) return res.status(404).json({ error: 'Not found' });
     if (existingMsg.senderId !== user.uid) return res.status(403).json({ error: 'Unauthorized' });
+
+    // Req 37: Enforce 2-minute edit window (120,000 ms)
+    const msgAgeMs = Date.now() - new Date(existingMsg.createdAt).getTime();
+    if (msgAgeMs > 120000) {
+      return res.status(400).json({ error: 'Messages can only be edited within 2 minutes of sending' });
+    }
 
     const now = new Date();
     await db.collection('messages').updateOne(
@@ -777,6 +875,16 @@ router.delete('/:messageId', requireAuth, verifyMembership, async (req: Request,
         { _id: msgObjId },
         { $addToSet: { deletedFor: user.uid } as any }
       );
+
+      // Req 09: Notify user's connected clients to remove the message immediately from local view
+      if (io) {
+        io.to(`user:${user.uid}`).emit('message:delete', {
+          messageId,
+          conversationId,
+          everyone: false,
+          deletedAt: now
+        });
+      }
     }
 
     res.json({ success: true, everyone });

@@ -4,6 +4,7 @@ import type { Message, ChatThemePreset } from '../types/chat';
 import { formatLastSeen } from '../utils/time';
 import { formatFileSize } from '../config/media';
 import { e2eeService } from '../services/e2eeService';
+import { notificationService, NOTIFICATION_TONES, type NotificationTone } from '../services/notificationService';
 import './ChatInfoDrawer.css';
 
 interface ChatInfoDrawerProps {
@@ -12,7 +13,9 @@ interface ChatInfoDrawerProps {
   partner?: {
     firebaseUid?: string;
     display_name?: string;
+    displayName?: string;
     username?: string;
+    email?: string;
     avatarUrl?: string;
     online?: boolean;
     lastSeen?: string;
@@ -30,20 +33,12 @@ interface ChatInfoDrawerProps {
 }
 
 const THEME_PRESETS: Array<{ id: ChatThemePreset; name: string; gradient: string }> = [
-  { id: 'ig-classic', name: 'Instagram Sunset', gradient: 'linear-gradient(135deg, #833AB4, #FD1D1D, #FCB045)' },
-  { id: 'ig-cyberpunk', name: 'Cyberpunk Neon', gradient: 'linear-gradient(135deg, #00F0FF, #7000FF, #FF007A)' },
-  { id: 'ig-ocean', name: 'Ocean Pacific', gradient: 'linear-gradient(135deg, #06B6D4, #3B82F6, #1D4ED8)' },
-  { id: 'ig-golden-hour', name: 'Golden Hour', gradient: 'linear-gradient(135deg, #F59E0B, #EF4444, #EC4899)' },
-  { id: 'ig-sage', name: 'Matcha & Sage', gradient: 'linear-gradient(135deg, #10B981, #059669, #047857)' },
-  { id: 'ig-love', name: 'Rose & Love', gradient: 'linear-gradient(135deg, #F43F5E, #E11D48, #BE123C)' },
-  { id: 'ig-midnight', name: 'Midnight Galaxy', gradient: 'linear-gradient(135deg, #6366F1, #8B5CF6, #4C1D95)' },
-  { id: 'ig-monochrome', name: 'Monochrome Slate', gradient: 'linear-gradient(135deg, #64748B, #334155, #1E293B)' },
-  { id: 'classic-purple', name: 'Classic Purple', gradient: 'linear-gradient(135deg, #7C3AED, #5B21B6)' },
-  { id: 'midnight-velvet', name: 'Midnight Velvet', gradient: 'linear-gradient(135deg, #1E1B4B, #0F172A)' },
-  { id: 'sunset-glow', name: 'Sunset Glow', gradient: 'linear-gradient(135deg, #F43F5E, #FB7185)' },
-  { id: 'emerald-forest', name: 'Emerald Forest', gradient: 'linear-gradient(135deg, #059669, #047857)' },
-  { id: 'rose-quartz', name: 'Rose Quartz', gradient: 'linear-gradient(135deg, #DB2777, #9D174D)' },
-  { id: 'slate-minimal', name: 'Slate Minimal', gradient: 'linear-gradient(135deg, #334155, #1E293B)' }
+  { id: 'classic', name: 'Wibby Classic', gradient: 'linear-gradient(135deg, #7C3AED, #5B21B6)' },
+  { id: 'sunset', name: 'Sunset Glow', gradient: 'linear-gradient(135deg, #F43F5E, #FB7185)' },
+  { id: 'ocean', name: 'Ocean Breeze', gradient: 'linear-gradient(135deg, #06B6D4, #3B82F6)' },
+  { id: 'emerald', name: 'Emerald Forest', gradient: 'linear-gradient(135deg, #059669, #047857)' },
+  { id: 'rose', name: 'Rose Quartz', gradient: 'linear-gradient(135deg, #DB2777, #9D174D)' },
+  { id: 'midnight', name: 'Midnight Slate', gradient: 'linear-gradient(135deg, #6366F1, #1E1B4B)' }
 ];
 
 export default function ChatInfoDrawer({
@@ -60,18 +55,75 @@ export default function ChatInfoDrawer({
   currentThemePreset,
   onSelectThemePreset
 }: ChatInfoDrawerProps) {
-  const [activeTab, setActiveTab] = useState<'media' | 'files' | 'links' | 'starred' | 'settings'>('media');
+  const [activeTab, setActiveTab] = useState<'media' | 'files' | 'links' | 'starred' | 'calls' | 'settings'>('media');
   const [sharedItems, setSharedItems] = useState<Message[]>([]);
+  const [callHistory, setCallHistory] = useState<Array<{
+    id: string;
+    callId: string;
+    callerId: string;
+    calleeId: string;
+    callType: 'voice' | 'video';
+    status: 'completed' | 'missed' | 'declined' | 'cancelled';
+    startedAt: string;
+    duration: number;
+  }>>([]);
   const [loading, setLoading] = useState(false);
   const [disappearingTimer, setDisappearingTimer] = useState<number>(0);
-  const [isMuted, setIsMuted] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(() => notificationService.isSoundEnabled());
+  const [currentTone, setCurrentTone] = useState<NotificationTone>(() => notificationService.getNotificationTone());
   const [showUnpairConfirm, setShowUnpairConfirm] = useState(false);
 
-  const name = partner?.display_name || partner?.username || 'Partner';
+  useEffect(() => {
+    const handleSoundChange = (e: any) => {
+      if (e.detail && typeof e.detail.enabled === 'boolean') {
+        setSoundEnabled(e.detail.enabled);
+      }
+    };
+    const handleToneChange = (e: any) => {
+      if (e.detail?.tone) {
+        setCurrentTone(e.detail.tone);
+      }
+    };
+    window.addEventListener('wibby:sound-setting-changed', handleSoundChange);
+    window.addEventListener('wibby:notification-tone-changed', handleToneChange);
+    return () => {
+      window.removeEventListener('wibby:sound-setting-changed', handleSoundChange);
+      window.removeEventListener('wibby:notification-tone-changed', handleToneChange);
+    };
+  }, []);
+
+  const rawName = partner?.display_name || partner?.displayName;
+  const isBadName = !rawName || rawName === 'Unknown' || rawName === 'unknown';
+  const name = !isBadName
+    ? rawName
+    : (partner?.username && partner.username !== 'unknown' ? partner.username : (partner?.email ? partner.email.split('@')[0] : 'Partner'));
   const initial = name.charAt(0).toUpperCase();
 
   useEffect(() => {
     if (!isOpen || !conversationId) return;
+
+    if (activeTab === 'calls') {
+      const fetchCalls = async () => {
+        setLoading(true);
+        try {
+          const token = localStorage.getItem('wibby-token') || '';
+          const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations/${conversationId}/calls`;
+          const res = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setCallHistory(data || []);
+          }
+        } catch (err) {
+          console.error('Fetch calls error:', err);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchCalls();
+      return;
+    }
 
     const fetchCategory = async () => {
       setLoading(true);
@@ -144,7 +196,6 @@ export default function ChatInfoDrawer({
             <span>{initial}</span>
           </div>
           <h4 className="chat-info-name">{name}</h4>
-          {partner?.username && <span className="chat-info-username">@{partner.username}</span>}
           <div className="chat-info-status-pill">
             <span className={`status-dot ${partner?.online ? 'online' : 'offline'}`} />
             <span>{partner?.online ? 'Online' : formatLastSeen(partner?.lastSeen)}</span>
@@ -185,6 +236,9 @@ export default function ChatInfoDrawer({
           </button>
           <button className={`info-nav-tab ${activeTab === 'starred' ? 'active' : ''}`} onClick={() => setActiveTab('starred')}>
             ⭐ Starred
+          </button>
+          <button className={`info-nav-tab ${activeTab === 'calls' ? 'active' : ''}`} onClick={() => setActiveTab('calls')}>
+            📞 Calls
           </button>
           <button className={`info-nav-tab ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
             ⚙️ Chat
@@ -266,6 +320,61 @@ export default function ChatInfoDrawer({
             ) : (
               <div className="empty-shared-state">No starred messages yet</div>
             )
+          ) : activeTab === 'calls' ? (
+            callHistory.length > 0 ? (
+              <div className="shared-calls-list">
+                {callHistory.map(call => {
+                  const isVoice = call.callType === 'voice';
+                  const mins = Math.floor((call.duration || 0) / 60);
+                  const secs = (call.duration || 0) % 60;
+                  const durationText = call.duration > 0 ? `${mins > 0 ? `${mins}m ` : ''}${secs}s` : null;
+                  const callTime = new Date(call.startedAt).toLocaleString([], {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+
+                  return (
+                    <div key={call.id || call.callId} className="call-history-card">
+                      <div className="call-history-icon-col">
+                        <span className={`call-history-type-icon ${call.status}`}>
+                          {isVoice ? '📞' : '🎥'}
+                        </span>
+                      </div>
+                      <div className="call-history-info">
+                        <div className="call-history-title-row">
+                          <span className="call-history-title">{isVoice ? 'Voice Call' : 'Video Call'}</span>
+                          <span className={`call-history-status-badge ${call.status}`}>
+                            {call.status}
+                          </span>
+                        </div>
+                        <div className="call-history-meta">
+                          <span>{callTime}</span>
+                          {durationText && (
+                            <>
+                              <span className="call-meta-dot">•</span>
+                              <span>{durationText}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="call-history-callback-btn"
+                        onClick={isVoice ? onStartVoiceCall : onStartVideoCall}
+                        title={`Call back with ${isVoice ? 'voice' : 'video'}`}
+                        aria-label={`Call back with ${isVoice ? 'voice' : 'video'}`}
+                      >
+                        {isVoice ? '📞' : '🎥'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="empty-shared-state">No call history recorded yet</div>
+            )
           ) : (
             /* Settings Tab */
             <div className="chat-settings-tab">
@@ -301,15 +410,48 @@ export default function ChatInfoDrawer({
                 </div>
               </div>
 
-              {/* Mute Notifications */}
+              {/* In-App Notification Sound Toggle */}
               <div className="chat-setting-group">
-                <label className="chat-setting-toggle">
-                  <span>Mute notifications</span>
-                  <input
-                    type="checkbox"
-                    checked={isMuted}
-                    onChange={e => setIsMuted(e.target.checked)}
-                  />
+                <label className="chat-setting-toggle" style={{ cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <span style={{ fontWeight: 500 }}>Message notification sound</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--wibby-text-muted)' }}>
+                      {soundEnabled
+                        ? currentTone === 'none'
+                          ? 'Tone: None (Silent)'
+                          : `Tone: ${(() => {
+                              const t = NOTIFICATION_TONES.find(x => x.id === currentTone);
+                              return t ? `${t.name}${t.badge ? ` (${t.badge.toLowerCase()})` : ''}` : 'Wibby (default)';
+                            })()}`
+                        : 'Muted'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {soundEnabled && currentTone !== 'none' && (
+                      <button
+                        type="button"
+                        className="info-chime-test-btn"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          notificationService.playTestTone(currentTone);
+                        }}
+                        title={`Listen to sample ${NOTIFICATION_TONES.find(t => t.id === currentTone)?.name || 'tone'}`}
+                        aria-label="Test notification sound"
+                      >
+                        🔊
+                      </button>
+                    )}
+                    <input
+                      type="checkbox"
+                      checked={soundEnabled}
+                      onChange={e => {
+                        const next = e.target.checked;
+                        setSoundEnabled(next);
+                        notificationService.setSoundEnabled(next);
+                      }}
+                    />
+                  </div>
                 </label>
               </div>
 
