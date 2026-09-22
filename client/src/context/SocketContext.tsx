@@ -47,6 +47,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
         newSocket.on('connect', () => {
           if (isMounted) setIsConnected(true);
+          newSocket.emit('presence:request');
         });
 
         newSocket.on('disconnect', () => {

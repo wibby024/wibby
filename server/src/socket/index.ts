@@ -11,6 +11,11 @@ import { registerGameHandlers } from './gameHandler.js';
 let ioInstance: SocketIOServer | null = null;
 const userSockets = new Map<string, Set<string>>();
 
+export function isUserOnline(uid?: string): boolean {
+  if (!uid) return false;
+  return (userSockets.get(uid)?.size || 0) > 0;
+}
+
 export function initializeSocket(httpServer: HttpServer) {
   const isProd = process.env.NODE_ENV === 'production';
   const rawClientUrls = process.env.CLIENT_URL || (isProd ? 'https://wibby024.web.app,https://wibby024.firebaseapp.com,https://wibby.web.app' : 'http://localhost:5173');
@@ -130,6 +135,45 @@ export function initializeSocket(httpServer: HttpServer) {
         console.error('[WIBBY SOCKET] Auto-join error:', e);
       }
     })();
+
+    // Bi-directional presence synchronization
+    const sendPartnerPresence = async () => {
+      try {
+        const db = getDb();
+        const conversations = await db.collection('conversations').find({ members: uid }).toArray();
+        for (const conv of conversations) {
+          const partnerUid = conv.members.find((m: string) => m !== uid);
+          if (partnerUid) {
+            const partnerOnline = isUserOnline(partnerUid);
+            const partnerDoc = await db.collection('users').findOne(
+              { firebaseUid: partnerUid },
+              { projection: { lastSeen: 1 } }
+            );
+            socket.emit('presence:update', {
+              uid: partnerUid,
+              online: partnerOnline,
+              lastSeen: partnerDoc?.lastSeen ? new Date(partnerDoc.lastSeen).toISOString() : undefined
+            });
+
+            // Ensure the partner also knows this connected user is online
+            io.to(`user:${partnerUid}`).emit('presence:update', {
+              uid,
+              online: true
+            });
+          }
+        }
+      } catch (err) {
+        console.error('[WIBBY SOCKET] Error syncing presence:', err);
+      }
+    };
+
+    // Immediately sync presence upon connection
+    sendPartnerPresence();
+
+    // Listen for explicit presence requests from client
+    socket.on('presence:request', () => {
+      sendPartnerPresence();
+    });
 
     if (wasOffline) {
       // User just came online (run async in background so listeners attach synchronously)

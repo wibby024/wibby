@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { getDb, getClient } from '../lib/mongodb.js';
 import { auth as adminAuth } from '../lib/firebaseAdmin.js';
+import { isUserOnline } from '../socket/index.js';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 
@@ -252,12 +253,17 @@ router.get('/status', requireAuth, statusLimiter, async (req: Request, res: Resp
     }
 
     const partnerName = partner?.display_name || partner?.displayName || partner?.username || 'Partner';
+    const isOnline = isUserOnline(partnerUid) || !!partner?.online;
 
     const formattedPartner = partner ? {
       ...partner,
+      firebaseUid: partnerUid,
+      online: isOnline,
       display_name: partnerName,
       displayName: partnerName
     } : {
+      firebaseUid: partnerUid,
+      online: isOnline,
       display_name: 'Partner',
       displayName: 'Partner',
       username: 'partner'

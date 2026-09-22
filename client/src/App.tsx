@@ -189,14 +189,30 @@ function WibbyAppWrapper() {
           displayName: 'Partner',
           username: 'partner'
         };
-        setPartner(p);
+
+        setPartner((prev: any) => {
+          const effectiveOnline = (typeof rawPartner?.online === 'boolean')
+            ? rawPartner.online
+            : (prev?.online ?? false);
+          const merged = {
+            ...p,
+            online: effectiveOnline,
+            lastSeen: rawPartner?.lastSeen || prev?.lastSeen
+          };
+          if (user?.uid) {
+            try {
+              localStorage.setItem(`wibby-partner-${user.uid}`, JSON.stringify(merged));
+            } catch {}
+          }
+          return merged;
+        });
+
         setConversationId(data.conversationId);
         const syncedTheme = data.themeFamily || 'classic';
         setChatThemePreset(syncedTheme);
         localStorage.setItem('wibby-chat-theme', syncedTheme);
         if (user?.uid) {
           localStorage.setItem(`wibby-chat-theme-${user.uid}`, syncedTheme);
-          localStorage.setItem(`wibby-partner-${user.uid}`, JSON.stringify(p));
           localStorage.setItem(`wibby-conv-${user.uid}`, data.conversationId);
         }
       } else {
@@ -233,8 +249,20 @@ function WibbyAppWrapper() {
     
     const handlePresence = (data: { uid: string, online: boolean, lastSeen?: string }) => {
       setPartner((prev: any) => {
-        if (prev && prev.firebaseUid === data.uid) {
-          return { ...prev, online: data.online, lastSeen: data.lastSeen };
+        if (!prev) return prev;
+        const isMatch = prev.firebaseUid === data.uid || prev.uid === data.uid || prev._id === data.uid;
+        if (isMatch) {
+          const updated = {
+            ...prev,
+            online: !!data.online,
+            lastSeen: data.lastSeen || prev.lastSeen
+          };
+          if (user?.uid) {
+            try {
+              localStorage.setItem(`wibby-partner-${user.uid}`, JSON.stringify(updated));
+            } catch {}
+          }
+          return updated;
         }
         return prev;
       });
@@ -314,12 +342,20 @@ function WibbyAppWrapper() {
     };
   }, [socket, conversationId, signOut, user, partner]);
 
-  // Window focus & visibility reset for unread notifications (Req 05)
+  // Window focus & visibility reset for unread notifications & presence sync
   useEffect(() => {
-    const handleFocus = () => notificationService.resetUnread();
+    const handleFocus = () => {
+      notificationService.resetUnread();
+      if (socket?.connected) {
+        socket.emit('presence:request');
+      }
+    };
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         notificationService.resetUnread();
+        if (socket?.connected) {
+          socket.emit('presence:request');
+        }
       }
     };
 
@@ -329,7 +365,29 @@ function WibbyAppWrapper() {
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, []);
+  }, [socket]);
+
+  // Synchronize presence on socket connect and periodically every 20 seconds
+  useEffect(() => {
+    if (!socket) return;
+    const requestPresence = () => {
+      if (socket.connected) {
+        socket.emit('presence:request');
+      }
+    };
+
+    if (socket.connected) {
+      requestPresence();
+    }
+    socket.on('connect', requestPresence);
+
+    const interval = setInterval(requestPresence, 20000);
+
+    return () => {
+      socket.off('connect', requestPresence);
+      clearInterval(interval);
+    };
+  }, [socket, isPaired]);
 
   const rawPartnerName = partner?.display_name || partner?.displayName;
   const partnerName = (rawPartnerName && rawPartnerName !== 'Unknown' && rawPartnerName !== 'unknown')
