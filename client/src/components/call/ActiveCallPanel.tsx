@@ -809,7 +809,8 @@ export default function ActiveCallPanel() {
     isScreenSharing,
     isRemoteScreenSharing,
     startScreenSharing,
-    stopScreenSharing
+    stopScreenSharing,
+    requestKeyframe
   } = useCall();
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -882,6 +883,7 @@ export default function ActiveCallPanel() {
         rtcService.bindScreenVideoElement(screenVideoRef.current);
       }
       rtcService.triggerVideoPlayback();
+      requestKeyframe();
     }
     const localEl = localVideoRef.current;
     const localBgEl = localBgVideoRef.current;
@@ -895,7 +897,7 @@ export default function ActiveCallPanel() {
       if (remoteBgEl) rtcService.unbindRemoteVideoElement(remoteBgEl);
       if (screenEl) rtcService.unbindScreenVideoElement(screenEl);
     };
-  }, [activeCall?.callType, callState, viewMode, isScreenSharing, isRemoteScreenSharing, isScreenshareFullscreen, focusedParticipant]);
+  }, [activeCall?.callType, callState, viewMode, isScreenSharing, isRemoteScreenSharing, requestKeyframe]);
 
   // Imperatively attach screen share stream to hero video element as soon as available
   useEffect(() => {
@@ -921,14 +923,35 @@ export default function ActiveCallPanel() {
     }
   }, [isConnected, activeCall?.callType, isCameraOff, isRemoteCameraOff, isCameraUnavailable, viewMode, isScreenSharing, isRemoteScreenSharing, isScreenshareFullscreen]);
 
+  // Window visibility / focus recovery for minimize-maximize and tab switching
+  useEffect(() => {
+    const handleVisibilityRecovery = () => {
+      if (document.visibilityState === 'visible' && activeCall?.callType === 'video') {
+        console.log('[WIBBY WEBRTC] Window restored to foreground — recovering video playback and requesting keyframe');
+        rtcService.recoverVideoPlayback();
+        requestKeyframe();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityRecovery);
+    window.addEventListener('focus', handleVisibilityRecovery);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityRecovery);
+      window.removeEventListener('focus', handleVisibilityRecovery);
+    };
+  }, [activeCall?.callType, requestKeyframe]);
+
   // Fullscreen change listener
   useEffect(() => {
     const handleFsChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
+      setTimeout(() => {
+        rtcService.recoverVideoPlayback();
+        requestKeyframe();
+      }, 50);
     };
     document.addEventListener('fullscreenchange', handleFsChange);
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
-  }, []);
+  }, [requestKeyframe]);
 
   // Controls auto-hiding during active video calls (3.5s inactivity)
   const handleUserActivity = useCallback(() => {
@@ -968,6 +991,10 @@ export default function ActiveCallPanel() {
           setIsFullscreen(false);
         }
       }
+      setTimeout(() => {
+        rtcService.recoverVideoPlayback();
+        requestKeyframe();
+      }, 50);
     } catch (e) {
       console.warn('Fullscreen toggle failed:', e);
     }

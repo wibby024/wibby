@@ -516,6 +516,10 @@ export class RTCService {
       this.stopLocalDisplayPacingMonitor();
     }
     this.localVideoElements.delete(el);
+    try {
+      el.pause();
+      el.srcObject = null;
+    } catch {}
     if (this.localVideoElement === el) {
       this.localVideoElement = this.localVideoElements.values().next().value || null;
       if (this.localVideoElement) {
@@ -646,6 +650,14 @@ export class RTCService {
     (el as any).playsInline = true;
     // HARD RULE: Always muted to guarantee single audio output path!
     el.muted = true;
+
+    // Auto-resume if browser tries to pause in background/docked state
+    el.onpause = () => {
+      if (this.remoteVideoStream && this.remoteVideoElements.has(el)) {
+        el.play().catch(() => {});
+      }
+    };
+
     if (this.remoteVideoStream) {
       if (el.srcObject !== this.remoteVideoStream) {
         el.srcObject = this.remoteVideoStream;
@@ -661,6 +673,11 @@ export class RTCService {
       this.stopDisplayPacingMonitor();
     }
     this.remoteVideoElements.delete(el);
+    try {
+      el.pause();
+      el.onpause = null;
+      el.srcObject = null;
+    } catch {}
     if (this.remoteVideoElement === el) {
       this.remoteVideoElement = this.remoteVideoElements.values().next().value || null;
       if (this.remoteVideoElement) {
@@ -670,21 +687,60 @@ export class RTCService {
   }
 
   /**
+   * Comprehensive recovery for video playback on minimize/maximize, visibility changes, or decoder stalls.
+   * Checks every local and remote video element. If paused or readyState indicates stalled frames,
+   * kicks the video element, re-verifies srcObject, and calls play().
+   */
+  recoverVideoPlayback(): void {
+    console.log('[WIBBY WEBRTC] Comprehensive video recovery triggered (wake up paused elements)');
+    this.remoteVideoElements.forEach(el => {
+      try {
+        if (this.remoteVideoStream && el.srcObject !== this.remoteVideoStream) {
+          el.srcObject = this.remoteVideoStream;
+        }
+        el.muted = true;
+        el.autoplay = true;
+        (el as any).playsInline = true;
+        el.play().catch(err => console.warn('[WIBBY WEBRTC] Recover remote video play error:', err));
+      } catch (e) {}
+    });
+    this.localVideoElements.forEach(el => {
+      try {
+        if (this.localStream && el.srcObject !== this.localStream) {
+          el.srcObject = this.localStream;
+        }
+        el.muted = true;
+        el.autoplay = true;
+        (el as any).playsInline = true;
+        el.play().catch(err => console.warn('[WIBBY WEBRTC] Recover local video play error:', err));
+      } catch (e) {}
+    });
+  }
+
+  /**
+   * Generate an IDR Keyframe on the video sender upon remote partner request
+   * (e.g. when remote partner expands from minimized state)
+   */
+  sendKeyframe(): void {
+    if (!this.peerConnection) return;
+    try {
+      const senders = this.peerConnection.getSenders();
+      const videoSender = senders.find((s: RTCRtpSender) => s.track?.kind === 'video');
+      if (videoSender && typeof (videoSender as any).generateKeyFrame === 'function') {
+        (videoSender as any).generateKeyFrame();
+        console.log('[WIBBY WEBRTC] Keyframe generated on video sender');
+      }
+    } catch (e) {
+      console.warn('[WIBBY WEBRTC] Failed to generate keyframe:', e);
+    }
+  }
+
+  /**
    * Imperatively trigger playback on all bound video elements.
    * Required to fix black/frozen video in Safari when removing 'display: none' (hidden class).
    */
   triggerVideoPlayback(): void {
-    console.log('[WIBBY WEBRTC] Triggering imperative video playback to clear black frames');
-    this.localVideoElements.forEach(el => {
-      try {
-        if (el.paused) el.play().catch(() => {});
-      } catch (e) {}
-    });
-    this.remoteVideoElements.forEach(el => {
-      try {
-        if (el.paused) el.play().catch(err => console.warn('[WIBBY WEBRTC] Force play error:', err));
-      } catch (e) {}
-    });
+    this.recoverVideoPlayback();
   }
 
   /**

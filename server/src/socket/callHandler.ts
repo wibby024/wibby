@@ -538,6 +538,25 @@ export function registerCallHandlers(
     }
   });
 
+  // 8c. Keyframe Request relay (Phase 9 Video Freeze / Maximize Recovery)
+  socket.on('call:keyframe-request', (data: { callId: string; sessionId?: string }) => {
+    try {
+      if (!data?.callId) return;
+      const session = activeCalls.get(data.callId);
+      if (!session) return;
+
+      if (!isSessionValid(session, data.sessionId)) return;
+
+      const targetId = session.callerId === uid ? session.calleeId : session.callerId;
+      io.to(`user:${targetId}`).emit('call:keyframe-request', {
+        callId: data.callId,
+        userId: uid
+      });
+    } catch (err) {
+      console.error('[WIBBY CALL] Error in call:keyframe-request:', err);
+    }
+  });
+
   // 9. Check Recoverable Calls (Session Rehydration query)
   socket.on('call:check-recoverable', async () => {
     try {

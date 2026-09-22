@@ -55,7 +55,15 @@ export default function CallModals() {
       {callState === 'INCOMING_RINGING' && <IncomingCallModal />}
       {callState === 'OUTGOING_CALLING' && <OutgoingCallModal />}
       {(callState === 'CONNECTING' || callState === 'CONNECTED' || callState === 'RECONNECTING') && (
-        isMinimized ? <FloatingCallCapsule /> : <ActiveCallPanel />
+        <>
+          <div
+            className={`call-active-panel-container ${isMinimized ? 'is-minimized-dormant' : ''}`}
+            aria-hidden={isMinimized}
+          >
+            <ActiveCallPanel />
+          </div>
+          {isMinimized && <FloatingCallCapsule />}
+        </>
       )}
 
       {errorMessage && (

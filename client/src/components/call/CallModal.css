@@ -1,5 +1,24 @@
 /* Wibby Call Modals & Floating Active Call Panel */
 
+/* Persistent Active Call Panel Container (Prevents unmounting and WebRTC video decoder freezes on minimize/maximize) */
+.call-active-panel-container {
+  display: contents;
+}
+
+.call-active-panel-container.is-minimized-dormant {
+  display: block;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  position: fixed !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  z-index: -9999 !important;
+}
+
 .call-overlay {
   position: fixed;
   inset: 0;

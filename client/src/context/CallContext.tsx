@@ -85,6 +85,7 @@ interface CallContextType {
   isMinimized: boolean;
   minimizeCall: () => void;
   expandCall: () => void;
+  requestKeyframe: () => void;
   isRemoteSpeaking: boolean;
   availableOutputDevices: MediaDeviceInfo[];
   selectedOutputDeviceId: string | null;
@@ -272,13 +273,31 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setErrorMessage(null);
   }, []);
 
+  const requestKeyframe = useCallback(() => {
+    if (socket && activeCallRef.current) {
+      socket.emit('call:keyframe-request', {
+        callId: activeCallRef.current.callId,
+        sessionId: rtcService.getSessionId()
+      });
+    }
+  }, [socket]);
+
   const minimizeCall = useCallback(() => {
     setIsMinimized(true);
   }, []);
 
   const expandCall = useCallback(() => {
     setIsMinimized(false);
-  }, []);
+    setTimeout(() => {
+      rtcService.recoverVideoPlayback();
+      if (socket && activeCallRef.current) {
+        socket.emit('call:keyframe-request', {
+          callId: activeCallRef.current.callId,
+          sessionId: rtcService.getSessionId()
+        });
+      }
+    }, 40);
+  }, [socket]);
 
   const setAudioOutputDevice = useCallback(async (deviceId: string) => {
     setSelectedOutputDeviceId(deviceId);
@@ -794,6 +813,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       setIsRemoteScreenSharing(data.isSharing);
     };
 
+    // 15. Keyframe Request from partner (Phase 9 Video Freeze / Maximize Recovery)
+    const handleKeyframeRequest = (data: { callId: string }) => {
+      if (activeCallRef.current && activeCallRef.current.callId === data.callId) {
+        console.log('[WIBBY CALL] Partner requested IDR keyframe; generating on sender');
+        rtcService.sendKeyframe();
+      }
+    };
+
     socket.on('call:invite', handleCallInvite);
     socket.on('call:ringing', handleCallRinging);
     socket.on('call:accepted', handleCallAccepted);
@@ -809,6 +836,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     socket.on('call:peer-reconnected', handlePeerReconnected);
     socket.on('call:session-superseded', handleSessionSuperseded);
     socket.on('call:screenshare-toggle', handleRemoteScreenShareToggle);
+    socket.on('call:keyframe-request', handleKeyframeRequest);
 
     return () => {
       socket.off('call:invite', handleCallInvite);
@@ -826,6 +854,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       socket.off('call:peer-reconnected', handlePeerReconnected);
       socket.off('call:session-superseded', handleSessionSuperseded);
       socket.off('call:screenshare-toggle', handleRemoteScreenShareToggle);
+      socket.off('call:keyframe-request', handleKeyframeRequest);
     };
   }, [socket, resetCallState, clearError, showTransientError, clearTimer]);
 
@@ -1315,6 +1344,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         isMinimized,
         minimizeCall,
         expandCall,
+        requestKeyframe,
         isRemoteSpeaking,
         availableOutputDevices,
         selectedOutputDeviceId,
