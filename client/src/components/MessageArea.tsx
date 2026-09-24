@@ -643,6 +643,19 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
 
   const partnerName = resolvePartnerName(partner);
 
+  const sortedMessages = useMemo(() => {
+    return [...messages].sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      return (a._id || '').localeCompare(b._id || '');
+    });
+  }, [messages]);
+
+  const visibleMessages = useMemo(() => {
+    return sortedMessages.filter(msg => !user?.uid || !msg.deletedFor?.includes(user?.uid || ''));
+  }, [sortedMessages, user?.uid]);
+
   // Prevent browser default behavior of opening dropped files
   useEffect(() => {
     const handleWindowDragOver = (e: DragEvent) => {
@@ -1662,18 +1675,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
 
   const pinnedMsg = messages.slice().reverse().find(m => m.isPinned);
 
-  const sortedMessages = useMemo(() => {
-    return [...messages].sort((a, b) => {
-      const timeA = new Date(a.createdAt).getTime();
-      const timeB = new Date(b.createdAt).getTime();
-      if (timeA !== timeB) return timeA - timeB;
-      return (a._id || '').localeCompare(b._id || '');
-    });
-  }, [messages]);
 
-  const visibleMessages = useMemo(() => {
-    return sortedMessages.filter(msg => !user?.uid || !msg.deletedFor?.includes(user.uid));
-  }, [sortedMessages, user?.uid]);
 
   return (
     <div 

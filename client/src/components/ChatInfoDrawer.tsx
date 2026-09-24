@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useAuth } from '../context/AuthContext';
+import { AuthenticatedImage } from './AuthenticatedMedia';
 import type { Message, ChatThemePreset } from '../types/chat';
 import { formatLastSeen } from '../utils/time';
 import { formatFileSize } from '../config/media';
@@ -56,6 +58,7 @@ export default function ChatInfoDrawer({
   currentThemePreset,
   onSelectThemePreset
 }: ChatInfoDrawerProps) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'media' | 'files' | 'links' | 'starred' | 'calls' | 'settings'>('media');
   const [sharedItems, setSharedItems] = useState<Message[]>([]);
   const [callHistory, setCallHistory] = useState<Array<{
@@ -96,36 +99,70 @@ export default function ChatInfoDrawer({
   const name = resolvePartnerName(partner);
   const initial = name.charAt(0).toUpperCase();
 
+  // Fetch conversation settings (e.g. disappearing messages timer)
   useEffect(() => {
-    if (!isOpen || !conversationId) return;
+    if (!isOpen || !conversationId || !user) return;
+
+    let isMounted = true;
+    const fetchDetails = async () => {
+      try {
+        const token = await user.getIdToken();
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        const res = await fetch(`${apiUrl}/api/conversations/${conversationId}/details`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          if (typeof data.disappearingTimer === 'number') {
+            setDisappearingTimer(data.disappearingTimer);
+          }
+        }
+      } catch (err) {
+        console.error('Fetch conversation details error:', err);
+      }
+    };
+
+    fetchDetails();
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, conversationId, user]);
+
+  useEffect(() => {
+    if (!isOpen || !conversationId || !user) return;
+
+    let isMounted = true;
 
     if (activeTab === 'calls') {
       const fetchCalls = async () => {
         setLoading(true);
         try {
-          const token = localStorage.getItem('wibby-token') || '';
-          const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations/${conversationId}/calls`;
+          const token = await user.getIdToken();
+          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+          const url = `${apiUrl}/api/conversations/${conversationId}/calls`;
           const res = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
-          if (res.ok) {
+          if (res.ok && isMounted) {
             const data = await res.json();
             setCallHistory(data || []);
           }
         } catch (err) {
           console.error('Fetch calls error:', err);
         } finally {
-          setLoading(false);
+          if (isMounted) setLoading(false);
         }
       };
       fetchCalls();
-      return;
+      return () => {
+        isMounted = false;
+      };
     }
 
     const fetchCategory = async () => {
       setLoading(true);
       try {
-        const token = localStorage.getItem('wibby-token') || '';
+        const token = await user.getIdToken();
         const categoryMap: any = {
           media: 'media',
           files: 'files',
@@ -134,37 +171,44 @@ export default function ChatInfoDrawer({
         };
         const category = categoryMap[activeTab];
         if (!category) {
-          setLoading(false);
+          if (isMounted) setLoading(false);
           return;
         }
 
-        const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations/${conversationId}/messages/shared-media?category=${category}`;
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        const url = `${apiUrl}/api/conversations/${conversationId}/messages/shared-media?category=${category}`;
         const res = await fetch(url, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (res.ok) {
+        if (res.ok && isMounted) {
           const data = await res.json();
           setSharedItems(data.messages || []);
         }
       } catch (err) {
         console.error('Fetch shared media error:', err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     if (activeTab !== 'settings') {
       fetchCategory();
     }
-  }, [isOpen, activeTab, conversationId]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, activeTab, conversationId, user]);
 
   if (!isOpen) return null;
 
   const handleSetDisappearing = async (timer: number) => {
     setDisappearingTimer(timer);
+    if (!user) return;
     try {
-      const token = localStorage.getItem('wibby-token') || '';
-      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations/${conversationId}/messages/disappearing`;
+      const token = await user.getIdToken();
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const url = `${apiUrl}/api/conversations/${conversationId}/messages/disappearing`;
       await fetch(url, {
         method: 'POST',
         headers: {
@@ -256,10 +300,21 @@ export default function ChatInfoDrawer({
                   <div key={item._id} className="shared-media-thumb" onClick={() => onJumpToMessage(item._id)}>
                     {item.type === 'video' ? (
                       <div className="shared-video-thumb">
+                        {item.thumbnailUrl ? (
+                          <AuthenticatedImage
+                            conversationId={conversationId}
+                            mediaUrl={item.thumbnailUrl}
+                            alt={item.fileName || 'Shared video'}
+                          />
+                        ) : null}
                         <span className="video-badge">🎥</span>
                       </div>
                     ) : item.mediaUrl ? (
-                      <img src={item.mediaUrl} alt="Shared thumbnail" />
+                      <AuthenticatedImage
+                        conversationId={conversationId}
+                        mediaUrl={item.mediaUrl}
+                        alt={item.fileName || 'Shared thumbnail'}
+                      />
                     ) : (
                       <div className="fallback-thumb">🖼️</div>
                     )}

@@ -239,6 +239,64 @@ router.get('/shared-media', async (req: Request, res: Response) => {
   }
 });
 
+// Conversation details endpoint for contact drawer & settings
+router.get('/details', async (req: Request, res: Response) => {
+  try {
+    const conversation = (req as any).conversation;
+    res.json({
+      conversationId: conversation._id.toString(),
+      disappearingTimer: conversation.disappearingTimer || 0,
+      theme: conversation.theme || null,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt
+    });
+  } catch (error) {
+    console.error('Conversation details fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch conversation details' });
+  }
+});
+
+// Call History endpoint (Req 13)
+router.get('/calls', async (req: Request, res: Response) => {
+  try {
+    const conversationId = req.params.conversationId as string;
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const db = getDb();
+    const convId = new ObjectId(conversationId);
+
+    const calls = await db.collection('calls')
+      .find({
+        $or: [
+          { conversationId: convId },
+          { conversationId: conversationId }
+        ]
+      })
+      .sort({ startedAt: -1 })
+      .limit(limit)
+      .toArray();
+
+    const serializedCalls = calls.map(c => ({
+      id: c._id.toString(),
+      callId: c.callId,
+      conversationId: c.conversationId.toString(),
+      callerId: c.callerId,
+      calleeId: c.calleeId,
+      callType: c.callType || 'voice',
+      status: c.status,
+      startedAt: c.startedAt,
+      connectedAt: c.connectedAt,
+      endedAt: c.endedAt,
+      duration: c.duration || 0,
+      endReason: c.endReason
+    }));
+
+    res.json(serializedCalls);
+  } catch (error) {
+    console.error('Call history fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch call history' });
+  }
+});
+
 // Fetch message history
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -305,7 +363,7 @@ router.post('/clear', async (req: Request, res: Response) => {
 });
 
 // Fetch single message by ID
-router.get('/:messageId', async (req: Request, res: Response) => {
+router.get('/:messageId', async (req: Request, res: Response, next: any) => {
   try {
     const conversationId = req.params.conversationId as string;
     const messageId = req.params.messageId as string;
@@ -313,7 +371,7 @@ router.get('/:messageId', async (req: Request, res: Response) => {
     const db = getDb();
 
     if (!ObjectId.isValid(messageId)) {
-      return res.status(400).json({ error: 'Invalid message ID' });
+      return next();
     }
 
     const message = await db.collection('messages').findOne({
@@ -688,46 +746,7 @@ router.post('/theme', async (req: Request, res: Response) => {
   }
 });
 
-// Call History endpoint (Req 13)
-router.get('/calls', async (req: Request, res: Response) => {
-  try {
-    const conversationId = req.params.conversationId as string;
-    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
-    const db = getDb();
-    const convId = new ObjectId(conversationId);
 
-    const calls = await db.collection('calls')
-      .find({
-        $or: [
-          { conversationId: convId },
-          { conversationId: conversationId }
-        ]
-      })
-      .sort({ startedAt: -1 })
-      .limit(limit)
-      .toArray();
-
-    const serializedCalls = calls.map(c => ({
-      id: c._id.toString(),
-      callId: c.callId,
-      conversationId: c.conversationId.toString(),
-      callerId: c.callerId,
-      calleeId: c.calleeId,
-      callType: c.callType || 'voice',
-      status: c.status,
-      startedAt: c.startedAt,
-      connectedAt: c.connectedAt,
-      endedAt: c.endedAt,
-      duration: c.duration || 0,
-      endReason: c.endReason
-    }));
-
-    res.json(serializedCalls);
-  } catch (error) {
-    console.error('Call history fetch error:', error);
-    res.status(500).json({ error: 'Failed to fetch call history' });
-  }
-});
 
 router.post('/:messageId/reactions', requireAuth, verifyMembership, async (req: Request, res: Response) => {
   try {
