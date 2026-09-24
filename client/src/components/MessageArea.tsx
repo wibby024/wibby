@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { formatMessageTime } from '../utils/time';
@@ -635,6 +635,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
   const { socket } = useSocket();
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -697,8 +698,15 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
     }
   };
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    }
   }, []);
 
   const showToast = (msg: string) => {
@@ -841,19 +849,6 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
           return prev;
         }
         
-        // Reconcile optimistic message
-        if (message.clientMessageId) {
-          const index = prev.findIndex(m => 
-            (m.clientMessageId && m.clientMessageId === message.clientMessageId) || 
-            (m._id && m._id === message.clientMessageId)
-          );
-          if (index !== -1) {
-            const next = [...prev];
-            next[index] = message;
-            return next;
-          }
-        }
-        
         // If incoming, acknowledge delivery
         if (message.senderId !== user?.uid) {
           socket.emit('message:delivery-ack', {
@@ -861,15 +856,34 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
             conversationId
           });
         }
-        
-        return [...prev, message];
+
+        let next: Message[];
+        // Reconcile optimistic message
+        if (message.clientMessageId) {
+          const index = prev.findIndex(m => 
+            (m.clientMessageId && m.clientMessageId === message.clientMessageId) || 
+            (m._id && m._id === message.clientMessageId)
+          );
+          if (index !== -1) {
+            next = [...prev];
+            next[index] = message;
+          } else {
+            next = [...prev, message];
+          }
+        } else {
+          next = [...prev, message];
+        }
+
+        next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        return next;
       });
+
       setIsPartnerTyping(false);
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
-      setTimeout(scrollToBottom, 100);
+      setTimeout(() => scrollToBottom('smooth'), 50);
     };
 
     const handleTypingStart = (data: { conversationId: string, userId: string }) => {
@@ -1126,8 +1140,12 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       forwardedFromMessageId
     };
 
-    setMessages(prev => [...prev, tempMsg]);
-    setTimeout(scrollToBottom, 100);
+    setMessages(prev => {
+      const next = [...prev, tempMsg];
+      next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      return next;
+    });
+    setTimeout(() => scrollToBottom('smooth'), 50);
 
     try {
       const token = await user.getIdToken();
@@ -1164,7 +1182,11 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
 
       const data = await response.json();
       const normalizedSent = normalizeMessage(data.message);
-      setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? normalizedSent : m));
+      setMessages(prev => {
+        const next = prev.map(m => m.clientMessageId === tempId || m._id === tempId ? normalizedSent : m);
+        next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        return next;
+      });
     } catch (err) {
       console.error('Send error:', err);
       setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? { ...m, status: 'failed' } : m));
@@ -1190,8 +1212,12 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       status: 'sending'
     };
 
-    setMessages(prev => [...prev, tempMsg]);
-    setTimeout(scrollToBottom, 100);
+    setMessages(prev => {
+      const next = [...prev, tempMsg];
+      next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      return next;
+    });
+    setTimeout(() => scrollToBottom('smooth'), 50);
 
     try {
       const token = await user.getIdToken();
@@ -1211,7 +1237,11 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       if (!res.ok) throw new Error('Failed to send special message');
       const data = await res.json();
       const normalized = normalizeMessage(data.message);
-      setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? normalized : m));
+      setMessages(prev => {
+        const next = prev.map(m => m.clientMessageId === tempId || m._id === tempId ? normalized : m);
+        next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        return next;
+      });
     } catch (err) {
       console.error('Special send error:', err);
       setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? { ...m, status: 'failed' } : m));
@@ -1284,20 +1314,25 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
     const newMediaMsg = normalizeMessage(rawMediaMsg);
     setMessages(prev => {
       if (prev.some(m => m._id === newMediaMsg._id)) return prev;
+      let next: Message[];
       if (newMediaMsg.clientMessageId) {
         const index = prev.findIndex(m => 
           (m.clientMessageId && m.clientMessageId === newMediaMsg.clientMessageId) || 
           (m._id && m._id === newMediaMsg.clientMessageId)
         );
         if (index !== -1) {
-          const next = [...prev];
+          next = [...prev];
           next[index] = newMediaMsg;
-          return next;
+        } else {
+          next = [...prev, newMediaMsg];
         }
+      } else {
+        next = [...prev, newMediaMsg];
       }
-      return [...prev, newMediaMsg];
+      next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      return next;
     });
-    setTimeout(scrollToBottom, 100);
+    setTimeout(() => scrollToBottom('smooth'), 50);
   }, [scrollToBottom]);
 
   const handleRetry = async (msg: Message) => {
@@ -1627,7 +1662,18 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
 
   const pinnedMsg = messages.slice().reverse().find(m => m.isPinned);
 
-  const visibleMessages = messages.filter(msg => !user?.uid || !msg.deletedFor?.includes(user.uid));
+  const sortedMessages = useMemo(() => {
+    return [...messages].sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      return (a._id || '').localeCompare(b._id || '');
+    });
+  }, [messages]);
+
+  const visibleMessages = useMemo(() => {
+    return sortedMessages.filter(msg => !user?.uid || !msg.deletedFor?.includes(user.uid));
+  }, [sortedMessages, user?.uid]);
 
   return (
     <div 
@@ -1679,7 +1725,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       )}
 
       {visibleMessages.length === 0 ? (
-        <div className="message-area empty">
+        <div className="message-area empty" ref={scrollContainerRef}>
           <div className="empty-state">
             <div className="empty-state-decor">
               <div className="decor-ring ring-1" />
@@ -1707,7 +1753,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
           </div>
         </div>
       ) : (
-        <div className="message-area has-messages" onScroll={() => {
+        <div className="message-area has-messages" ref={scrollContainerRef} onScroll={() => {
           if (contextMenu) closeContextMenu();
           if (emojiPicker) setEmojiPicker(null);
           setHoveredMessageId(null);
@@ -1722,8 +1768,11 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
               const isSameSenderAsPrev = prevMsg && prevMsg.senderId === msg.senderId;
               const isSameSenderAsNext = nextMsg && nextMsg.senderId === msg.senderId;
               
-              const isCloseToPrev = prevMsg && (new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime() < GROUPING_TIME_LIMIT);
-              const isCloseToNext = nextMsg && (new Date(nextMsg.createdAt).getTime() - new Date(msg.createdAt).getTime() < GROUPING_TIME_LIMIT);
+              const timeDiffPrev = prevMsg ? Math.abs(new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime()) : Infinity;
+              const timeDiffNext = nextMsg ? Math.abs(new Date(nextMsg.createdAt).getTime() - new Date(msg.createdAt).getTime()) : Infinity;
+
+              const isCloseToPrev = timeDiffPrev < GROUPING_TIME_LIMIT;
+              const isCloseToNext = timeDiffNext < GROUPING_TIME_LIMIT;
 
               const isFirstInGroup = !isSameSenderAsPrev || !isCloseToPrev;
               const isLastInGroup = !isSameSenderAsNext || !isCloseToNext;

@@ -759,11 +759,12 @@
 .chat-area-container {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 1 1 0%;
   min-height: 0;
   position: relative;
   overflow: hidden;
-  height: 100%;
+  height: auto;
+  max-height: 100%;
   width: 100%;
 }
 

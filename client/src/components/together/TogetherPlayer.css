@@ -16,9 +16,12 @@
   position: relative;
   width: calc(100% - 1.5rem);
   max-width: 780px;
-  margin: 0.65rem auto 0.5rem auto;
+  margin: 0.5rem auto 0.35rem auto;
   border-radius: var(--radius-xl);
   flex-shrink: 0;
+  max-height: 48vh;
+  display: flex;
+  flex-direction: column;
   animation: dockSlideDown 0.25s var(--ease-out);
 }
 
@@ -230,7 +233,13 @@
 }
 
 .together-player-frame-wrap.full-frame {
-  max-height: 440px;
+  max-height: min(280px, 32vh);
+}
+
+@media (max-width: 768px) {
+  .together-player-frame-wrap.full-frame {
+    max-height: min(190px, 26vh);
+  }
 }
 
 .together-player-frame-wrap.mini-frame {
