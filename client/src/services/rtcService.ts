@@ -501,12 +501,7 @@ export class RTCService {
     el.autoplay = true;
     (el as any).playsInline = true;
     el.muted = true; // Local preview must always be muted to prevent acoustic feedback
-    if (this.isScreenSharing && this.screenStream) {
-      if (el.srcObject !== this.screenStream) {
-        el.srcObject = this.screenStream;
-      }
-      el.play().catch(() => {});
-    } else if (this.localStream && this.localStream.getVideoTracks().length > 0) {
+    if (this.localStream && this.localStream.getVideoTracks().length > 0) {
       if (el.srcObject !== this.localStream) {
         el.srcObject = this.localStream;
       }
@@ -723,6 +718,19 @@ export class RTCService {
         el.play().catch(err => console.warn('[WIBBY WEBRTC] Recover local video play error:', err));
       } catch (e) {}
     });
+    if (this.isScreenSharing && this.screenStream) {
+      this.screenVideoElements.forEach(el => {
+        try {
+          if (el.srcObject !== this.screenStream) {
+            el.srcObject = this.screenStream;
+          }
+          el.muted = true;
+          el.autoplay = true;
+          (el as any).playsInline = true;
+          el.play().catch(err => console.warn('[WIBBY WEBRTC] Recover screen video play error:', err));
+        } catch (e) {}
+      });
+    }
   }
 
   /**
@@ -1903,12 +1911,8 @@ export class RTCService {
       return 'error';
     }
 
-    // Update local preview elements and dedicated screen video elements to show the screen
-    const screenPreviewStream = new MediaStream([screenVideoTrack]);
-    this.localVideoElements.forEach(el => {
-      el.srcObject = screenPreviewStream;
-      el.play().catch(() => {});
-    });
+    // Dedicated screen video elements show the high-definition screen stream
+    // Local camera preview elements remain untouched displaying localStream webcam
     this.screenVideoElements.forEach(el => {
       el.srcObject = screenStream;
       el.play().catch(() => {});

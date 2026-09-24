@@ -403,7 +403,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
             {/* Main Shared Screen Presentation: exactly ONE video element */}
             {isLocalSharing ? (
               <video
-                ref={screenVideoRef || localVideoRef}
+                ref={screenVideoRef}
                 className="call-video-fg-live is-screen-share"
                 autoPlay
                 playsInline
@@ -425,7 +425,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
             {/* Top Tile: Partner User */}
             <div className="call-sidebar-user-tile remote">
               {isRemoteSharing ? (
-                // If partner is sharing, their avatar & status card goes here
+                // If partner is sharing, their screen is in the hero view; top tile shows status & avatar
                 <div className="call-video-placeholder">
                   <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
                     {isConnected && isRemoteSpeaking && <div className="call-pulse-ring speaking" />}
@@ -482,10 +482,16 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               </div>
             </div>
 
-            {/* Bottom Tile: You */}
+            {/* Bottom Tile: You (Live Local Camera Feed) */}
             <div className={`call-sidebar-user-tile local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''}`}>
-              {isLocalSharing ? (
-                // If local is sharing, local user's info card goes here
+              <video
+                ref={localVideoRef}
+                className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
+                autoPlay
+                playsInline
+                muted
+              />
+              {(isCameraOff || isCameraUnavailable) && (
                 <div className="call-video-placeholder">
                   <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
                     <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
@@ -493,29 +499,10 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                     </div>
                   </div>
                   <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>You</span>
-                  <span style={{ fontSize: 11, color: '#a78bfa' }}>🖥️ Sharing screen</span>
-                </div>
-              ) : (
-                // If local is NOT sharing (remote is sharing), your live camera goes here (mirrored selfie)
-                <>
-                  <video
-                    ref={localVideoRef}
-                    className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
-                    autoPlay
-                    playsInline
-                    muted
-                  />
-                  {(isCameraOff || isCameraUnavailable) && (
-                    <div className="call-video-placeholder">
-                      <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
-                        <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
-                          <span>Y</span>
-                        </div>
-                      </div>
-                      <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>You</span>
-                    </div>
+                  {isLocalSharing && (
+                    <span style={{ fontSize: 11, color: '#a78bfa' }}>🖥️ Sharing screen</span>
                   )}
-                </>
+                </div>
               )}
 
               {/* Local Badge & Flip Camera */}
@@ -523,8 +510,13 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span className="call-identity-dot online" />
                   <span className="call-identity-name">You</span>
+                  {isLocalSharing && (
+                    <span style={{ fontSize: 10, color: '#c4b5fd', background: 'rgba(167, 139, 250, 0.2)', padding: '1px 5px', borderRadius: 4, marginLeft: 4 }}>
+                      Presenting
+                    </span>
+                  )}
                 </div>
-                {!isLocalSharing && !isCameraOff && !isCameraUnavailable && (
+                {!isCameraOff && !isCameraUnavailable && (
                   <button
                     type="button"
                     className="call-panel-switch-cam-btn"
