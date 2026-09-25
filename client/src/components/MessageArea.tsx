@@ -645,10 +645,9 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
 
   const sortedMessages = useMemo(() => {
     return [...messages].sort((a, b) => {
-      const timeA = new Date(a.createdAt).getTime();
-      const timeB = new Date(b.createdAt).getTime();
-      if (timeA !== timeB) return timeA - timeB;
-      return (a._id || '').localeCompare(b._id || '');
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return (Number.isNaN(timeA) ? 0 : timeA) - (Number.isNaN(timeB) ? 0 : timeB);
     });
   }, [messages]);
 
@@ -880,14 +879,10 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
           if (index !== -1) {
             next = [...prev];
             next[index] = message;
-          } else {
-            next = [...prev, message];
+            return next;
           }
-        } else {
-          next = [...prev, message];
         }
-
-        next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        next = [...prev, message];
         return next;
       });
 
@@ -1153,11 +1148,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       forwardedFromMessageId
     };
 
-    setMessages(prev => {
-      const next = [...prev, tempMsg];
-      next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      return next;
-    });
+    setMessages(prev => [...prev, tempMsg]);
     setTimeout(() => scrollToBottom('smooth'), 50);
 
     try {
@@ -1195,11 +1186,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
 
       const data = await response.json();
       const normalizedSent = normalizeMessage(data.message);
-      setMessages(prev => {
-        const next = prev.map(m => m.clientMessageId === tempId || m._id === tempId ? normalizedSent : m);
-        next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        return next;
-      });
+      setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? normalizedSent : m));
     } catch (err) {
       console.error('Send error:', err);
       setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? { ...m, status: 'failed' } : m));
@@ -1225,11 +1212,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       status: 'sending'
     };
 
-    setMessages(prev => {
-      const next = [...prev, tempMsg];
-      next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      return next;
-    });
+    setMessages(prev => [...prev, tempMsg]);
     setTimeout(() => scrollToBottom('smooth'), 50);
 
     try {
@@ -1250,11 +1233,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       if (!res.ok) throw new Error('Failed to send special message');
       const data = await res.json();
       const normalized = normalizeMessage(data.message);
-      setMessages(prev => {
-        const next = prev.map(m => m.clientMessageId === tempId || m._id === tempId ? normalized : m);
-        next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        return next;
-      });
+      setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? normalized : m));
     } catch (err) {
       console.error('Special send error:', err);
       setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? { ...m, status: 'failed' } : m));
@@ -1327,23 +1306,18 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
     const newMediaMsg = normalizeMessage(rawMediaMsg);
     setMessages(prev => {
       if (prev.some(m => m._id === newMediaMsg._id)) return prev;
-      let next: Message[];
       if (newMediaMsg.clientMessageId) {
         const index = prev.findIndex(m => 
           (m.clientMessageId && m.clientMessageId === newMediaMsg.clientMessageId) || 
           (m._id && m._id === newMediaMsg.clientMessageId)
         );
         if (index !== -1) {
-          next = [...prev];
+          const next = [...prev];
           next[index] = newMediaMsg;
-        } else {
-          next = [...prev, newMediaMsg];
+          return next;
         }
-      } else {
-        next = [...prev, newMediaMsg];
       }
-      next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      return next;
+      return [...prev, newMediaMsg];
     });
     setTimeout(() => scrollToBottom('smooth'), 50);
   }, [scrollToBottom]);

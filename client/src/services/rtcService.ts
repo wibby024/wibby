@@ -569,6 +569,47 @@ export class RTCService {
   }
 
   /**
+   * Get active remote video stream (remote camera or received screen share).
+   */
+  getRemoteVideoStream(): MediaStream | null {
+    return this.remoteVideoStream;
+  }
+
+  /**
+   * Get active local media stream (camera + mic).
+   */
+  getLocalStream(): MediaStream | null {
+    return this.localStream;
+  }
+
+  /**
+   * Diagnostic inspector for active screen sharing verification
+   */
+  getScreenShareDiagnostics() {
+    const screenTrack = this.screenStream?.getVideoTracks()[0];
+    const localTrack = this.localStream?.getVideoTracks()[0];
+    const remoteTrack = this.remoteVideoStream?.getVideoTracks()[0];
+    const videoSender =
+      this.peerConnection?.getSenders().find(s => s.track?.kind === 'video' || (s as any).kind === 'video') ||
+      this.peerConnection?.getTransceivers().find(t => t.sender?.track?.kind === 'video' || t.receiver?.track?.kind === 'video' || (t as any).kind === 'video')?.sender;
+    const videoReceiver = this.peerConnection?.getReceivers().find(r => r.track?.kind === 'video');
+
+    return {
+      isScreenSharing: this.isScreenSharing,
+      screenStreamId: this.screenStream?.id ?? null,
+      screenTrackKind: screenTrack?.kind ?? null,
+      screenTrackReadyState: screenTrack?.readyState ?? null,
+      screenTrackLabel: screenTrack?.label ?? null,
+      localCameraTrackLabel: localTrack?.label ?? null,
+      remoteCameraTrackLabel: remoteTrack?.label ?? null,
+      senderTrackKind: videoSender?.track?.kind ?? null,
+      senderTrackLabel: videoSender?.track?.label ?? null,
+      receiverTrackKind: videoReceiver?.track?.kind ?? null,
+      receiverTrackLabel: videoReceiver?.track?.label ?? null,
+    };
+  }
+
+  /**
    * Start requestVideoFrameCallback display pacing monitor on remote video element (Guardrail #4).
    * Measures real frame presentation timing, actual presented FPS, interval variance, and freezes.
    */
@@ -844,7 +885,8 @@ export class RTCService {
     console.log(`[WIBBY WEBRTC] Switching camera. deviceId: ${deviceId || 'none (mobile toggle)'}, current: ${previousFacing}, target facing: ${nextFacing}`);
 
     // Enumerate video devices BEFORE stopping old track so labels are retained by the browser
-    let targetDeviceId = (deviceId && deviceId !== 'toggle-facing') ? deviceId : undefined;
+    const isExplicitDeviceId = Boolean(deviceId && deviceId !== 'toggle-facing');
+    let targetDeviceId = isExplicitDeviceId ? deviceId : undefined;
     let videoDevs: MediaDeviceInfo[] = [];
     try {
       if (navigator.mediaDevices?.enumerateDevices) {
@@ -856,8 +898,8 @@ export class RTCService {
       console.warn('[WIBBY WEBRTC] Pre-switch camera enumeration error:', enumErr);
     }
 
+    // Only attempt label matching if an explicit deviceId was NOT supplied
     if (!targetDeviceId && videoDevs.length > 0) {
-      // Find matching device for nextFacing
       const matchKeywords = nextFacing === 'environment'
         ? ['back', 'rear', 'environment', 'camera2 0', 'camera 0', 'outer', 'main']
         : ['front', 'user', 'facing front', 'camera2 1', 'camera 1', 'inner', 'selfie'];
@@ -869,28 +911,13 @@ export class RTCService {
 
       if (matched && matched.deviceId) {
         targetDeviceId = matched.deviceId;
-        console.log(`[WIBBY WEBRTC] Found target device by label match: ${matched.label} (${targetDeviceId})`);
+        console.log(`[WIBBY WEBRTC] Found candidate target device by label match: ${matched.label} (${targetDeviceId})`);
       } else if (currentTrackDeviceId && videoDevs.length === 2) {
-        // Dual-camera smartphone (front + rear): the other device MUST be the target camera!
+        // Dual-camera setup: other device is alternative
         const otherDev = videoDevs.find(d => d.deviceId && d.deviceId !== currentTrackDeviceId);
         if (otherDev && otherDev.deviceId) {
           targetDeviceId = otherDev.deviceId;
-          console.log(`[WIBBY WEBRTC] Selected other device in 2-camera setup: ${otherDev.label || otherDev.deviceId}`);
-        }
-      } else if (currentTrackDeviceId && videoDevs.length > 2) {
-        // Multi-camera phone (e.g. front + main rear + wide rear): find a camera that matches target facing
-        const otherDev = videoDevs.find(d => {
-          if (d.deviceId === currentTrackDeviceId) return false;
-          const label = (d.label || '').toLowerCase();
-          if (nextFacing === 'environment') {
-            return !/front|user|selfie|camera2 1|camera 1/i.test(label);
-          } else {
-            return /front|user|selfie|camera2 1|camera 1/i.test(label);
-          }
-        });
-        if (otherDev && otherDev.deviceId) {
-          targetDeviceId = otherDev.deviceId;
-          console.log(`[WIBBY WEBRTC] Selected camera device in multi-camera setup: ${otherDev.label || otherDev.deviceId}`);
+          console.log(`[WIBBY WEBRTC] Candidate other device in 2-camera setup: ${otherDev.label || otherDev.deviceId}`);
         }
       }
     }
@@ -898,114 +925,173 @@ export class RTCService {
     try {
       // CRITICAL: Stop previous video tracks so mobile OS (Android/iOS) releases exclusive camera sensor lock
       const oldVideoTracks = this.localStream.getVideoTracks();
-    oldVideoTracks.forEach(t => {
-      try {
-        t.stop();
-        this.localStream?.removeTrack(t);
-      } catch {}
-    });
-
-    let newStream: MediaStream | null = null;
-    let targetFacing: 'user' | 'environment' = nextFacing;
-
-    // Constraint acquisition ladder: try specific deviceId first, then facingMode variants
-    // Note: NEVER use `min: 1280` or `min: 720` on camera switching because portrait mode (1080x1920) throws OverconstrainedError!
-    const candidateConstraints: MediaTrackConstraints[] = [];
-
-    if (targetDeviceId) {
-      candidateConstraints.push(
-        { deviceId: { exact: targetDeviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        { deviceId: { exact: targetDeviceId } },
-        { deviceId: targetDeviceId }
-      );
-    }
-
-    // Standard facingMode attempts (WITHOUT min constraints so portrait 1080x1920 does not fail)
-    candidateConstraints.push(
-      { facingMode: { exact: nextFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      { facingMode: { exact: nextFacing } },
-      { facingMode: nextFacing, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      { facingMode: nextFacing },
-      { facingMode: { ideal: nextFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      { facingMode: { ideal: nextFacing } }
-    );
-
-    for (const constraint of candidateConstraints) {
-      try {
-        newStream = await navigator.mediaDevices.getUserMedia({ video: constraint });
-        if (newStream && newStream.getVideoTracks().length > 0) {
-          console.log('[WIBBY WEBRTC] Camera acquired successfully using constraint:', constraint);
-          break;
-        }
-      } catch {
-        // Continue to next constraint attempt
-      }
-    }
-
-    // Verification check: did the browser satisfy the requested facingMode, or did it return the wrong camera?
-    let newVideoTrack = newStream?.getVideoTracks()[0];
-    if (newVideoTrack) {
-      const trackSettings = newVideoTrack.getSettings ? newVideoTrack.getSettings() : {};
-      const newTrackLabel = (newVideoTrack.label || '').toLowerCase();
-      const isActuallyFront = /front|user|facing front|camera2 1|camera 1|inner|selfie/i.test(newTrackLabel) || trackSettings.facingMode === 'user';
-
-      // If we requested rear (environment) but got front camera:
-      if (nextFacing === 'environment' && isActuallyFront && !targetDeviceId) {
-        console.warn('[WIBBY WEBRTC] Browser gave front camera despite requesting rear. Attempting deviceId discovery with active permission.');
+      oldVideoTracks.forEach(t => {
         try {
-          const freshDevs = await navigator.mediaDevices.enumerateDevices();
-          const freshVideoDevs = freshDevs.filter(d => d.kind === 'videoinput');
-          const rearDev = freshVideoDevs.find(d => {
-            const l = (d.label || '').toLowerCase();
-            return /back|rear|environment|camera2 0|camera 0|outer|main/i.test(l) || (freshVideoDevs.length === 2 && d.deviceId !== trackSettings.deviceId);
-          });
-          if (rearDev && rearDev.deviceId && rearDev.deviceId !== trackSettings.deviceId) {
-            newVideoTrack.stop();
-            const directStream = await navigator.mediaDevices.getUserMedia({
-              video: { deviceId: { exact: rearDev.deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-            });
-            if (directStream && directStream.getVideoTracks().length > 0) {
-              newStream = directStream;
-              newVideoTrack = directStream.getVideoTracks()[0];
-            }
+          t.stop();
+          this.localStream?.removeTrack(t);
+        } catch {}
+      });
+
+      let newStream: MediaStream | null = null;
+      let targetFacing: 'user' | 'environment' = nextFacing;
+
+      const candidateConstraints: MediaTrackConstraints[] = [];
+
+      // 1. If explicit verified deviceId was passed, prioritize it first
+      if (isExplicitDeviceId && targetDeviceId) {
+        candidateConstraints.push(
+          { deviceId: { exact: targetDeviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          { deviceId: { exact: targetDeviceId } },
+          { deviceId: targetDeviceId }
+        );
+      }
+
+      // 2. Mobile/Tablet standard: Prioritize facingMode constraints ladder
+      candidateConstraints.push(
+        { facingMode: { exact: nextFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        { facingMode: { exact: nextFacing } },
+        { facingMode: nextFacing, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        { facingMode: nextFacing },
+        { facingMode: { ideal: nextFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        { facingMode: { ideal: nextFacing } }
+      );
+
+      // 3. Fallback for desktop / environments without native facingMode support: try enumerated deviceId
+      if (!isExplicitDeviceId && targetDeviceId) {
+        candidateConstraints.push(
+          { deviceId: { exact: targetDeviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          { deviceId: { exact: targetDeviceId } },
+          { deviceId: targetDeviceId }
+        );
+      }
+
+      for (const constraint of candidateConstraints) {
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia({ video: constraint });
+          if (newStream && newStream.getVideoTracks().length > 0) {
+            console.log('[WIBBY WEBRTC] Camera acquired successfully using constraint:', constraint);
+            break;
           }
-        } catch (forceRearErr) {
-          console.warn('[WIBBY WEBRTC] Direct rear device fallback failed:', forceRearErr);
+        } catch {
+          // Continue to next constraint attempt
         }
       }
-    }
 
-    if (!newVideoTrack) {
-      throw new Error('No video track available in newly acquired camera stream');
-    }
+      // Verification check: did the browser satisfy the requested facingMode, or did it return the wrong camera?
+      let newVideoTrack = newStream?.getVideoTracks()[0];
+      if (newVideoTrack) {
+        const trackSettings = newVideoTrack.getSettings ? newVideoTrack.getSettings() : {};
+        const newTrackLabel = (newVideoTrack.label || '').toLowerCase();
+        const isActuallyFront = /front|user|facing front|camera2 1|camera 1|inner|selfie/i.test(newTrackLabel) || trackSettings.facingMode === 'user';
+        const isActuallyRear = /back|rear|environment|camera2 0|camera 0|outer|main/i.test(newTrackLabel) || trackSettings.facingMode === 'environment';
 
-    // Inspect final track settings to determine true hardware facingMode
-    const finalSettings = newVideoTrack.getSettings ? newVideoTrack.getSettings() : {};
-    const finalLabel = (newVideoTrack.label || '').toLowerCase();
+        // If we requested rear (environment) but got front camera:
+        if (nextFacing === 'environment' && isActuallyFront && !isActuallyRear) {
+          console.warn('[WIBBY WEBRTC] Browser gave front camera despite requesting rear. Attempting deviceId discovery with active permission.');
+          try {
+            const freshDevs = await navigator.mediaDevices.enumerateDevices();
+            const freshVideoDevs = freshDevs.filter(d => d.kind === 'videoinput');
+            const rearDev = freshVideoDevs.find(d => {
+              const l = (d.label || '').toLowerCase();
+              return /back|rear|environment|camera2 0|camera 0|outer|main/i.test(l) || (freshVideoDevs.length === 2 && d.deviceId !== trackSettings.deviceId);
+            });
+            if (rearDev && rearDev.deviceId && rearDev.deviceId !== trackSettings.deviceId) {
+              newVideoTrack.stop();
+              const directStream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: rearDev.deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+              });
+              if (directStream && directStream.getVideoTracks().length > 0) {
+                newStream = directStream;
+                newVideoTrack = directStream.getVideoTracks()[0];
+              }
+            }
+          } catch (forceRearErr) {
+            console.warn('[WIBBY WEBRTC] Direct rear device fallback failed:', forceRearErr);
+          }
+        } else if (nextFacing === 'user' && isActuallyRear && !isActuallyFront) {
+          console.warn('[WIBBY WEBRTC] Browser gave rear camera despite requesting front. Attempting front deviceId discovery.');
+          try {
+            const freshDevs = await navigator.mediaDevices.enumerateDevices();
+            const freshVideoDevs = freshDevs.filter(d => d.kind === 'videoinput');
+            const frontDev = freshVideoDevs.find(d => {
+              const l = (d.label || '').toLowerCase();
+              return /front|user|selfie|camera2 1|camera 1/i.test(l) || (freshVideoDevs.length === 2 && d.deviceId !== trackSettings.deviceId);
+            });
+            if (frontDev && frontDev.deviceId && frontDev.deviceId !== trackSettings.deviceId) {
+              newVideoTrack.stop();
+              const directStream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: frontDev.deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+              });
+              if (directStream && directStream.getVideoTracks().length > 0) {
+                newStream = directStream;
+                newVideoTrack = directStream.getVideoTracks()[0];
+              }
+            }
+          } catch (forceFrontErr) {
+            console.warn('[WIBBY WEBRTC] Direct front device fallback failed:', forceFrontErr);
+          }
+        }
+      }
 
-    if (/back|rear|environment|camera2 0|camera 0|outer|main/i.test(finalLabel)) {
-      targetFacing = 'environment';
-    } else if (/front|user|facing front|camera2 1|camera 1|inner|selfie/i.test(finalLabel)) {
-      targetFacing = 'user';
-    } else if (finalSettings.facingMode === 'user' || finalSettings.facingMode === 'environment') {
-      targetFacing = finalSettings.facingMode;
-    } else {
-      targetFacing = nextFacing;
-    }
+      if (!newVideoTrack) {
+        throw new Error('No video track available in newly acquired camera stream');
+      }
 
-    this.currentFacingMode = targetFacing;
-    this.currentCaptureWidth = finalSettings.width || 0;
-    this.currentCaptureHeight = finalSettings.height || 0;
-    this.currentCaptureFps = Math.round(finalSettings.frameRate || 0);
+      // Inspect final track settings to determine true hardware facingMode
+      const finalSettings = newVideoTrack.getSettings ? newVideoTrack.getSettings() : {};
+      const finalLabel = (newVideoTrack.label || '').toLowerCase();
 
-    if ('contentHint' in newVideoTrack) {
-      newVideoTrack.contentHint = 'motion';
-    }
+      if (finalSettings.facingMode === 'user' || finalSettings.facingMode === 'environment') {
+        targetFacing = finalSettings.facingMode;
+      } else if (/back|rear|environment|camera2 0|camera 0|outer|main/i.test(finalLabel)) {
+        targetFacing = 'environment';
+      } else if (/front|user|facing front|camera2 1|camera 1|inner|selfie/i.test(finalLabel)) {
+        targetFacing = 'user';
+      } else {
+        targetFacing = nextFacing;
+      }
 
-    console.log(`[WIBBY WEBRTC] Camera switch succeeded. Active facingMode: ${this.currentFacingMode}, label: "${newVideoTrack.label}", capture: ${this.currentCaptureWidth}x${this.currentCaptureHeight}`);
+      // Guard: Do NOT falsely update UI state if actual requested camera was not obtained
+      if (nextFacing === 'environment' && targetFacing === 'user') {
+        console.warn('[WIBBY WEBRTC] Camera switch failed to acquire rear camera (hardware returned user/front)');
+        this.currentFacingMode = 'user';
+        this.localStream.addTrack(newVideoTrack);
+        if (this.peerConnection) {
+          const transceivers = this.peerConnection.getTransceivers();
+          const videoTransceiver = transceivers.find(
+            t => t.sender?.track?.kind === 'video' || t.receiver?.track?.kind === 'video' || (t as any).kind === 'video'
+          );
+          const videoSender = videoTransceiver?.sender || this.peerConnection.getSenders().find(s => s.track?.kind === 'video' || (s as any).kind === 'video');
+          if (videoSender) {
+            await videoSender.replaceTrack(newVideoTrack);
+          }
+        }
+        this.localVideoElements.forEach(el => {
+          try {
+            el.muted = true;
+            el.autoplay = true;
+            (el as any).playsInline = true;
+            el.srcObject = null;
+            el.srcObject = this.localStream;
+            el.play().catch(() => {});
+          } catch {}
+        });
+        return false;
+      }
 
-    // Add new track to local stream
-    this.localStream.addTrack(newVideoTrack);
+      this.currentFacingMode = targetFacing;
+      this.currentCaptureWidth = finalSettings.width || 0;
+      this.currentCaptureHeight = finalSettings.height || 0;
+      this.currentCaptureFps = Math.round(finalSettings.frameRate || 0);
+
+      if ('contentHint' in newVideoTrack) {
+        newVideoTrack.contentHint = 'motion';
+      }
+
+      console.log(`[WIBBY WEBRTC] Camera switch succeeded. Active facingMode: ${this.currentFacingMode}, label: "${newVideoTrack.label}", capture: ${this.currentCaptureWidth}x${this.currentCaptureHeight}`);
+
+      // Add new track to local stream
+      this.localStream.addTrack(newVideoTrack);
 
     // Replace track on RTCPeerConnection sender
     if (this.peerConnection) {
@@ -1874,7 +1960,15 @@ export class RTCService {
     this.screenStream = screenStream;
 
     // ── VIDEO: replaceTrack() — no renegotiation ──────────────────────────────
-    const videoSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+    let videoSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'video' || (s as any).kind === 'video');
+    if (!videoSender) {
+      const videoTransceiver = this.peerConnection.getTransceivers().find(
+        t => t.sender && (t.sender.track?.kind === 'video' || t.receiver?.track?.kind === 'video' || (t as any).kind === 'video')
+      );
+      if (videoTransceiver) {
+        videoSender = videoTransceiver.sender;
+      }
+    }
     if (!videoSender) {
       console.warn('[WIBBY SCREEN] No video sender found on RTCPeerConnection');
       screenStream.getTracks().forEach(t => { try { t.stop(); } catch {} });
@@ -1888,6 +1982,7 @@ export class RTCService {
     try {
       await videoSender.replaceTrack(screenVideoTrack);
       console.log('[WIBBY SCREEN] Video sender replaceTrack succeeded with screen track');
+      console.log('[WIBBY SCREEN] Active screen sharing diagnostics:', this.getScreenShareDiagnostics());
 
       // Maximize bitrate for crisp, uncompressed 1080p screen share (Guardrail: maintain-resolution)
       try {
@@ -1987,10 +2082,18 @@ export class RTCService {
     });
 
     // ── VIDEO: restore camera track ───────────────────────────────────────────
-    const videoSender = this.peerConnection?.getSenders().find(s =>
+    let videoSender = this.peerConnection?.getSenders().find(s =>
       // The sender may now hold the screen track or a null track — find by video kind
-      s.track === null || s.track?.kind === 'video'
+      s.track === null || s.track?.kind === 'video' || (s as any).kind === 'video'
     );
+    if (!videoSender && this.peerConnection) {
+      const videoTransceiver = this.peerConnection.getTransceivers().find(
+        t => t.sender && (t.sender.track?.kind === 'video' || t.receiver?.track?.kind === 'video' || (t as any).kind === 'video' || t.mid !== null)
+      );
+      if (videoTransceiver) {
+        videoSender = videoTransceiver.sender;
+      }
+    }
     if (videoSender) {
       const cameraTrack =
         (this.preSharingVideoTrack?.readyState === 'live' ? this.preSharingVideoTrack : null) ??

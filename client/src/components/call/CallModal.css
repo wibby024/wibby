@@ -1,6 +1,10 @@
 /* Wibby Call Modals & Floating Active Call Panel */
 
 /* Persistent Active Call Panel Container (Prevents unmounting and WebRTC video decoder freezes on minimize/maximize) */
+.hidden {
+  display: none !important;
+}
+
 .call-active-panel-container {
   display: contents;
 }
@@ -573,38 +577,47 @@
 /* -------------------------------------------------------------
    VIEW 1: STACKED TWO-PANEL VIEW (Desktop & Responsive)
    User 1 (Remote) on top, User 2 (Local) on bottom
-   Centered presentation frame (~4:3 / ~16:10 per tile)
+   UP/DOWN presentation intelligently utilizing available call-stage height (~50% each)
    ------------------------------------------------------------- */
 .call-video-stage.view-mode-stacked {
-  padding: 68px 24px 84px 24px;
+  padding: calc(60px + env(safe-area-inset-top, 0px)) 16px calc(80px + env(safe-area-inset-bottom, 0px)) 16px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .call-video-stage.view-mode-stacked .call-stage-presentation-frame {
   display: flex;
   flex-direction: column;
-  align-items: center; /* Horizontally center each natural aspect-ratio card */
-  justify-content: center;
-  gap: 14px;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
   width: 100%;
-  height: min(880px, calc(100vh - 140px));
-  max-height: calc(100vh - 140px);
-  margin: auto;
+  max-width: 1400px;
+  height: 100%;
+  max-height: 100%;
+  margin: 0 auto;
   position: relative;
+  box-sizing: border-box;
 }
 
 .call-video-stage.view-mode-stacked .call-video-panel {
   flex: 1 1 0;
   min-height: 0;
+  min-width: 0;
   height: 100%;
-  max-height: calc((100vh - 165px) / 2);
-  width: auto;
-  max-width: min(94vw, 1200px);
-  border-radius: 12px;
+  max-height: calc(50% - 6px);
+  width: 100%;
+  max-width: 100%;
+  border-radius: 16px;
   background: #000;
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -613,31 +626,36 @@
 }
 
 .call-video-stage.view-mode-stacked .call-video-panel:hover {
-  transform: scale(1.008);
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.2);
+  transform: scale(1.006);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
-@media (min-width: 900px) {
-  .call-video-stage.view-mode-stacked .call-stage-presentation-frame {
-    flex-direction: column;
-    width: 100%;
-    height: min(880px, calc(100vh - 130px));
-    gap: 14px;
-  }
+.call-video-stage.view-mode-stacked .call-video-panel .call-video-fg-live {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.call-video-stage.view-mode-stacked .call-video-bg-live,
+.call-video-stage.view-mode-stacked .call-video-vignette-overlay {
+  display: none !important;
 }
 
 @media (max-width: 640px) {
   .call-video-stage.view-mode-stacked {
-    padding: 60px 10px 80px 10px;
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 10px calc(76px + env(safe-area-inset-bottom, 0px)) 10px;
   }
   .call-video-stage.view-mode-stacked .call-stage-presentation-frame {
     width: 100%;
     height: 100%;
-    gap: 10px;
+    gap: 8px;
   }
   .call-video-stage.view-mode-stacked .call-video-panel {
-    border-radius: 10px;
-    max-height: calc((100vh - 150px) / 2);
+    border-radius: 12px;
+    max-height: calc(50% - 4px);
   }
 }
 
@@ -716,17 +734,12 @@
    Can be toggled to Full Screen or Screen + Sidebar.
    ------------------------------------------------------------- */
 .call-video-stage.view-mode-screenshare {
-  padding: 68px 20px 84px 20px;
+  padding: calc(60px + env(safe-area-inset-top, 0px)) 16px calc(80px + env(safe-area-inset-bottom, 0px)) 16px;
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-sizing: border-box;
-}
-
-.call-video-stage.view-mode-screenshare {
-  padding: 68px 24px 84px 24px;
   box-sizing: border-box;
 }
 
@@ -797,11 +810,11 @@
 
 /* Right Stacked Column for Both Users */
 .call-screenshare-sidebar {
-  width: clamp(260px, 20vw, 320px);
+  width: clamp(220px, 18vw, 300px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   height: 100%;
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
@@ -815,6 +828,7 @@
 .call-screenshare-sidebar .call-sidebar-user-tile {
   flex: 1 1 0;
   min-height: 0;
+  width: 100%;
   border-radius: 14px;
   background: #0e0d16;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -835,6 +849,13 @@
 
 .call-screenshare-sidebar .call-sidebar-user-tile.local video {
   transform: scaleX(-1); /* Local selfie camera remains mirrored */
+  -webkit-transform: scaleX(-1);
+}
+
+.call-screenshare-sidebar .call-sidebar-user-tile.local video.is-rear-camera,
+.call-screenshare-sidebar .call-sidebar-user-tile.local.is-rear-camera video {
+  transform: none !important;
+  -webkit-transform: none !important;
 }
 
 /* Floating overlay for users when screenshare is full screen */
@@ -942,23 +963,27 @@
 
 @media (max-width: 768px) {
   .call-video-stage.view-mode-screenshare {
-    padding: 60px 10px 80px 10px;
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 8px calc(76px + env(safe-area-inset-bottom, 0px)) 8px;
   }
   .call-video-stage.view-mode-screenshare .call-stage-presentation-frame {
-    flex-direction: column;
+    flex-direction: row;
     width: 100%;
     height: 100%;
-    gap: 10px;
+    gap: 8px;
   }
   .call-screenshare-sidebar {
-    width: 100%;
-    height: 120px;
-    flex-direction: row;
-    gap: 10px;
+    width: clamp(100px, 24vw, 150px);
+    height: 100%;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
   }
   .call-screenshare-sidebar .call-sidebar-user-tile {
     flex: 1 1 0;
-    height: 100%;
+    min-height: 0;
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
   }
 }
 
@@ -1592,8 +1617,9 @@ video.is-screen-share {
   transform: scale(1.08);
 }
 
-/* Presentation Video Rules (Always preserves full uncropped video) */
-.call-video-stage .call-video-fg-live {
+/* Screenshare hero always contains (uncropped, letterboxed) */
+.call-screenshare-main .call-video-fg-live,
+.call-screenshare-main video {
   object-fit: contain;
 }
 
@@ -1688,6 +1714,9 @@ video.is-screen-share {
   z-index: 50;
   transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   box-sizing: border-box;
+  max-width: calc(100vw - 16px);
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .call-video-controls-bar.hidden {
@@ -2316,8 +2345,8 @@ video.is-screen-share {
     max-height: 100%;
     flex-direction: column;
     gap: 8px;
-    align-items: center;
-    justify-content: center;
+    align-items: stretch;
+    justify-content: space-between;
     box-sizing: border-box;
   }
 
@@ -2361,7 +2390,7 @@ video.is-screen-share {
   }
 
   .call-video-stage.view-mode-screenshare .call-stage-presentation-frame {
-    flex-direction: column;
+    flex-direction: row;
     width: 100%;
     height: 100%;
     gap: 8px;
@@ -2370,23 +2399,25 @@ video.is-screen-share {
 
   .call-screenshare-main {
     flex: 1 1 0;
+    min-width: 0;
     min-height: 0;
-    width: 100%;
+    height: 100%;
     border-radius: 12px;
   }
 
   .call-screenshare-sidebar {
-    width: 100%;
-    height: 80px;
-    flex-direction: row;
+    width: clamp(96px, 24vw, 140px);
+    height: 100%;
+    flex-direction: column;
     gap: 8px;
     flex-shrink: 0;
   }
 
   .call-screenshare-sidebar .call-sidebar-user-tile {
     flex: 1 1 0;
-    height: 100%;
-    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    height: auto;
     border-radius: 10px;
   }
 
@@ -2701,3 +2732,77 @@ video.is-screen-share {
 }
 
 
+
+/* ============================================================
+   Popup / Small Window Containment
+   Prevents layout overflow when browser window is resized small
+   ============================================================ */
+
+/* Ensure stacked tiles never overflow horizontally in a small popup */
+.call-video-stage.view-mode-stacked .call-video-panel {
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* Ensure video inside stacked tiles always fills and covers (highest specificity wins) */
+.call-video-stage.view-mode-stacked .call-video-panel .call-video-fg-live {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+
+/* Screenshare hero always uses contain — never cover */
+.call-screenshare-main .call-video-fg-live,
+.call-screenshare-main video {
+  object-fit: contain !important;
+}
+
+/* Screenshare camera sidebar tiles always use cover */
+.call-screenshare-sidebar .call-sidebar-user-tile video {
+  object-fit: cover !important;
+}
+
+/* Very narrow popup: prevent screenshare sidebar from disappearing */
+@media (max-width: 400px) {
+  .call-screenshare-sidebar {
+    width: clamp(72px, 28vw, 110px) !important;
+  }
+  .call-screenshare-sidebar .call-sidebar-user-tile {
+    border-radius: 8px;
+  }
+  .call-screenshare-badge-bar span:not(.call-screenshare-hd-pill) {
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Landscape short-height viewports (e.g. iPhone landscape, ~400px height) */
+@media (max-height: 500px) and (orientation: landscape) {
+  .call-video-stage.view-mode-stacked {
+    padding: calc(44px + env(safe-area-inset-top, 0px)) 8px calc(60px + env(safe-area-inset-bottom, 0px)) 8px;
+  }
+  .call-video-stage.view-mode-screenshare {
+    padding: calc(44px + env(safe-area-inset-top, 0px)) 8px calc(60px + env(safe-area-inset-bottom, 0px)) 8px;
+  }
+  .call-video-controls-bar {
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    padding: 6px 12px;
+    gap: 8px;
+  }
+  .call-video-controls-bar .call-btn {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+  }
+  .call-video-controls-bar .call-btn svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+  .call-video-controls-bar .call-btn-label {
+    display: none !important;
+  }
+}

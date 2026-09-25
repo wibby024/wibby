@@ -81,18 +81,29 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
+  direction: ltr;
+  unicode-bidi: isolate;
+  writing-mode: horizontal-tb;
+  transform: none;
 }
 
 .message-row {
   display: flex;
   align-items: flex-end;
   gap: 8px;
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .message-content {
   flex: 1 1 auto;
   min-width: 0;
   word-break: break-word;
+  direction: ltr;
+  unicode-bidi: isolate;
+  writing-mode: horizontal-tb;
+  text-align: left;
+  transform: none;
 }
 
 .message-forwarded-indicator {
@@ -376,6 +387,9 @@
   align-items: center;
   gap: 4px;
   white-space: nowrap;
+  direction: ltr;
+  unicode-bidi: isolate;
+  writing-mode: horizontal-tb;
 }
 
 .message-time {
@@ -428,6 +442,8 @@
   gap: 4px;
   margin-top: 4px;
   margin-bottom: 2px;
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .own .message-reactions {
@@ -750,6 +766,11 @@
   margin-top: 4px;
   margin-bottom: 2px;
   word-break: break-word;
+  direction: ltr;
+  unicode-bidi: isolate;
+  writing-mode: horizontal-tb;
+  text-align: left;
+  transform: none;
 }
 
 /* ============================================
@@ -766,6 +787,9 @@
   height: auto;
   max-height: 100%;
   width: 100%;
+  isolation: isolate;
+  direction: ltr;
+  writing-mode: horizontal-tb;
 }
 
 .chat-drag-drop-overlay {

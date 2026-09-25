@@ -9,6 +9,11 @@
   overflow: hidden;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
   z-index: 100;
+  isolation: isolate;
+  direction: ltr;
+  unicode-bidi: isolate;
+  writing-mode: horizontal-tb;
+  text-align: left;
 }
 
 /* 1. ONE Standard Layout (Docked seamlessly in chat flow above messages) */
@@ -230,6 +235,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  isolation: isolate;
+  direction: ltr;
+  transform: none;
 }
 
 .together-player-frame-wrap.full-frame {
@@ -255,6 +263,8 @@
   background: #000000;
   display: block;
   object-fit: contain;
+  direction: ltr;
+  transform: none;
 }
 
 /* Sync Action Bar */

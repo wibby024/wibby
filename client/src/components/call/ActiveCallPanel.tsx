@@ -30,6 +30,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   localVideoRef,
   localBgVideoRef,
   screenVideoRef,
+  remoteScreenVideoRef,
   isRemoteCameraOff,
   isCameraOff,
   isCameraUnavailable,
@@ -60,6 +61,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
   localBgVideoRef: React.RefObject<HTMLVideoElement | null>;
   screenVideoRef?: React.RefObject<HTMLVideoElement | null>;
+  remoteScreenVideoRef?: React.RefObject<HTMLVideoElement | null>;
   isRemoteCameraOff: boolean;
   isCameraOff: boolean;
   isCameraUnavailable: boolean;
@@ -290,15 +292,17 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
     setFocusedParticipant(prev => (prev === 'local' ? 'none' : 'local'));
   };
 
-  if (viewMode === 'screenshare') {
+  const isScreenshareActive = Boolean(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare');
+
+  if (isScreenshareActive) {
     const isRemoteSharing = isRemoteScreenSharing;
     const isLocalSharing = isScreenSharing;
 
     return (
       <div className={`call-video-stage view-mode-screenshare ${isScreenshareFullscreen ? 'is-hero-fullscreen' : ''}`}>
-        {/* Hidden background video refs to preserve rtcService bindings */}
-        <video ref={remoteBgVideoRef} className="hidden" aria-hidden="true" muted playsInline />
-        <video ref={localBgVideoRef} className="hidden" aria-hidden="true" muted playsInline />
+        {/* Hidden background video refs with explicit inline display: none */}
+        <video ref={remoteBgVideoRef} style={{ display: 'none' }} aria-hidden="true" muted playsInline />
+        <video ref={localBgVideoRef} style={{ display: 'none' }} aria-hidden="true" muted playsInline />
 
         <div className="call-stage-presentation-frame">
           {/* Main Hero: Shared Screen (Uncropped, Crystal 1080p, Black Background, Never Mirrored) */}
@@ -403,7 +407,17 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
             {/* Main Shared Screen Presentation: exactly ONE video element */}
             {isLocalSharing ? (
               <video
-                ref={screenVideoRef}
+                ref={(el) => {
+                  if (screenVideoRef) (screenVideoRef as any).current = el;
+                  if (el) {
+                    rtcService.bindScreenVideoElement(el);
+                    const stream = rtcService.getScreenStream();
+                    if (stream && el.srcObject !== stream) {
+                      el.srcObject = stream;
+                    }
+                    el.play().catch(() => {});
+                  }
+                }}
                 className="call-video-fg-live is-screen-share"
                 autoPlay
                 playsInline
@@ -411,7 +425,17 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               />
             ) : (
               <video
-                ref={remoteVideoRef}
+                ref={(el) => {
+                  if (remoteScreenVideoRef) (remoteScreenVideoRef as any).current = el;
+                  if (el) {
+                    rtcService.bindRemoteVideoElement(el);
+                    const stream = rtcService.getRemoteVideoStream();
+                    if (stream && el.srcObject !== stream) {
+                      el.srcObject = stream;
+                    }
+                    el.play().catch(() => {});
+                  }
+                }}
                 className="call-video-fg-live is-screen-share"
                 autoPlay
                 playsInline
@@ -422,25 +446,37 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
 
           {/* Right Stacked Column: Both users stacked vertically (floating when full screen) */}
           <div className={`call-screenshare-sidebar ${isScreenshareFullscreen && hideFloatingTiles ? 'tiles-hidden' : ''}`}>
-            {/* Top Tile: Partner User */}
+            {/* Top Tile: Partner User (Live Remote Camera Feed when local user is sharing, or Presenter Card when remote user is sharing) */}
             <div className="call-sidebar-user-tile remote">
               {isRemoteSharing ? (
-                // If partner is sharing, their screen is in the hero view; top tile shows status & avatar
-                <div className="call-video-placeholder">
-                  <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
-                    {isConnected && isRemoteSpeaking && <div className="call-pulse-ring speaking" />}
-                    <div className={`call-avatar ${isRemoteSpeaking ? 'avatar-speaking' : ''}`} style={{ width: 50, height: 50, fontSize: 20 }}>
-                      {avatar ? <img src={avatar} alt={partnerName} /> : <span>{initial}</span>}
+                /* Partner is presenting screen in Main Hero; show presenter badge & speaking indicator here */
+                <>
+                  <video ref={remoteVideoRef} style={{ display: 'none' }} aria-hidden="true" muted playsInline />
+                  <div className="call-video-placeholder">
+                    <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
+                      {isConnected && isRemoteSpeaking && <div className="call-pulse-ring speaking" />}
+                      <div className={`call-avatar ${isRemoteSpeaking ? 'avatar-speaking' : ''}`} style={{ width: 50, height: 50, fontSize: 20 }}>
+                        {avatar ? <img src={avatar} alt={partnerName} /> : <span>{initial}</span>}
+                      </div>
                     </div>
+                    <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>{partnerName}</span>
                   </div>
-                  <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>{partnerName}</span>
-                  <span style={{ fontSize: 11, color: '#c4b5fd' }}>🖥️ Sharing screen</span>
-                </div>
+                </>
               ) : (
-                // If partner is NOT sharing (local is sharing), partner's live camera video goes here!
+                /* Local user is presenting screen; partner's live webcam video displays here */
                 <>
                   <video
-                    ref={remoteVideoRef}
+                    ref={(el) => {
+                      if (remoteVideoRef) (remoteVideoRef as any).current = el;
+                      if (el) {
+                        rtcService.bindRemoteVideoElement(el);
+                        const stream = rtcService.getRemoteVideoStream();
+                        if (stream && el.srcObject !== stream) {
+                          el.srcObject = stream;
+                        }
+                        el.play().catch(() => {});
+                      }
+                    }}
                     className={`call-video-fg-live ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
                     autoPlay
                     playsInline
@@ -449,7 +485,8 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                   {(isRemoteCameraOff || !isConnected) && (
                     <div className="call-video-placeholder">
                       <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
-                        <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
+                        {isConnected && isRemoteSpeaking && <div className="call-pulse-ring speaking" />}
+                        <div className={`call-avatar ${isRemoteSpeaking ? 'avatar-speaking' : ''}`} style={{ width: 50, height: 50, fontSize: 20 }}>
                           {avatar ? <img src={avatar} alt={partnerName} /> : <span>{initial}</span>}
                         </div>
                       </div>
@@ -463,6 +500,11 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               <div className="call-panel-identity-label" style={{ bottom: 8, left: 8, padding: '3px 8px', fontSize: 11 }}>
                 <span className={`call-identity-dot ${isConnected ? 'online' : 'reconnecting'}`} />
                 <span className="call-identity-name">{partnerName}</span>
+                {isRemoteSharing && (
+                  <span style={{ fontSize: 10, color: '#c4b5fd', background: 'rgba(167, 139, 250, 0.2)', padding: '1px 5px', borderRadius: 4, marginLeft: 4 }}>
+                    Presenting
+                  </span>
+                )}
                 {isRemoteSpeaking && isConnected && !isRemoteMuted && (
                   <span className="call-speaking-wave-tag" title="Speaking" style={{ marginLeft: 4 }}>
                     <span className="call-wave-bar b1" />
@@ -485,7 +527,17 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
             {/* Bottom Tile: You (Live Local Camera Feed) */}
             <div className={`call-sidebar-user-tile local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''}`}>
               <video
-                ref={localVideoRef}
+                ref={(el) => {
+                  if (localVideoRef) (localVideoRef as any).current = el;
+                  if (el) {
+                    rtcService.bindLocalVideoElement(el);
+                    const stream = rtcService.getLocalStream();
+                    if (stream && el.srcObject !== stream) {
+                      el.srcObject = stream;
+                    }
+                    el.play().catch(() => {});
+                  }
+                }}
                 className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
                 autoPlay
                 playsInline
@@ -499,9 +551,6 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                     </div>
                   </div>
                   <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>You</span>
-                  {isLocalSharing && (
-                    <span style={{ fontSize: 11, color: '#a78bfa' }}>🖥️ Sharing screen</span>
-                  )}
                 </div>
               )}
 
@@ -548,15 +597,13 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
         {/* REMOTE PARTICIPANT (Phone or Laptop) */}
         <div
           className={`call-video-panel remote-panel ${
-            isRemoteScreenSharing ? 'is-screen-share' : ''
-          } ${
             focusedParticipant === 'remote'
               ? 'is-focused-main'
               : focusedParticipant === 'local'
               ? 'is-pip-window'
               : ''
           }`}
-          style={isMobile ? undefined : { aspectRatio: `${remoteAspect}` }}
+          style={focusedParticipant === 'remote' ? { aspectRatio: `${remoteAspect}` } : undefined}
           onClick={handleRemoteClick}
           aria-label={`Live video of ${partnerName}`}
         >
@@ -583,7 +630,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
           {/* Layer 1: Ambient live video background (Same live stream, cover, subdued, NO blur) */}
           <video
             ref={remoteBgVideoRef}
-            className={`call-video-bg-live ${isRemoteScreenSharing || isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
+            className={`call-video-bg-live ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
             autoPlay
             playsInline
             muted
@@ -591,12 +638,12 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
           />
 
           {/* Vignette mask to blend boundaries and prevent duplicate person effect */}
-          <div className={`call-video-vignette-overlay ${isRemoteScreenSharing || isRemoteCameraOff || !isConnected ? 'hidden' : ''}`} />
+          <div className={`call-video-vignette-overlay ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`} />
 
           {/* Layer 2: Main Remote Video (100% sharp, uncropped, native aspect ratio) */}
           <video
             ref={remoteVideoRef}
-            className={`call-video-fg-live remote-main ${isRemoteScreenSharing ? 'is-screen-share' : ''} ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
+            className={`call-video-fg-live remote-main ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
             autoPlay
             playsInline
             muted
@@ -651,8 +698,6 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
           className={`call-video-panel local-panel ${
             currentFacingMode === 'environment' ? 'is-rear-camera' : ''
           } ${
-            isScreenSharing ? 'is-screen-share' : ''
-          } ${
             focusedParticipant === 'local'
               ? 'is-focused-main'
               : isLocalPip
@@ -661,7 +706,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               ? 'is-grid-tile'
               : 'is-stacked-tile'
           }`}
-          style={isMobile || isLocalPip ? undefined : { aspectRatio: `${localAspect}` }}
+          style={focusedParticipant === 'local' ? { aspectRatio: `${localAspect}` } : undefined}
           onClick={handleLocalClick}
           onPointerDown={isLocalPip ? handlePointerDown : undefined}
           onPointerMove={isLocalPip ? handlePointerMove : undefined}
@@ -693,7 +738,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
           {/* In Stacked Mode: Ambient live video background (Same live stream, cover, subdued, mirrored, NO blur) */}
           <video
             ref={localBgVideoRef}
-            className={`call-video-bg-live local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isScreenSharing ? 'is-screen-share' : ''} ${isCameraOff || isCameraUnavailable || isLocalPip ? 'hidden' : ''}`}
+            className={`call-video-bg-live local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable || isLocalPip ? 'hidden' : ''}`}
             autoPlay
             playsInline
             muted
@@ -701,12 +746,12 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
           />
 
           {/* Vignette mask for stacked mode */}
-          <div className={`call-video-vignette-overlay ${isScreenSharing || isCameraOff || isCameraUnavailable || isLocalPip ? 'hidden' : ''}`} />
+          <div className={`call-video-vignette-overlay ${isCameraOff || isCameraUnavailable || isLocalPip ? 'hidden' : ''}`} />
 
-          {/* Main Local Video (100% sharp, complete native frame; un-mirrored when screen sharing or rear camera) */}
+          {/* Main Local Video (100% sharp, complete native frame; un-mirrored when rear camera) */}
           <video
             ref={localVideoRef}
-            className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isScreenSharing ? 'is-screen-share' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
+            className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
             autoPlay
             playsInline
             muted
@@ -811,6 +856,7 @@ export default function ActiveCallPanel() {
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteBgVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteScreenVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'stacked' | 'pip' | 'screenshare'>('stacked');
@@ -820,6 +866,7 @@ export default function ActiveCallPanel() {
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+  const [screenShareNotice, setScreenShareNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -871,6 +918,9 @@ export default function ActiveCallPanel() {
       if (remoteVideoRef.current) {
         rtcService.bindRemoteVideoElement(remoteVideoRef.current);
       }
+      if (remoteScreenVideoRef.current) {
+        rtcService.bindRemoteVideoElement(remoteScreenVideoRef.current);
+      }
       if (isScreenSharing && screenVideoRef.current) {
         rtcService.bindScreenVideoElement(screenVideoRef.current);
       }
@@ -882,12 +932,14 @@ export default function ActiveCallPanel() {
     const remoteEl = remoteVideoRef.current;
     const remoteBgEl = remoteBgVideoRef.current;
     const screenEl = screenVideoRef.current;
+    const remoteScreenEl = remoteScreenVideoRef.current;
     return () => {
       if (localEl) rtcService.unbindLocalVideoElement(localEl);
       if (localBgEl) rtcService.unbindLocalVideoElement(localBgEl);
       if (remoteEl) rtcService.unbindRemoteVideoElement(remoteEl);
       if (remoteBgEl) rtcService.unbindRemoteVideoElement(remoteBgEl);
       if (screenEl) rtcService.unbindScreenVideoElement(screenEl);
+      if (remoteScreenEl) rtcService.unbindRemoteVideoElement(remoteScreenEl);
     };
   }, [activeCall?.callType, callState, viewMode, isScreenSharing, isRemoteScreenSharing, requestKeyframe]);
 
@@ -901,8 +953,16 @@ export default function ActiveCallPanel() {
         }
         screenVideoRef.current.play().catch(() => {});
       }
+    } else if (isRemoteScreenSharing && remoteScreenVideoRef.current) {
+      const stream = rtcService.getRemoteVideoStream();
+      if (stream) {
+        if (remoteScreenVideoRef.current.srcObject !== stream) {
+          remoteScreenVideoRef.current.srcObject = stream;
+        }
+        remoteScreenVideoRef.current.play().catch(() => {});
+      }
     }
-  }, [isScreenSharing, viewMode]);
+  }, [isScreenSharing, isRemoteScreenSharing, viewMode]);
 
   // Imperatively trigger video playback when connection stabilizes or camera states change
   // This is required to fix black video in Safari when removing 'display: none' (hidden class)
@@ -1032,6 +1092,7 @@ export default function ActiveCallPanel() {
           localVideoRef={localVideoRef}
           localBgVideoRef={localBgVideoRef}
           screenVideoRef={screenVideoRef}
+          remoteScreenVideoRef={remoteScreenVideoRef}
           isRemoteCameraOff={isRemoteCameraOff}
           isCameraOff={isCameraOff}
           isCameraUnavailable={isCameraUnavailable}
@@ -1199,17 +1260,24 @@ export default function ActiveCallPanel() {
             </div>
           )}
 
+          {/* Screen Share Feedback Toast Notification */}
+          {screenShareNotice && (
+            <div className="call-status-toast" role="status">
+              <span>🖥️ {screenShareNotice}</span>
+            </div>
+          )}
+
           {/* Bottom Floating Control Bar (Auto-Hiding) */}
           <div className={`call-video-controls-bar ${showControls ? 'visible' : 'hidden'}`}>
             {/* View Layout Toggle Button */}
             <div className="call-control-item">
               <button
                 type="button"
-                className={`call-btn view-ctrl ${viewMode !== 'stacked' || focusedParticipant !== 'none' ? 'active' : ''}`}
+                className={`call-btn view-ctrl ${viewMode !== 'stacked' || focusedParticipant !== 'none' || isScreenshareFullscreen ? 'active' : ''}`}
                 onClick={() => {
                   setFocusedParticipant('none');
                   if (isScreenSharing || isRemoteScreenSharing) {
-                    setViewMode(prev => (prev === 'screenshare' ? 'stacked' : prev === 'stacked' ? 'grid' : 'screenshare'));
+                    setIsScreenshareFullscreen(prev => !prev);
                   } else if (isMobile) {
                     setViewMode(prev => (prev === 'stacked' ? 'pip' : 'stacked'));
                   } else {
@@ -1217,10 +1285,12 @@ export default function ActiveCallPanel() {
                   }
                 }}
                 title={`Switch layout (Current: ${
-                  focusedParticipant !== 'none'
+                  isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare'
+                    ? isScreenshareFullscreen
+                      ? 'Screen Share (Full Hero)'
+                      : 'Screen Share (Sidebar)'
+                    : focusedParticipant !== 'none'
                     ? 'Full Video'
-                    : viewMode === 'screenshare'
-                    ? 'Screen Share'
                     : viewMode === 'stacked'
                     ? 'Stacked'
                     : viewMode === 'grid'
@@ -1229,26 +1299,26 @@ export default function ActiveCallPanel() {
                 })`}
                 aria-label="Switch layout"
               >
-                {viewMode === 'screenshare' && (
+                {(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="3" width="13" height="18" rx="2" />
                     <rect x="17" y="3" width="5" height="8" rx="1.5" />
                     <rect x="17" y="13" width="5" height="8" rx="1.5" />
                   </svg>
                 )}
-                {viewMode === 'stacked' && (
+                {!(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && viewMode === 'stacked' && (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="18" height="8" rx="2" />
                     <rect x="3" y="13" width="18" height="8" rx="2" />
                   </svg>
                 )}
-                {viewMode === 'grid' && (
+                {!(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && viewMode === 'grid' && (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="8" height="18" rx="2" />
                     <rect x="13" y="3" width="8" height="18" rx="2" />
                   </svg>
                 )}
-                {viewMode === 'pip' && (
+                {!(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && viewMode === 'pip' && (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="3" width="20" height="18" rx="2" />
                     <rect x="13" y="12" width="7" height="7" rx="1.5" fill="currentColor" fillOpacity="0.3" />
@@ -1256,10 +1326,12 @@ export default function ActiveCallPanel() {
                 )}
               </button>
               <span className="call-btn-label">
-                {focusedParticipant !== 'none'
+                {isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare'
+                  ? isScreenshareFullscreen
+                    ? 'Full Hero'
+                    : 'Sidebar'
+                  : focusedParticipant !== 'none'
                   ? 'Full Video'
-                  : viewMode === 'screenshare'
-                  ? 'Screen'
                   : viewMode === 'stacked'
                   ? 'Stacked'
                   : viewMode === 'grid'
@@ -1316,40 +1388,50 @@ export default function ActiveCallPanel() {
               </div>
             )}
 
-            {/* Screen Share Button (Phase 10 - Supported browsers only) */}
-            {isScreenShareSupported && (
-              <div className="call-control-item">
-                <button
-                  type="button"
-                  id="screen-share-btn"
-                  className={`call-btn screen-share ${isScreenSharing ? 'active' : ''}`}
-                  onClick={() => isScreenSharing ? stopScreenSharing() : startScreenSharing()}
-                  title={isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
-                  aria-label={isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
-                >
-                  {isScreenSharing ? (
-                    /* Stop-share icon: monitor with X */
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="3" width="20" height="14" rx="2" />
-                      <line x1="8" y1="21" x2="16" y2="21" />
-                      <line x1="12" y1="17" x2="12" y2="21" />
-                      <line x1="9" y1="8" x2="15" y2="14" />
-                      <line x1="15" y1="8" x2="9" y2="14" />
-                    </svg>
-                  ) : (
-                    /* Share icon: monitor with upward arrow */
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="3" width="20" height="14" rx="2" />
-                      <line x1="8" y1="21" x2="16" y2="21" />
-                      <line x1="12" y1="17" x2="12" y2="21" />
-                      <polyline points="8 9 12 5 16 9" />
-                      <line x1="12" y1="5" x2="12" y2="13" />
-                    </svg>
-                  )}
-                </button>
-                <span className="call-btn-label">{isScreenSharing ? 'Stop screen' : 'Screen'}</span>
-              </div>
-            )}
+            {/* Screen Share Button */}
+            <div className="call-control-item">
+              <button
+                type="button"
+                id="screen-share-btn"
+                className={`call-btn screen-share ${isScreenSharing ? 'active' : ''} ${!isScreenShareSupported ? 'disabled' : ''}`}
+                onClick={() => {
+                  if (!isScreenShareSupported) {
+                    setScreenShareNotice('Screen sharing is not supported on this browser or device');
+                    setTimeout(() => setScreenShareNotice(null), 3500);
+                    return;
+                  }
+                  if (isScreenSharing) {
+                    stopScreenSharing();
+                  } else {
+                    startScreenSharing();
+                  }
+                }}
+                title={!isScreenShareSupported ? 'Screen sharing is not supported on this device/browser' : isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
+                aria-label={!isScreenShareSupported ? 'Screen sharing not supported' : isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
+                style={!isScreenShareSupported ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+              >
+                {isScreenSharing ? (
+                  /* Stop-share icon: monitor with X */
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                    <line x1="9" y1="8" x2="15" y2="14" />
+                    <line x1="15" y1="8" x2="9" y2="14" />
+                  </svg>
+                ) : (
+                  /* Share icon: monitor with upward arrow */
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                    <polyline points="8 9 12 5 16 9" />
+                    <line x1="12" y1="5" x2="12" y2="13" />
+                  </svg>
+                )}
+              </button>
+              <span className="call-btn-label">{isScreenSharing ? 'Stop screen' : 'Screen'}</span>
+            </div>
 
             {/* Microphone Mute Button */}
             <div className="call-control-item">
