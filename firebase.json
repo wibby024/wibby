@@ -31,15 +31,6 @@
         ]
       },
       {
-        "source": "**/*.@(jpg|jpeg|gif|png|svg|webp|js|css|woff2|woff)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "max-age=31536000, immutable"
-          }
-        ]
-      },
-      {
         "source": "/favicon.ico",
         "headers": [
           {
@@ -48,7 +39,7 @@
           },
           {
             "key": "Cache-Control",
-            "value": "max-age=86400"
+            "value": "max-age=3600"
           }
         ]
       },
@@ -61,7 +52,25 @@
           },
           {
             "key": "Cache-Control",
-            "value": "max-age=86400"
+            "value": "max-age=3600"
+          }
+        ]
+      },
+      {
+        "source": "/favicon.svg",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=3600"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(jpg|jpeg|gif|webp|js|css|woff2|woff)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=31536000, immutable"
           }
         ]
       }
