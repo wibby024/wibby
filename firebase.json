@@ -44,7 +44,7 @@
         ]
       },
       {
-        "source": "/favicon*.png",
+        "source": "/@(favicon|icon)*.png",
         "headers": [
           {
             "key": "Content-Type",
