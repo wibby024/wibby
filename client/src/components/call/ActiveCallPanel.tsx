@@ -624,7 +624,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                 </>
               )}
             </svg>
-            <span>{focusedParticipant === 'remote' ? 'Exit full video' : 'Click for full video'}</span>
+            <span>{focusedParticipant === 'remote' ? 'Exit full screen' : 'Click for full screen'}</span>
           </div>
 
           {/* Layer 1: Ambient live video background (Same live stream, cover, subdued, NO blur) */}
@@ -702,8 +702,6 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               ? 'is-focused-main'
               : isLocalPip
               ? 'is-pip-window'
-              : viewMode === 'grid'
-              ? 'is-grid-tile'
               : 'is-stacked-tile'
           }`}
           style={focusedParticipant === 'local' ? { aspectRatio: `${localAspect}` } : undefined}
@@ -732,7 +730,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                 </>
               )}
             </svg>
-            <span>{focusedParticipant === 'local' ? 'Exit full video' : 'Click for full video'}</span>
+            <span>{focusedParticipant === 'local' ? 'Exit full screen' : 'Click for full screen'}</span>
           </div>
 
           {/* In Stacked Mode: Ambient live video background (Same live stream, cover, subdued, mirrored, NO blur) */}
@@ -859,20 +857,13 @@ export default function ActiveCallPanel() {
   const remoteScreenVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'stacked' | 'pip' | 'screenshare'>('stacked');
+  const [viewMode, setViewMode] = useState<'stacked' | 'pip' | 'screenshare'>('stacked');
   const [isScreenshareFullscreen, setIsScreenshareFullscreen] = useState(false);
   const [hideFloatingTiles, setHideFloatingTiles] = useState(false);
   const [focusedParticipant, setFocusedParticipant] = useState<'none' | 'remote' | 'local'>('none');
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
   const [screenShareNotice, setScreenShareNotice] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   // Auto-switch to screenshare layout when either participant shares screen
   useEffect(() => {
@@ -1269,19 +1260,22 @@ export default function ActiveCallPanel() {
 
           {/* Bottom Floating Control Bar (Auto-Hiding) */}
           <div className={`call-video-controls-bar ${showControls ? 'visible' : 'hidden'}`}>
-            {/* View Layout Toggle Button */}
+            {/* View Layout Toggle Button: Exactly 2 options (Stacked & Full Screen) */}
             <div className="call-control-item">
               <button
                 type="button"
-                className={`call-btn view-ctrl ${viewMode !== 'stacked' || focusedParticipant !== 'none' || isScreenshareFullscreen ? 'active' : ''}`}
+                className={`call-btn view-ctrl ${viewMode === 'pip' || focusedParticipant !== 'none' || isScreenshareFullscreen ? 'active' : ''}`}
                 onClick={() => {
-                  setFocusedParticipant('none');
-                  if (isScreenSharing || isRemoteScreenSharing) {
+                  if (isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') {
                     setIsScreenshareFullscreen(prev => !prev);
-                  } else if (isMobile) {
-                    setViewMode(prev => (prev === 'stacked' ? 'pip' : 'stacked'));
                   } else {
-                    setViewMode(prev => (prev === 'stacked' ? 'grid' : prev === 'grid' ? 'pip' : 'stacked'));
+                    if (viewMode === 'pip' || focusedParticipant !== 'none') {
+                      setFocusedParticipant('none');
+                      setViewMode('stacked');
+                    } else {
+                      setFocusedParticipant('none');
+                      setViewMode('pip');
+                    }
                   }
                 }}
                 title={`Switch layout (Current: ${
@@ -1289,13 +1283,9 @@ export default function ActiveCallPanel() {
                     ? isScreenshareFullscreen
                       ? 'Screen Share (Full Hero)'
                       : 'Screen Share (Sidebar)'
-                    : focusedParticipant !== 'none'
-                    ? 'Full Video'
-                    : viewMode === 'stacked'
-                    ? 'Stacked'
-                    : viewMode === 'grid'
-                    ? 'Side-by-Side'
-                    : 'Main + PiP'
+                    : viewMode === 'pip' || focusedParticipant !== 'none'
+                    ? 'Full Screen'
+                    : 'Stacked'
                 })`}
                 aria-label="Switch layout"
               >
@@ -1306,19 +1296,13 @@ export default function ActiveCallPanel() {
                     <rect x="17" y="13" width="5" height="8" rx="1.5" />
                   </svg>
                 )}
-                {!(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && viewMode === 'stacked' && (
+                {!(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && viewMode === 'stacked' && focusedParticipant === 'none' && (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="18" height="8" rx="2" />
                     <rect x="3" y="13" width="18" height="8" rx="2" />
                   </svg>
                 )}
-                {!(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && viewMode === 'grid' && (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="8" height="18" rx="2" />
-                    <rect x="13" y="3" width="8" height="18" rx="2" />
-                  </svg>
-                )}
-                {!(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && viewMode === 'pip' && (
+                {!(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && (viewMode === 'pip' || focusedParticipant !== 'none') && (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="3" width="20" height="18" rx="2" />
                     <rect x="13" y="12" width="7" height="7" rx="1.5" fill="currentColor" fillOpacity="0.3" />
@@ -1330,13 +1314,9 @@ export default function ActiveCallPanel() {
                   ? isScreenshareFullscreen
                     ? 'Full Hero'
                     : 'Sidebar'
-                  : focusedParticipant !== 'none'
-                  ? 'Full Video'
-                  : viewMode === 'stacked'
-                  ? 'Stacked'
-                  : viewMode === 'grid'
-                  ? 'Side by Side'
-                  : 'Main + PiP'}
+                  : viewMode === 'pip' || focusedParticipant !== 'none'
+                  ? 'Full Screen'
+                  : 'Stacked'}
               </span>
             </div>
 

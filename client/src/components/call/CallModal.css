@@ -523,54 +523,82 @@
 }
 
 /* -------------------------------------------------------------
-   VIEW 0: SIDE-BY-SIDE / GRID VIEW (Desktop & Responsive)
-   User 1 (Remote) on left, User 2 (Local) on right (equal size)
-   Full uncropped video presentation in respected side-by-side grid
+   VIEW 0: STACKED UP/DOWN VIEW (Desktop & Responsive)
+   User 1 (Remote) on top, User 2 (Local) on bottom
+   UP/DOWN presentation intelligently utilizing available call-stage height (~50% each)
    ------------------------------------------------------------- */
 .call-video-stage.view-mode-grid {
-  padding: 68px 24px 84px 24px;
-}
-
-.call-video-stage.view-mode-grid .call-stage-presentation-frame {
-  display: flex;
-  flex-direction: row;
-  gap: 16px;
-  width: min(1440px, 94vw);
-  height: min(720px, calc(100vh - 150px));
-  max-height: 100%;
-  margin: auto;
-  position: relative;
-  align-items: stretch;
-}
-
-.call-video-stage.view-mode-grid .call-video-panel {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
+  padding: calc(60px + env(safe-area-inset-top, 0px)) 16px calc(80px + env(safe-area-inset-bottom, 0px)) 16px;
+  width: 100%;
   height: 100%;
-  border-radius: 18px;
-  background: #0c0a14;
-  position: relative;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-@media (max-width: 768px) {
+.call-video-stage.view-mode-grid .call-stage-presentation-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: 1400px;
+  height: 100%;
+  max-height: 100%;
+  margin: 0 auto;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.call-video-stage.view-mode-grid .call-video-panel {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  max-height: calc(50% - 6px);
+  width: 100%;
+  max-width: 100%;
+  border-radius: 16px;
+  background: #000;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.call-video-stage.view-mode-grid .call-video-panel .call-video-fg-live {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.call-video-stage.view-mode-grid .call-video-bg-live,
+.call-video-stage.view-mode-grid .call-video-vignette-overlay {
+  display: none !important;
+}
+
+@media (max-width: 640px) {
   .call-video-stage.view-mode-grid {
-    padding: 60px 12px 80px 12px;
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 10px calc(76px + env(safe-area-inset-bottom, 0px)) 10px;
   }
   .call-video-stage.view-mode-grid .call-stage-presentation-frame {
-    flex-direction: column;
     width: 100%;
     height: 100%;
-    gap: 10px;
+    gap: 8px;
   }
   .call-video-stage.view-mode-grid .call-video-panel {
-    border-radius: 14px;
+    border-radius: 12px;
+    max-height: calc(50% - 4px);
   }
 }
 

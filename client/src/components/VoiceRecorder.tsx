@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { getBestAudioRecorderMimeType, formatAudioDuration } from '../config/media';
 import './VoiceRecorder.css';
 
@@ -592,7 +593,7 @@ export default function VoiceRecorder({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="voice-recorder-overlay" role="dialog" aria-modal="true" aria-label="Voice Message Recorder">
       <div className="voice-recorder-card">
         
@@ -787,6 +788,7 @@ export default function VoiceRecorder({
         )}
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

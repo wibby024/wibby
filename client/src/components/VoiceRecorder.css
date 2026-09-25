@@ -6,7 +6,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 10000;
   padding: 1rem;
   animation: voiceFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -35,6 +35,8 @@
   gap: 1.25rem;
   color: #F3F4F6;
   font-family: inherit;
+  position: relative;
+  z-index: 10001;
 }
 
 .voice-recorder-header {
@@ -426,4 +428,15 @@
   border-radius: 8px;
   font-size: 0.85rem;
   cursor: pointer;
+}
+
+@media (max-width: 480px) {
+  .voice-recorder-overlay {
+    padding: 0.75rem;
+  }
+  .voice-recorder-card {
+    padding: 1.15rem;
+    gap: 1rem;
+    border-radius: 14px;
+  }
 }
