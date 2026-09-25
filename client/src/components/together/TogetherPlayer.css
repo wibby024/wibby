@@ -368,19 +368,61 @@
 }
 
 /* Mobile Responsive */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .together-dock.standard {
     width: calc(100% - 1rem);
-    margin: 0.5rem;
+    margin: 0.35rem auto 0.25rem auto;
     border-radius: var(--radius-lg);
+    flex-shrink: 1;
+    min-height: 0;
+    max-height: 36vh;
+  }
+
+  .together-player-frame-wrap.full-frame {
+    max-height: min(160px, 22vh);
   }
 
   .together-dock-body {
-    padding: 0.5rem;
+    padding: 0.45rem;
   }
 
   .together-dock.minimized {
     width: calc(100vw - 32px);
     max-width: 280px;
+  }
+}
+
+/* Mobile Virtual Keyboard Active Protection (when viewport height shrinks) */
+@media (max-height: 560px) and (max-width: 768px) {
+  .together-dock.standard {
+    max-height: 140px;
+    margin: 0.2rem auto 0.15rem auto;
+  }
+
+  .together-player-frame-wrap.full-frame {
+    max-height: 85px;
+  }
+
+  .together-dock-header {
+    padding: 0.25rem 0.5rem;
+  }
+
+  .together-dock-body {
+    padding: 0.25rem 0.4rem;
+  }
+
+  .together-sync-action-bar {
+    padding: 0.1rem 0;
+    gap: 0.25rem;
+  }
+
+  .together-seek-btn,
+  .together-sync-play-btn {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.72rem;
+  }
+
+  .together-host-tag {
+    display: none;
   }
 }

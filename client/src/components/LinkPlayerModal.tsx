@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { IconPlay, IconCamera, IconMusic, IconVideo, IconLink } from './common/Icons';
 import './LinkPlayerModal.css';
 
 interface LinkPlayerModalProps {
@@ -106,14 +107,14 @@ export default function LinkPlayerModal({
     : 'Web Media';
 
   const badgeIcon = ytEmbed
-    ? '▶️'
+    ? <IconPlay size={16} color="var(--wibby-primary)" />
     : igEmbed
-    ? '📸'
+    ? <IconCamera size={16} color="var(--wibby-primary)" />
     : (spotifyEmbed || soundcloudEmbed || isAudio)
-    ? '🎵'
+    ? <IconMusic size={16} color="var(--wibby-primary)" />
     : isVideo
-    ? '🎬'
-    : '🌐';
+    ? <IconVideo size={16} color="var(--wibby-primary)" />
+    : <IconLink size={16} color="var(--wibby-primary)" />;
 
   const handleClose = () => {
     setIsMinimized(false);
@@ -128,7 +129,7 @@ export default function LinkPlayerModal({
       {/* Header */}
       <div className="link-modal-header" onClick={() => isMinimized && setIsMinimized(false)}>
         <div className="link-modal-title">
-          <span className="link-badge-icon">{badgeIcon}</span>
+          <span className="link-badge-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>{badgeIcon}</span>
           <span className="link-title-text">{title || mediaTypeLabel}</span>
         </div>
         <div className="link-modal-actions">

@@ -10,7 +10,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 3000;
+  z-index: 5000;
   padding: 24px;
   animation: lightboxFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }

@@ -27,12 +27,19 @@
   border: none;
   padding: 10px 12px;
   text-align: left;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--wibby-text);
   cursor: pointer;
-  border-radius: 6px;
-  transition: background 0.1s;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.menu-item svg {
+  flex-shrink: 0;
 }
 
 .menu-item:hover {

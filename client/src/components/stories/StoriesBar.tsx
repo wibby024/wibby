@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { musicNoteService } from '../../services/musicNoteService';
+import { musicCatalogService, LEGAL_MUSIC_CATALOG } from '../../services/musicCatalog';
 import { resolvePartnerName } from '../../utils/partnerName';
 import type { Story } from '../../types/chat';
 import CreateStoryModal from './CreateStoryModal';
@@ -30,9 +31,18 @@ export default function StoriesBar({
   const [playingSong, setPlayingSong] = useState<string | null>(null);
 
   useEffect(() => {
-    return musicNoteService.subscribe((song, isPlaying) => {
-      setPlayingSong(isPlaying ? song : null);
+    const unsub1 = musicNoteService.subscribe((song, isPlaying) => {
+      if (isPlaying) setPlayingSong(song);
+      else if (!musicCatalogService.getState().isPlaying) setPlayingSong(null);
     });
+    const unsub2 = musicCatalogService.subscribe(state => {
+      if (state.isPlaying && state.currentTrack) setPlayingSong(state.currentTrack.title);
+      else if (!musicNoteService.isPlaying()) setPlayingSong(null);
+    });
+    return () => {
+      unsub1();
+      unsub2();
+    };
   }, []);
 
   const currentUserId = user?.uid || '';
@@ -187,25 +197,65 @@ export default function StoriesBar({
   const latestUserStory = userStories[userStories.length - 1];
   const latestPartnerStory = partnerStories[partnerStories.length - 1];
 
-  const userNoteText = latestUserStory 
-    ? (latestUserStory.type === 'text' ? latestUserStory.text : (latestUserStory.caption || 'Story')) 
-    : null;
+  const userNoteText = latestUserStory?.musicNote
+    ? `🎵 ${latestUserStory.musicNote.title} • ${latestUserStory.musicNote.artist}`
+    : (latestUserStory 
+      ? (latestUserStory.type === 'text' ? latestUserStory.text : (latestUserStory.caption || 'Story')) 
+      : null);
 
-  const partnerNoteText = latestPartnerStory 
-    ? (latestPartnerStory.type === 'text' ? latestPartnerStory.text : (latestPartnerStory.caption || 'Story')) 
-    : null;
+  const partnerNoteText = latestPartnerStory?.musicNote
+    ? `🎵 ${latestPartnerStory.musicNote.title} • ${latestPartnerStory.musicNote.artist}`
+    : (latestPartnerStory 
+      ? (latestPartnerStory.type === 'text' ? latestPartnerStory.text : (latestPartnerStory.caption || 'Story')) 
+      : null);
+
+  const isUserPlaying = Boolean(
+    playingSong &&
+    (playingSong === userNoteText || (latestUserStory?.musicNote && playingSong === latestUserStory.musicNote.title))
+  );
+
+  const isPartnerPlaying = Boolean(
+    playingSong &&
+    (playingSong === partnerNoteText || (latestPartnerStory?.musicNote && playingSong === latestPartnerStory.musicNote.title))
+  );
 
   // Check if partner story is unviewed
   const hasUnviewedPartnerStory = partnerStories.some(
     s => !Array.isArray(s.viewers) || !s.viewers.some(v => v.uid === currentUserId)
   );
 
-  const handleToggleNoteMusic = (e: React.MouseEvent, noteText: string) => {
+  const handleToggleNoteMusic = (e: React.MouseEvent, story: Story | undefined, fallbackText: string | null) => {
     e.stopPropagation();
-    if (noteText.includes('🎵')) {
-      musicNoteService.playSong(noteText);
-    } else {
-      musicNoteService.playSong(noteText);
+    if (story?.musicNote) {
+      if (playingSong && (playingSong === story.musicNote.title || playingSong === fallbackText)) {
+        musicCatalogService.stop();
+        musicNoteService.stop();
+      } else {
+        musicNoteService.stop();
+        const mn = story.musicNote;
+        const matchedTrack = LEGAL_MUSIC_CATALOG.find(t => t.id === mn.id) || {
+          id: mn.id,
+          title: mn.title,
+          artist: mn.artist,
+          genre: mn.genre || 'Pop',
+          duration: mn.duration || 60,
+          artworkGradient: mn.artworkUrl || 'linear-gradient(135deg, #7C3AED, #5B21B6)',
+          coverEmoji: '🎵',
+          bpm: 100,
+          key: 'C Major',
+          chords: [[130.81, 164.81, 196.00], [174.61, 220.00, 261.63]],
+          melody: [261.63, 329.63, 392.00, 523.25]
+        };
+        musicCatalogService.playClip(matchedTrack, mn.clipStart || 0, mn.clipDuration || 30);
+      }
+    } else if (fallbackText) {
+      if (playingSong === fallbackText) {
+        musicNoteService.stop();
+        musicCatalogService.stop();
+      } else {
+        musicCatalogService.stop();
+        musicNoteService.playSong(fallbackText);
+      }
     }
   };
 
@@ -219,11 +269,11 @@ export default function StoriesBar({
         >
           {userNoteText ? (
             <div 
-              className={`instagram-note-bubble ${playingSong === userNoteText ? 'is-playing-music' : ''}`}
+              className={`instagram-note-bubble ${isUserPlaying ? 'is-playing-music' : ''}`}
               title={userNoteText}
-              onClick={(e) => handleToggleNoteMusic(e, userNoteText)}
+              onClick={(e) => handleToggleNoteMusic(e, latestUserStory, userNoteText)}
             >
-              {playingSong === userNoteText ? (
+              {isUserPlaying ? (
                 <span className="note-music-equalizer">
                   <span className="eq-bar bar-1" />
                   <span className="eq-bar bar-2" />
@@ -281,11 +331,11 @@ export default function StoriesBar({
           >
             {partnerNoteText && (
               <div 
-                className={`instagram-note-bubble partner-note ${playingSong === partnerNoteText ? 'is-playing-music' : ''}`}
+                className={`instagram-note-bubble partner-note ${isPartnerPlaying ? 'is-playing-music' : ''}`}
                 title={partnerNoteText}
-                onClick={(e) => handleToggleNoteMusic(e, partnerNoteText)}
+                onClick={(e) => handleToggleNoteMusic(e, latestPartnerStory, partnerNoteText)}
               >
-                {playingSong === partnerNoteText ? (
+                {isPartnerPlaying ? (
                   <span className="note-music-equalizer">
                     <span className="eq-bar bar-1" />
                     <span className="eq-bar bar-2" />

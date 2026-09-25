@@ -2,8 +2,15 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { ObjectId } from 'mongodb';
 import { getDb } from '../lib/mongodb.js';
 import crypto from 'crypto';
-
-export type GameType = 'tictactoe' | 'dotsandboxes' | 'wordimposter';
+import {
+  GameType,
+  initGameData,
+  checkTicTacToeWin,
+  handleConnectFourDrop,
+  checkGomokuWin,
+  getReversiFlips,
+  hasValidReversiMoves
+} from './gameLogic.js';
 
 export interface GameState {
   gameId: string;
@@ -21,84 +28,9 @@ export interface GameState {
 
 const activeGames = new Map<string, GameState>();
 
-// Word Imposter dictionary with categories
-export const WORD_CATEGORIES: { [cat: string]: string[] } = {
-  Animals: ['DOLPHIN', 'PENGUIN', 'GIRAFFE', 'CHEETAH', 'KANGAROO', 'OCTOPUS', 'HAMSTER', 'PEACOCK'],
-  Food: ['PANCAKE', 'BURRITO', 'AVOCADO', 'CUPCAKE', 'POPCORN', 'NOODLES', 'BROWNIE', 'LASAGNA'],
-  Objects: ['COMPASS', 'LANTERN', 'TELESCOPE', 'UMBRELLA', 'NOTEBOOK', 'GUITAR', 'KEYBOARD', 'HEADSET'],
-  Places: ['VOLCANO', 'GLACIER', 'ISLAND', 'LIBRARY', 'PYRAMID', 'CASTLE', 'AIRPORT', 'STADIUM']
-};
-
-function getRandomWord(): { word: string; category: string } {
-  const categories = Object.keys(WORD_CATEGORIES);
-  const category = categories[Math.floor(Math.random() * categories.length)];
-  const words = WORD_CATEGORIES[category];
-  const word = words[Math.floor(Math.random() * words.length)];
-  return { word, category };
-}
-
-function initGameData(gameType: GameType, p1: string, p2: string) {
-  if (gameType === 'tictactoe') {
-    return {
-      board: Array(9).fill(null),
-      winningLine: null as number[] | null
-    };
-  } else if (gameType === 'dotsandboxes') {
-    // 4x4 dots = 3x3 boxes (9 boxes total)
-    // horizontal lines: h_row_col  row in [0..3], col in [0..2]  => 12 lines
-    // vertical lines:   v_row_col  row in [0..2], col in [0..3]  => 12 lines
-    const boxes: Array<{ row: number; col: number; owner: string | null }> = [];
-    for (let r = 0; r < 3; r++) {
-      for (let c = 0; c < 3; c++) {
-        boxes.push({ row: r, col: c, owner: null });
-      }
-    }
-    return {
-      lines: {} as { [key: string]: string }, // key -> claimedBy uid
-      boxes,
-      boxScores: { [p1]: 0, [p2]: 0 }
-    };
-  } else if (gameType === 'wordimposter') {
-    const { word, category } = getRandomWord();
-    return {
-      category,
-      word,
-      guessedLetters: [] as string[],
-      wrongGuesses: 0,
-      maxWrong: 6,
-      revealedMask: word.split('').map(() => '_').join(' ')
-    };
-  }
-  return {};
-}
-
-// Tic Tac Toe check win
-function checkTicTacToeWin(board: (string | null)[]): { winner: string | null; line: number[] | null; isDraw: boolean } {
-  const lines = [
-    [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
-    [0, 3, 6], [1, 4, 7], [2, 5, 8], // cols
-    [0, 4, 8], [2, 4, 6]             // diags
-  ];
-
-  for (const [a, b, c] of lines) {
-    if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-      return { winner: board[a], line: [a, b, c], isDraw: false };
-    }
-  }
-
-  const isFull = board.every(cell => cell !== null);
-  return { winner: null, line: null, isDraw: isFull };
-}
-
 // Dots and Boxes box completion check for 3x3 grid (9 boxes)
 function checkBoxesCompleted(lines: { [key: string]: string }, boxes: any[], claimerUid: string): number {
   let newlyCompleted = 0;
-  // 3 rows × 3 cols = 9 boxes
-  // Box at (row, col) is bounded by:
-  //   top:    h_{row}_{col}
-  //   bottom: h_{row+1}_{col}
-  //   left:   v_{row}_{col}
-  //   right:  v_{row}_{col+1}
   for (let row = 0; row < 3; row++) {
     for (let col = 0; col < 3; col++) {
       const boxIndex = row * 3 + col;
@@ -162,13 +94,17 @@ export function registerGameHandlers(
         }
       }
 
+      // Dynamic symbols based on game type
+      const p1Symbol = data.gameType === 'reversi' ? 'B' : 'X';
+      const p2Symbol = data.gameType === 'reversi' ? 'W' : 'O';
+
       const gameState: GameState = {
         gameId,
         conversationId: data.conversationId,
         gameType: data.gameType,
         players: {
-          [uid]: { symbol: 'X', color: '#7C3AED', name: 'Host' },
-          [partnerUid]: { symbol: 'O', color: '#10B981', name: 'Partner' }
+          [uid]: { symbol: p1Symbol, color: '#7C3AED', name: 'Host' },
+          [partnerUid]: { symbol: p2Symbol, color: '#10B981', name: 'Partner' }
         },
         playerOrder: [uid, partnerUid],
         currentTurn: uid,
@@ -231,10 +167,74 @@ export function registerGameHandlers(
       const game = activeGames.get(data.conversationId);
       if (!game || game.gameId !== data.gameId || game.status !== 'in_progress') return;
 
-      // Ensure it's the sender's turn
-      if (game.currentTurn !== uid) return;
-
       const partnerUid = game.playerOrder.find(id => id !== uid) || uid;
+      const isHost = game.playerOrder[0] === uid;
+
+      // Special case: Rock Paper Scissors allows simultaneous choice from either player
+      if (game.gameType === 'rockpaperscissors') {
+        const { choice } = data.move;
+        if (!['rock', 'paper', 'scissors'].includes(choice)) return;
+
+        game.stateData.playerChoices[uid] = choice;
+
+        // Check if both players picked
+        const p1 = game.playerOrder[0];
+        const p2 = game.playerOrder[1];
+        const c1 = game.stateData.playerChoices[p1];
+        const c2 = game.stateData.playerChoices[p2];
+
+        if (c1 && c2) {
+          let roundWinner: string | null = null;
+          let summary = '';
+
+          if (c1 === c2) {
+            summary = `Both played ${c1}! It's a draw!`;
+          } else if (
+            (c1 === 'rock' && c2 === 'scissors') ||
+            (c1 === 'paper' && c2 === 'rock') ||
+            (c1 === 'scissors' && c2 === 'paper')
+          ) {
+            roundWinner = p1;
+            game.stateData.roundScores[p1] = (game.stateData.roundScores[p1] || 0) + 1;
+            summary = `${c1} beats ${c2}!`;
+          } else {
+            roundWinner = p2;
+            game.stateData.roundScores[p2] = (game.stateData.roundScores[p2] || 0) + 1;
+            summary = `${c2} beats ${c1}!`;
+          }
+
+          game.stateData.lastRoundResult = {
+            p1Choice: c1,
+            p2Choice: c2,
+            winnerUid: roundWinner,
+            summary
+          };
+
+          // Check if either reached targetWins (3)
+          const target = game.stateData.targetWins || 3;
+          if (game.stateData.roundScores[p1] >= target) {
+            game.status = 'won';
+            game.winnerId = p1;
+            game.scores[p1] = (game.scores[p1] || 0) + 1;
+          } else if (game.stateData.roundScores[p2] >= target) {
+            game.status = 'won';
+            game.winnerId = p2;
+            game.scores[p2] = (game.scores[p2] || 0) + 1;
+          } else {
+            // Reset choices for next round
+            game.stateData.playerChoices[p1] = null;
+            game.stateData.playerChoices[p2] = null;
+            game.stateData.roundNumber = (game.stateData.roundNumber || 1) + 1;
+          }
+        }
+
+        game.updatedAt = new Date().toISOString();
+        io.to(`conversation:${data.conversationId}`).emit('game:state', game);
+        return;
+      }
+
+      // Turn enforcement for all other games
+      if (game.currentTurn !== uid) return;
 
       // Handle Tic-Tac-Toe
       if (game.gameType === 'tictactoe') {
@@ -261,16 +261,13 @@ export function registerGameHandlers(
 
       // Handle Dots & Boxes
       else if (game.gameType === 'dotsandboxes') {
-        const { lineKey } = data.move; // e.g. "h_0_1" or "v_1_2"
+        const { lineKey } = data.move;
         if (!lineKey || typeof lineKey !== 'string') return;
-        if (game.stateData.lines[lineKey]) return; // already claimed
+        if (game.stateData.lines[lineKey]) return;
 
-        // Validate key format against 3x3 grid boundaries
-        // Horizontal: h_row_col, row in [0..3], col in [0..2]
-        // Vertical:   v_row_col, row in [0..2], col in [0..3]
         const hMatch = lineKey.match(/^h_(\d+)_(\d+)$/);
         const vMatch = lineKey.match(/^v_(\d+)_(\d+)$/);
-        if (!hMatch && !vMatch) return; // reject unknown format
+        if (!hMatch && !vMatch) return;
         if (hMatch) {
           const row = parseInt(hMatch[1]), col = parseInt(hMatch[2]);
           if (row < 0 || row > 3 || col < 0 || col > 2) return;
@@ -285,7 +282,6 @@ export function registerGameHandlers(
 
         if (newlyCompleted > 0) {
           game.stateData.boxScores[uid] = (game.stateData.boxScores[uid] || 0) + newlyCompleted;
-          // Check if all 9 boxes claimed
           const allClaimed = game.stateData.boxes.every((b: any) => b.owner !== null);
           if (allClaimed) {
             const p1Score = game.stateData.boxScores[uid] || 0;
@@ -303,9 +299,7 @@ export function registerGameHandlers(
               game.winnerId = null;
             }
           }
-          // Note: If newlyCompleted > 0 and not all claimed, currentTurn remains uid (bonus turn!)
         } else {
-          // Switch turn
           game.currentTurn = partnerUid;
         }
       }
@@ -326,7 +320,7 @@ export function registerGameHandlers(
             game.stateData.wrongGuesses += 1;
             if (game.stateData.wrongGuesses >= game.stateData.maxWrong) {
               game.status = 'won';
-              game.winnerId = partnerUid; // Host imposter wins
+              game.winnerId = partnerUid;
               game.scores[partnerUid] = (game.scores[partnerUid] || 0) + 1;
               game.stateData.revealedMask = secretWord.split('').join(' ');
             }
@@ -337,13 +331,11 @@ export function registerGameHandlers(
             game.stateData.guessedLetters.push(upperLetter);
 
             if (secretWord.includes(upperLetter)) {
-              // Update revealed mask
               const mask = secretWord.split('').map((char: string) =>
                 game.stateData.guessedLetters.includes(char) ? char : '_'
               ).join(' ');
               game.stateData.revealedMask = mask;
 
-              // Check if all letters revealed
               const allRevealed = secretWord.split('').every((char: string) =>
                 game.stateData.guessedLetters.includes(char)
               );
@@ -365,9 +357,277 @@ export function registerGameHandlers(
           }
         }
 
-        // Toggle turn in word imposter if game still in progress
         if (game.status === 'in_progress') {
           game.currentTurn = partnerUid;
+        }
+      }
+
+      // Handle Connect Four
+      else if (game.gameType === 'connectfour') {
+        const { col } = data.move;
+        if (typeof col !== 'number') return;
+        const symbol = game.players[uid]?.symbol || 'X';
+
+        const result = handleConnectFourDrop(game.stateData.board, col, symbol);
+        if (!result.success) return;
+
+        game.stateData.lastDrop = { row: result.row, col };
+
+        if (result.winningCells) {
+          game.status = 'won';
+          game.winnerId = uid;
+          game.stateData.winningCells = result.winningCells;
+          game.scores[uid] = (game.scores[uid] || 0) + 1;
+        } else if (result.isDraw) {
+          game.status = 'draw';
+          game.winnerId = null;
+        } else {
+          game.currentTurn = partnerUid;
+        }
+      }
+
+      // Handle Memory Match
+      else if (game.gameType === 'memorymatch') {
+        const { cardIndex } = data.move;
+        if (typeof cardIndex !== 'number' || cardIndex < 0 || cardIndex > 15) return;
+        if (game.stateData.matchedIndices.includes(cardIndex)) return;
+
+        // Clear previous mismatch on new turn
+        if (game.stateData.lastMismatch) {
+          game.stateData.lastMismatch = null;
+        }
+
+        const flipped = game.stateData.flippedIndices;
+        if (flipped.length === 0) {
+          flipped.push(cardIndex);
+        } else if (flipped.length === 1) {
+          if (flipped[0] === cardIndex) return; // cannot click same card
+          flipped.push(cardIndex);
+
+          const card1 = game.stateData.cards[flipped[0]];
+          const card2 = game.stateData.cards[cardIndex];
+
+          if (card1 === card2) {
+            // Match found!
+            game.stateData.matchedIndices.push(flipped[0], cardIndex);
+            game.stateData.playerScores[uid] = (game.stateData.playerScores[uid] || 0) + 1;
+            game.stateData.flippedIndices = [];
+
+            // Check if all 16 matched
+            if (game.stateData.matchedIndices.length >= 16) {
+              const myMatches = game.stateData.playerScores[uid] || 0;
+              const theirMatches = game.stateData.playerScores[partnerUid] || 0;
+              if (myMatches > theirMatches) {
+                game.status = 'won';
+                game.winnerId = uid;
+                game.scores[uid] = (game.scores[uid] || 0) + 1;
+              } else if (theirMatches > myMatches) {
+                game.status = 'won';
+                game.winnerId = partnerUid;
+                game.scores[partnerUid] = (game.scores[partnerUid] || 0) + 1;
+              } else {
+                game.status = 'draw';
+                game.winnerId = null;
+              }
+            }
+            // Turn stays with player on match!
+          } else {
+            // Mismatch: record mismatch, clear flippedIndices, swap turn
+            game.stateData.lastMismatch = [flipped[0], cardIndex];
+            game.stateData.flippedIndices = [];
+            game.currentTurn = partnerUid;
+          }
+        }
+      }
+
+      // Handle Gomoku
+      else if (game.gameType === 'gomoku') {
+        const { cellIndex } = data.move;
+        if (typeof cellIndex !== 'number' || cellIndex < 0 || cellIndex > 80) return;
+        if (game.stateData.board[cellIndex] !== null) return;
+
+        const symbol = game.players[uid]?.symbol || 'X';
+        game.stateData.board[cellIndex] = symbol;
+
+        const result = checkGomokuWin(game.stateData.board, cellIndex, symbol);
+        if (result.isWin) {
+          game.status = 'won';
+          game.winnerId = uid;
+          game.stateData.winningLine = result.winningLine;
+          game.scores[uid] = (game.scores[uid] || 0) + 1;
+        } else if (result.isDraw) {
+          game.status = 'draw';
+          game.winnerId = null;
+        } else {
+          game.currentTurn = partnerUid;
+        }
+      }
+
+      // Handle Checkers (6x6 compact board)
+      else if (game.gameType === 'checkers') {
+        const { from, to } = data.move;
+        if (typeof from !== 'number' || typeof to !== 'number') return;
+        if (from < 0 || from > 35 || to < 0 || to > 35) return;
+
+        const piece = game.stateData.board[from];
+        if (!piece) return;
+
+        // Check ownership: host has 'r'/'R', partner has 'b'/'B'
+        const isMyPiece = isHost
+          ? piece === 'r' || piece === 'R'
+          : piece === 'b' || piece === 'B';
+        if (!isMyPiece) return;
+
+        // Target must be empty and dark square ((r+c)%2 === 1)
+        if (game.stateData.board[to] !== null) return;
+        const toR = Math.floor(to / 6);
+        const toC = to % 6;
+        if ((toR + toC) % 2 === 0) return;
+
+        const fromR = Math.floor(from / 6);
+        const fromC = from % 6;
+        const dr = toR - fromR;
+        const dc = toC - fromC;
+        const isKing = piece === 'R' || piece === 'B';
+
+        let isValid = false;
+        let isJump = false;
+        let capturedIdx = -1;
+
+        // Normal step (abs(dr) === 1 and abs(dc) === 1)
+        if (Math.abs(dr) === 1 && Math.abs(dc) === 1) {
+          // Direction check for non-king: 'r' moves down (dr > 0), 'b' moves up (dr < 0)
+          if (isKing || (piece === 'r' && dr === 1) || (piece === 'b' && dr === -1)) {
+            isValid = true;
+          }
+        }
+        // Jump move (abs(dr) === 2 and abs(dc) === 2)
+        else if (Math.abs(dr) === 2 && Math.abs(dc) === 2) {
+          if (isKing || (piece === 'r' && dr === 2) || (piece === 'b' && dr === -2)) {
+            const midR = fromR + dr / 2;
+            const midC = fromC + dc / 2;
+            capturedIdx = midR * 6 + midC;
+            const jumpedPiece = game.stateData.board[capturedIdx];
+
+            const isOpponent = isHost
+              ? jumpedPiece === 'b' || jumpedPiece === 'B'
+              : jumpedPiece === 'r' || jumpedPiece === 'R';
+
+            if (isOpponent) {
+              isValid = true;
+              isJump = true;
+            }
+          }
+        }
+
+        if (!isValid) return;
+
+        // Execute move
+        game.stateData.board[from] = null;
+        let finalPiece = piece;
+        // King promotion
+        if (piece === 'r' && toR === 5) finalPiece = 'R';
+        if (piece === 'b' && toR === 0) finalPiece = 'B';
+        game.stateData.board[to] = finalPiece;
+
+        if (isJump && capturedIdx !== -1) {
+          game.stateData.board[capturedIdx] = null;
+          game.stateData.captured[uid] = (game.stateData.captured[uid] || 0) + 1;
+        }
+
+        // Count remaining opponent pieces
+        const opponentPieces = game.stateData.board.filter((p: string | null) =>
+          isHost ? p === 'b' || p === 'B' : p === 'r' || p === 'R'
+        );
+
+        if (opponentPieces.length === 0) {
+          game.status = 'won';
+          game.winnerId = uid;
+          game.scores[uid] = (game.scores[uid] || 0) + 1;
+        } else {
+          game.currentTurn = partnerUid;
+        }
+      }
+
+      // Handle Battleship (5x5 fleet)
+      else if (game.gameType === 'battleship') {
+        const { targetCell } = data.move;
+        if (typeof targetCell !== 'number' || targetCell < 0 || targetCell > 24) return;
+        if (game.stateData.shots[uid]?.[targetCell]) return; // already fired here
+
+        const enemyShips: number[] = game.stateData.ships[partnerUid] || [];
+        const isHit = enemyShips.includes(targetCell);
+
+        if (!game.stateData.shots[uid]) game.stateData.shots[uid] = {};
+        game.stateData.shots[uid][targetCell] = isHit ? 'hit' : 'miss';
+
+        if (isHit) {
+          game.stateData.hitsCount[uid] = (game.stateData.hitsCount[uid] || 0) + 1;
+          if (game.stateData.hitsCount[uid] >= game.stateData.totalTargetHits) {
+            game.status = 'won';
+            game.winnerId = uid;
+            game.scores[uid] = (game.scores[uid] || 0) + 1;
+          } else {
+            // Keep turn on hit or pass? In Wibby 2-player quick battleships, alternate turns keeps both engaged
+            game.currentTurn = partnerUid;
+          }
+        } else {
+          game.currentTurn = partnerUid;
+        }
+      }
+
+      // Handle Reversi (6x6 Othello)
+      else if (game.gameType === 'reversi') {
+        const { cellIndex } = data.move;
+        if (typeof cellIndex !== 'number' || cellIndex < 0 || cellIndex > 35) return;
+
+        const mySymbol = isHost ? 'B' : 'W';
+        const opponentSymbol = isHost ? 'W' : 'B';
+        const flips = getReversiFlips(game.stateData.board, cellIndex, mySymbol);
+        if (flips.length === 0) return; // not a valid reversible move
+
+        // Place and flip
+        game.stateData.board[cellIndex] = mySymbol;
+        flips.forEach(idx => {
+          game.stateData.board[idx] = mySymbol;
+        });
+
+        // Recalculate piece counts
+        let bCount = 0;
+        let wCount = 0;
+        game.stateData.board.forEach((cell: string | null) => {
+          if (cell === 'B') bCount++;
+          if (cell === 'W') wCount++;
+        });
+        game.stateData.counts = { B: bCount, W: wCount };
+
+        // Turn switching with pass handling
+        const opponentHasMoves = hasValidReversiMoves(game.stateData.board, opponentSymbol);
+        const myHasMoves = hasValidReversiMoves(game.stateData.board, mySymbol);
+
+        if (opponentHasMoves) {
+          game.currentTurn = partnerUid;
+        } else if (myHasMoves) {
+          // Partner has to pass, turn stays with current player
+          game.currentTurn = uid;
+        } else {
+          // Neither can move: Game Over!
+          const hostScore = bCount;
+          const partnerScore = wCount;
+          if (hostScore > partnerScore) {
+            const hostUid = game.playerOrder[0];
+            game.status = 'won';
+            game.winnerId = hostUid;
+            game.scores[hostUid] = (game.scores[hostUid] || 0) + 1;
+          } else if (partnerScore > hostScore) {
+            const partUid = game.playerOrder[1];
+            game.status = 'won';
+            game.winnerId = partUid;
+            game.scores[partUid] = (game.scores[partUid] || 0) + 1;
+          } else {
+            game.status = 'draw';
+            game.winnerId = null;
+          }
         }
       }
 
@@ -388,14 +648,14 @@ export function registerGameHandlers(
       const p1 = game.playerOrder[0];
       const p2 = game.playerOrder[1];
       // Switch who goes first on rematch
-      const nextOrder = [game.playerOrder[1], game.playerOrder[0]];
+      const nextOrder = [p2, p1];
 
       game.gameId = crypto.randomUUID();
       game.playerOrder = nextOrder;
       game.currentTurn = nextOrder[0];
       game.status = 'in_progress';
       game.winnerId = null;
-      game.stateData = initGameData(game.gameType, p1, p2);
+      game.stateData = initGameData(game.gameType, nextOrder[0], nextOrder[1]);
       game.updatedAt = new Date().toISOString();
 
       io.to(`conversation:${data.conversationId}`).emit('game:state', game);

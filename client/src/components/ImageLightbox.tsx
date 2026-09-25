@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { getAuthenticatedMediaBlobUrl, downloadMediaFile } from '../services/mediaService';
 import './ImageLightbox.css';
 
@@ -87,7 +88,7 @@ export default function ImageLightbox({
     }
   };
 
-  return (
+  return createPortal(
     <div 
       className="image-lightbox-overlay" 
       onClick={onClose}
@@ -172,6 +173,7 @@ export default function ImageLightbox({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -97,11 +97,18 @@ export default function EmojiPicker({ onSelect, onSelectSticker, onClose, anchor
       left = anchorRect.left;
     }
     
-    if (left + pickerWidth > window.innerWidth - SAFE_MARGIN) {
-      left = window.innerWidth - pickerWidth - SAFE_MARGIN;
+    const chatPanel = document.querySelector('.chat-panel') as HTMLElement | null;
+    const chatRect = chatPanel
+      ? chatPanel.getBoundingClientRect()
+      : { left: 0, right: window.innerWidth, top: 0, bottom: window.innerHeight };
+
+    const minLeft = chatRect.left + SAFE_MARGIN;
+    const maxLeft = Math.max(minLeft, chatRect.right - pickerWidth - SAFE_MARGIN);
+    if (left > maxLeft) {
+      left = maxLeft;
     }
-    if (left < SAFE_MARGIN) {
-      left = SAFE_MARGIN;
+    if (left < minLeft) {
+      left = minLeft;
     }
     
     setPosition({ left, top, maxHeight });

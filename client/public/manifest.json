@@ -1,0 +1,16 @@
+{
+  "short_name": "Wibby",
+  "name": "Wibby — Private Space",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0B0E14",
+  "theme_color": "#7C3AED",
+  "display": "standalone"
+}

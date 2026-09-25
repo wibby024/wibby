@@ -7,7 +7,7 @@
   border-radius: 20px;
   padding: 4px 6px;
   box-shadow: var(--shadow-md);
-  z-index: 100;
+  z-index: 120;
   backdrop-filter: blur(10px);
   
   /* Initial animation state */

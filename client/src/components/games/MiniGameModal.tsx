@@ -4,6 +4,13 @@ import type { GameState, GameType } from '../../types/chat';
 import TicTacToe from './TicTacToe';
 import DotsAndBoxes from './DotsAndBoxes';
 import WordImposter from './WordImposter';
+import ConnectFour from './ConnectFour';
+import RockPaperScissors from './RockPaperScissors';
+import MemoryMatch from './MemoryMatch';
+import Gomoku from './Gomoku';
+import Checkers from './Checkers';
+import Battleship from './Battleship';
+import Reversi from './Reversi';
 import './MiniGameModal.css';
 
 interface MiniGameModalProps {
@@ -114,6 +121,34 @@ export default function MiniGameModal({
   const myScore = gameState?.scores[currentUserId] || 0;
   const partnerScore = gameState?.scores[partnerUid] || 0;
 
+  const getGameTitle = (type?: GameType) => {
+    const t = type || gameState?.gameType;
+    switch (t) {
+      case 'tictactoe':
+        return 'Tic-Tac-Toe';
+      case 'dotsandboxes':
+        return 'Dots & Boxes';
+      case 'wordimposter':
+        return 'Word Imposter';
+      case 'connectfour':
+        return 'Connect Four';
+      case 'rockpaperscissors':
+        return 'Rock Paper Scissors';
+      case 'memorymatch':
+        return 'Memory Match';
+      case 'gomoku':
+        return 'Gomoku (5-in-a-Row)';
+      case 'checkers':
+        return 'Checkers';
+      case 'battleship':
+        return 'Battleship';
+      case 'reversi':
+        return 'Reversi (Othello)';
+      default:
+        return 'Mini Games';
+    }
+  };
+
   // Render Game Content
   const renderGameBody = () => {
     if (!gameState) {
@@ -141,7 +176,7 @@ export default function MiniGameModal({
               <div className="game-option-icon">⚄</div>
               <div className="game-option-info">
                 <div className="game-option-name">Dots & Boxes</div>
-                <div className="game-option-desc">Connect lines and capture the most squares</div>
+                <div className="game-option-desc">Connect lines and capture squares</div>
               </div>
             </button>
 
@@ -153,7 +188,91 @@ export default function MiniGameModal({
               <div className="game-option-icon">🕵️</div>
               <div className="game-option-info">
                 <div className="game-option-name">Word Imposter</div>
-                <div className="game-option-desc">Crack the mystery word before 6 wrong turns</div>
+                <div className="game-option-desc">Crack the mystery word before 6 turns</div>
+              </div>
+            </button>
+
+            <button
+              className="game-option-btn"
+              onClick={() => handleStartGame('connectfour')}
+              type="button"
+            >
+              <div className="game-option-icon">🔴</div>
+              <div className="game-option-info">
+                <div className="game-option-name">Connect Four</div>
+                <div className="game-option-desc">Drop chips and align 4 in a row</div>
+              </div>
+            </button>
+
+            <button
+              className="game-option-btn"
+              onClick={() => handleStartGame('rockpaperscissors')}
+              type="button"
+            >
+              <div className="game-option-icon">✊</div>
+              <div className="game-option-info">
+                <div className="game-option-name">Rock Paper Scissors</div>
+                <div className="game-option-desc">Fast-paced duel, first to 3 wins</div>
+              </div>
+            </button>
+
+            <button
+              className="game-option-btn"
+              onClick={() => handleStartGame('memorymatch')}
+              type="button"
+            >
+              <div className="game-option-icon">🎴</div>
+              <div className="game-option-info">
+                <div className="game-option-name">Memory Match</div>
+                <div className="game-option-desc">Flip cards and match emoji pairs</div>
+              </div>
+            </button>
+
+            <button
+              className="game-option-btn"
+              onClick={() => handleStartGame('gomoku')}
+              type="button"
+            >
+              <div className="game-option-icon">⚫</div>
+              <div className="game-option-info">
+                <div className="game-option-name">Gomoku</div>
+                <div className="game-option-desc">Align 5 stones on a 9x9 grid</div>
+              </div>
+            </button>
+
+            <button
+              className="game-option-btn"
+              onClick={() => handleStartGame('checkers')}
+              type="button"
+            >
+              <div className="game-option-icon">🏁</div>
+              <div className="game-option-info">
+                <div className="game-option-name">Checkers</div>
+                <div className="game-option-desc">Jump opponent pieces & become King</div>
+              </div>
+            </button>
+
+            <button
+              className="game-option-btn"
+              onClick={() => handleStartGame('battleship')}
+              type="button"
+            >
+              <div className="game-option-icon">🚢</div>
+              <div className="game-option-info">
+                <div className="game-option-name">Battleship</div>
+                <div className="game-option-desc">Radar coordinates & sink the fleet</div>
+              </div>
+            </button>
+
+            <button
+              className="game-option-btn"
+              onClick={() => handleStartGame('reversi')}
+              type="button"
+            >
+              <div className="game-option-icon">☯️</div>
+              <div className="game-option-info">
+                <div className="game-option-name">Reversi (Othello)</div>
+                <div className="game-option-desc">Flank and flip disks to dominate</div>
               </div>
             </button>
           </div>
@@ -163,6 +282,7 @@ export default function MiniGameModal({
 
     // Waiting for partner response
     if (gameState.status === 'waiting') {
+      const title = getGameTitle(gameState.gameType);
       if (isHost) {
         return (
           <div className="game-invite-card">
@@ -170,14 +290,7 @@ export default function MiniGameModal({
             <h4 className="game-invite-title">Invitation Sent!</h4>
             <p className="game-invite-desc">
               Waiting for {partnerName} to accept your invitation to play{' '}
-              <strong>
-                {gameState.gameType === 'tictactoe'
-                  ? 'Tic-Tac-Toe'
-                  : gameState.gameType === 'dotsandboxes'
-                  ? 'Dots & Boxes'
-                  : 'Word Imposter'}
-              </strong>
-              ...
+              <strong>{title}</strong>...
             </p>
             <div className="game-invite-actions">
               <button className="game-btn secondary" onClick={handleCloseGame} type="button">
@@ -192,15 +305,7 @@ export default function MiniGameModal({
             <div className="game-invite-badge">🎮</div>
             <h4 className="game-invite-title">{partnerName} Challenged You!</h4>
             <p className="game-invite-desc">
-              Do you want to play a round of{' '}
-              <strong>
-                {gameState.gameType === 'tictactoe'
-                  ? 'Tic-Tac-Toe'
-                  : gameState.gameType === 'dotsandboxes'
-                  ? 'Dots & Boxes'
-                  : 'Word Imposter'}
-              </strong>
-              ?
+              Do you want to play a round of <strong>{title}</strong>?
             </p>
             <div className="game-invite-actions">
               <button className="game-btn secondary" onClick={handleDeclineInvite} type="button">
@@ -292,15 +397,119 @@ export default function MiniGameModal({
       );
     }
 
-    return null;
-  };
+    if (gameState.gameType === 'connectfour') {
+      return (
+        <ConnectFour
+          board={gameState.stateData.board}
+          winningCells={gameState.stateData.winningCells}
+          isMyTurn={isMyTurn}
+          mySymbol={gameState.players[currentUserId]?.symbol || 'X'}
+          players={gameState.players}
+          myUid={currentUserId}
+          onDropColumn={col => handleMove({ col })}
+          disabled={!isMyTurn}
+        />
+      );
+    }
 
-  const getGameTitle = () => {
-    if (!gameState) return 'Mini Games';
-    if (gameState.gameType === 'tictactoe') return 'Tic-Tac-Toe';
-    if (gameState.gameType === 'dotsandboxes') return 'Dots & Boxes';
-    if (gameState.gameType === 'wordimposter') return 'Word Imposter';
-    return 'Mini Games';
+    if (gameState.gameType === 'rockpaperscissors') {
+      return (
+        <RockPaperScissors
+          playerChoices={gameState.stateData.playerChoices || {}}
+          roundScores={gameState.stateData.roundScores || {}}
+          roundNumber={gameState.stateData.roundNumber || 1}
+          targetWins={gameState.stateData.targetWins || 3}
+          lastRoundResult={gameState.stateData.lastRoundResult || null}
+          myUid={currentUserId}
+          partnerUid={partnerUid}
+          partnerName={partnerName}
+          onChoice={choice => handleMove({ choice })}
+          disabled={false}
+        />
+      );
+    }
+
+    if (gameState.gameType === 'memorymatch') {
+      return (
+        <MemoryMatch
+          cards={gameState.stateData.cards || []}
+          flippedIndices={gameState.stateData.flippedIndices || []}
+          matchedIndices={gameState.stateData.matchedIndices || []}
+          lastMismatch={gameState.stateData.lastMismatch || null}
+          playerScores={gameState.stateData.playerScores || {}}
+          myUid={currentUserId}
+          partnerUid={partnerUid}
+          partnerName={partnerName}
+          isMyTurn={isMyTurn}
+          onCardClick={cardIndex => handleMove({ cardIndex })}
+          disabled={!isMyTurn}
+        />
+      );
+    }
+
+    if (gameState.gameType === 'gomoku') {
+      return (
+        <Gomoku
+          board={gameState.stateData.board || []}
+          winningLine={gameState.stateData.winningLine || null}
+          isMyTurn={isMyTurn}
+          mySymbol={gameState.players[currentUserId]?.symbol || 'X'}
+          onCellClick={cellIndex => handleMove({ cellIndex })}
+          disabled={!isMyTurn}
+        />
+      );
+    }
+
+    if (gameState.gameType === 'checkers') {
+      return (
+        <Checkers
+          board={gameState.stateData.board || []}
+          isHost={isHost}
+          isMyTurn={isMyTurn}
+          captured={gameState.stateData.captured}
+          myUid={currentUserId}
+          partnerUid={partnerUid}
+          partnerName={partnerName}
+          onMove={(from, to) => handleMove({ from, to })}
+          disabled={!isMyTurn}
+        />
+      );
+    }
+
+    if (gameState.gameType === 'battleship') {
+      return (
+        <Battleship
+          ships={gameState.stateData.ships || {}}
+          shots={gameState.stateData.shots || {}}
+          hitsCount={gameState.stateData.hitsCount || {}}
+          totalTargetHits={gameState.stateData.totalTargetHits || 7}
+          myUid={currentUserId}
+          partnerUid={partnerUid}
+          partnerName={partnerName}
+          isMyTurn={isMyTurn}
+          onFire={targetCell => handleMove({ targetCell })}
+          disabled={!isMyTurn}
+        />
+      );
+    }
+
+    if (gameState.gameType === 'reversi') {
+      return (
+        <Reversi
+          board={gameState.stateData.board || []}
+          counts={gameState.stateData.counts}
+          isHost={isHost}
+          isMyTurn={isMyTurn}
+          myUid={currentUserId}
+          partnerUid={partnerUid}
+          partnerName={partnerName}
+          onPlaceDisk={cellIndex => handleMove({ cellIndex })}
+          disabled={!isMyTurn}
+        />
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -355,7 +564,11 @@ export default function MiniGameModal({
         {/* Turn indicator */}
         {gameState && gameState.status === 'in_progress' && (
           <div className={`game-turn-banner ${isMyTurn ? 'is-me' : ''}`}>
-            {isMyTurn ? "👉 It's your turn!" : `⏳ Waiting for ${partnerName}...`}
+            {gameState.gameType === 'rockpaperscissors'
+              ? '⚡ Choose your move simultaneously!'
+              : isMyTurn
+              ? "👉 It's your turn!"
+              : `⏳ Waiting for ${partnerName}...`}
           </div>
         )}
 

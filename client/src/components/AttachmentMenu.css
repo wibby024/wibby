@@ -12,7 +12,7 @@
   animation: attachmentMenuPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  z-index: 1000;
+  z-index: 150;
   box-sizing: border-box;
 }
 

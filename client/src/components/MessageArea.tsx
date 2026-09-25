@@ -16,6 +16,7 @@ import LinkPlayerModal from './LinkPlayerModal';
 import MiniMapWidget from './MiniMapWidget';
 import { AuthenticatedImage, AuthenticatedVideo } from './AuthenticatedMedia';
 import { resolvePartnerName } from '../utils/partnerName';
+import { IconPin, IconStar, IconBan } from './common/Icons';
 import type { Message, PollData } from '../types/chat';
 import './MessageArea.css';
 
@@ -427,7 +428,7 @@ function MessageBubbleBody({
     const parts = msg.text.split(urlRegex);
 
     return (
-      <div className="message-content">
+      <div className="message-content" dir="ltr">
         {parts.map((part, idx) => {
           if (part.match(urlRegex)) {
             return (
@@ -587,8 +588,8 @@ function IncomingMessage({
                 onOpenLink={onOpenLink}
               />
               <div className="message-meta">
-                {msg.isPinned && <span className="badge-pin" title="Pinned message">📌</span>}
-                {isStarred && <span className="badge-star" title="Starred message">⭐</span>}
+                {msg.isPinned && <span className="badge-pin" title="Pinned message"><IconPin size={11} color="var(--wibby-primary)" /></span>}
+                {isStarred && <span className="badge-star" title="Starred message"><IconStar size={11} color="#FBBF24" /></span>}
                 <span className="message-time">{formatMessageTime(msg.createdAt)}</span>
               </div>
             </div>
@@ -1663,7 +1664,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       {pinnedMsg && (
         <div className="pinned-messages-banner" onClick={() => handleNavigateToReply(pinnedMsg._id)}>
           <div className="pinned-banner-content">
-            <span className="pinned-banner-icon">📌</span>
+            <span className="pinned-banner-icon"><IconPin size={16} color="var(--wibby-primary)" /></span>
             <div className="pinned-banner-text">
               <span className="pinned-banner-title">Pinned Message</span>
               <span className="pinned-banner-snippet">{pinnedMsg.text || pinnedMsg.fileName || pinnedMsg.poll?.question || 'Pinned content'}</span>
@@ -1821,7 +1822,9 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
                     {msg.deletedAt ? (
                       <div className="message-row">
                         <div className="message-content deleted-text">
-                          <span className="deleted-icon">🚫</span> This message was deleted
+                          <span className="deleted-icon" style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }}>
+                            <IconBan size={14} color="var(--wibby-text-muted)" />
+                          </span> This message was deleted
                         </div>
                         <div className="message-meta">
                           <span className="message-time">{formatMessageTime(msg.createdAt)}</span>
@@ -1884,8 +1887,8 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
                             onStopLiveLocation={handleStopLiveLocation}
                           />
                           <div className="message-meta">
-                            {msg.isPinned && <span className="badge-pin" title="Pinned message">📌</span>}
-                            {isStarred && <span className="badge-star" title="Starred message">⭐</span>}
+                            {msg.isPinned && <span className="badge-pin" title="Pinned message"><IconPin size={11} color="var(--wibby-primary)" /></span>}
+                            {isStarred && <span className="badge-star" title="Starred message"><IconStar size={11} color="#FBBF24" /></span>}
                             <span className="message-time">{formatMessageTime(msg.createdAt)}</span>
                             <span className="message-status">
                               {msg.status === 'failed' ? (

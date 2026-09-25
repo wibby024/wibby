@@ -1,5 +1,18 @@
 import React, { useRef, useEffect } from 'react';
 import './MessageContextMenu.css';
+import {
+  IconReply,
+  IconEdit,
+  IconCopy,
+  IconStar,
+  IconStarOutline,
+  IconPin,
+  IconForward,
+  IconInfo,
+  IconCheckSquare,
+  IconTrash,
+  IconBan
+} from './common/Icons';
 
 interface MessageContextMenuProps {
   x: number;
@@ -74,44 +87,54 @@ export default function MessageContextMenu({
     <div className="message-context-menu" ref={ref} style={{ position: 'fixed', top: 0, left: 0, zIndex: 1000, pointerEvents: 'none' }}>
       <div className="menu-options" style={{ ...menuStyle, pointerEvents: 'auto' }}>
         <button className="menu-item" aria-label="Reply" onClick={() => { onReply(); onClose(); }}>
-          ↩️ Reply
+          <IconReply size={16} />
+          <span>Reply</span>
         </button>
         {isOwn && onEdit && (
           <button className="menu-item" aria-label="Edit" onClick={() => { onEdit(); onClose(); }}>
-            ✏️ Edit
+            <IconEdit size={16} />
+            <span>Edit</span>
           </button>
         )}
         <button className="menu-item" aria-label="Copy" onClick={() => { onCopy(); onClose(); }}>
-          📋 Copy
+          <IconCopy size={16} />
+          <span>Copy</span>
         </button>
         {onStar && (
-          <button className="menu-item" aria-label="Star" onClick={() => { onStar(); onClose(); }}>
-            {isStarred ? '⭐ Unstar' : '☆ Star'}
+          <button className="menu-item" aria-label={isStarred ? 'Unstar' : 'Star'} onClick={() => { onStar(); onClose(); }}>
+            {isStarred ? <IconStar size={16} color="#FBBF24" /> : <IconStarOutline size={16} />}
+            <span>{isStarred ? 'Unstar' : 'Star'}</span>
           </button>
         )}
         {onPin && (
-          <button className="menu-item" aria-label="Pin" onClick={() => { onPin(); onClose(); }}>
-            {isPinned ? '📌 Unpin' : '📌 Pin'}
+          <button className="menu-item" aria-label={isPinned ? 'Unpin' : 'Pin'} onClick={() => { onPin(); onClose(); }}>
+            <IconPin size={16} color={isPinned ? 'var(--wibby-primary)' : 'currentColor'} />
+            <span>{isPinned ? 'Unpin' : 'Pin'}</span>
           </button>
         )}
         <button className="menu-item" aria-label="Forward" onClick={() => { onForward(); onClose(); }}>
-          ↗️ Forward
+          <IconForward size={16} />
+          <span>Forward</span>
         </button>
         {onInfo && (
           <button className="menu-item" aria-label="Message info" onClick={() => { onInfo(); onClose(); }}>
-            ℹ️ Message Info
+            <IconInfo size={16} />
+            <span>Message Info</span>
           </button>
         )}
         <button className="menu-item" aria-label="Select" onClick={() => { onSelect(); onClose(); }}>
-          ☑️ Select
+          <IconCheckSquare size={16} />
+          <span>Select</span>
         </button>
         <div className="menu-divider" />
         <button className="menu-item danger" aria-label="Delete for me" onClick={() => { onDelete(); onClose(); }}>
-          🗑️ Delete for me
+          <IconTrash size={16} color="#ef4444" />
+          <span>Delete for me</span>
         </button>
         {onDeleteForEveryone && (
           <button className="menu-item danger" aria-label="Delete for everyone" onClick={() => { onDeleteForEveryone(); onClose(); }}>
-            🚫 Delete for everyone
+            <IconBan size={16} color="#ef4444" />
+            <span>Delete for everyone</span>
           </button>
         )}
       </div>

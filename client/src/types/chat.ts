@@ -86,6 +86,18 @@ export interface Message {
   linkPreview?: LinkPreviewData | null;
 }
 
+export interface MusicNoteTrack {
+  id: string;
+  title: string;
+  artist: string;
+  genre?: string;
+  artworkUrl?: string;
+  audioUrl?: string;
+  duration?: number;
+  clipStart?: number;
+  clipDuration?: number;
+}
+
 export interface Story {
   _id: string;
   conversationId: string;
@@ -98,6 +110,7 @@ export interface Story {
   backgroundColor?: string;
   textStyle?: { font?: string; color?: string };
   duration?: number;
+  musicNote?: MusicNoteTrack | null;
   viewers: Array<{ uid: string; viewedAt: string }>;
   reactions: Array<{ uid: string; emoji: string; createdAt: string }>;
   createdAt: string;
@@ -127,7 +140,10 @@ export type ThemeFamily =
   | 'ocean'
   | 'emerald'
   | 'rose'
-  | 'midnight';
+  | 'midnight'
+  | 'cyberpunk'
+  | 'sage'
+  | 'monochrome';
 
 export type ChatThemePreset = 
   | ThemeFamily
@@ -146,7 +162,17 @@ export type ChatThemePreset =
   | 'rose-quartz' 
   | 'slate-minimal';
 
-export type GameType = 'tictactoe' | 'dotsandboxes' | 'wordimposter';
+export type GameType =
+  | 'tictactoe'
+  | 'dotsandboxes'
+  | 'wordimposter'
+  | 'connectfour'
+  | 'rockpaperscissors'
+  | 'memorymatch'
+  | 'gomoku'
+  | 'checkers'
+  | 'battleship'
+  | 'reversi';
 
 export interface GameState {
   gameId: string;

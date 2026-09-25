@@ -1,0 +1,515 @@
+/* ============================================
+   Wibby — Music Note Picker & Clip Trimmer Modal
+   ============================================ */
+
+.music-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5200;
+  padding: 16px;
+  animation: pickerFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pickerFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.music-picker-modal {
+  width: 100%;
+  max-width: 480px;
+  background: var(--wibby-surface, #1e2029);
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.1));
+  border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  overflow: hidden;
+  color: var(--wibby-text, #ffffff);
+  animation: pickerScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pickerScaleIn {
+  from { transform: scale(0.95) translateY(8px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* Header */
+.music-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.08));
+}
+
+.music-picker-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.music-picker-icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--wibby-primary-subtle, rgba(124, 58, 237, 0.15));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.music-picker-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.music-picker-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--wibby-text-secondary, #94a3b8);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.music-picker-close-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+/* Search */
+.music-picker-search {
+  margin: 14px 18px 8px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.music-picker-search .search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--wibby-text-secondary, #94a3b8);
+  pointer-events: none;
+}
+
+.music-picker-search input {
+  width: 100%;
+  padding: 10px 36px 10px 36px;
+  background: var(--wibby-bg-subtle, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.1));
+  border-radius: 12px;
+  color: var(--wibby-text, #fff);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.music-picker-search input:focus {
+  border-color: var(--wibby-primary, #7c3aed);
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--wibby-text-secondary, #94a3b8);
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* Track List */
+.music-picker-track-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.music-picker-empty {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--wibby-text-secondary, #94a3b8);
+  font-size: 0.9rem;
+}
+
+.music-track-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.music-track-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.music-track-item.is-playing {
+  background: var(--wibby-primary-subtle, rgba(124, 58, 237, 0.12));
+}
+
+.track-art-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.track-art-emoji {
+  font-size: 1.25rem;
+}
+
+.track-play-hover {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.music-track-item:hover .track-play-hover,
+.music-track-item.is-playing .track-play-hover {
+  opacity: 1;
+}
+
+.track-info {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.track-title {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--wibby-text, #ffffff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--wibby-text-secondary, #94a3b8);
+  margin-top: 2px;
+}
+
+.track-artist {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-dot {
+  opacity: 0.5;
+}
+
+.track-genre {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.track-select-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.1));
+  color: var(--wibby-text, #ffffff);
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.track-select-btn:hover {
+  background: var(--wibby-primary, #7c3aed);
+  border-color: var(--wibby-primary, #7c3aed);
+  color: #ffffff;
+}
+
+/* ============================================
+   Clip Trimmer View
+   ============================================ */
+
+.music-picker-trimmer-view {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.selected-track-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: var(--wibby-bg-subtle, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.08));
+  border-radius: 14px;
+}
+
+.selected-track-art {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.selected-track-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.selected-title {
+  display: block;
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selected-artist {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--wibby-text-secondary, #94a3b8);
+  margin-top: 1px;
+}
+
+.selected-genre {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--wibby-text-secondary, #cbd5e1);
+}
+
+.change-track-btn {
+  background: transparent;
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.15));
+  color: var(--wibby-text-secondary, #94a3b8);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.change-track-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+/* Trimmer Section */
+.trimmer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.06));
+  padding: 16px;
+  border-radius: 14px;
+}
+
+.trimmer-labels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--wibby-text-secondary, #94a3b8);
+}
+
+.clip-time-badge {
+  background: var(--wibby-primary-subtle, rgba(124, 58, 237, 0.15));
+  color: var(--wibby-primary-light, #a78bfa);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.trimmer-slider-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trimmer-slider {
+  width: 100%;
+  accent-color: var(--wibby-primary, #7c3aed);
+  cursor: pointer;
+}
+
+.trimmer-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--wibby-text-secondary, #64748b);
+}
+
+/* Duration toggle */
+.clip-duration-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 4px;
+}
+
+.duration-label {
+  font-size: 0.82rem;
+  color: var(--wibby-text-secondary, #94a3b8);
+}
+
+.duration-pill-group {
+  display: flex;
+  gap: 8px;
+}
+
+.duration-pill {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.1));
+  color: var(--wibby-text-secondary, #94a3b8);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.duration-pill.active {
+  background: var(--wibby-primary, #7c3aed);
+  border-color: var(--wibby-primary, #7c3aed);
+  color: #ffffff;
+}
+
+/* Playback bar */
+.trimmer-playback-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.trimmer-play-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--wibby-primary, #7c3aed);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.1s ease;
+}
+
+.trimmer-play-btn:hover {
+  transform: scale(1.05);
+}
+
+.trimmer-progress-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.trimmer-progress-fill {
+  height: 100%;
+  background: var(--wibby-primary, #7c3aed);
+  border-radius: 3px;
+  transition: width 0.1s linear;
+}
+
+.trimmer-status {
+  font-size: 0.78rem;
+  color: var(--wibby-text-secondary, #94a3b8);
+  white-space: nowrap;
+}
+
+/* Footer */
+.music-picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.picker-btn-cancel {
+  background: transparent;
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.15));
+  color: var(--wibby-text, #ffffff);
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.picker-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.picker-btn-attach {
+  background: var(--wibby-primary, #7c3aed);
+  border: none;
+  color: #ffffff;
+  padding: 10px 22px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px var(--wibby-primary-glow, rgba(124, 58, 237, 0.3));
+  transition: all 0.15s ease;
+}
+
+.picker-btn-attach:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}

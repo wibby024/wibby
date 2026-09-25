@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { formatFileSize, validateClientFile, ACCEPT_PATTERNS, type MediaCategory } from '../config/media';
 import { uploadMedia, type UploadProgressEvent, type UploadMediaHandle } from '../services/mediaService';
 import { generateUUID } from '../utils/uuid';
@@ -270,7 +271,7 @@ export default function MediaPreviewModal({
 
   const totalBytes = items.reduce((acc, item) => acc + item.file.size, 0);
 
-  return (
+  return createPortal(
     <div className="media-preview-overlay" role="dialog" aria-modal="true" aria-label="Attachments Preview">
       <div className="media-preview-container">
         {/* Hidden File Input for Add More */}
@@ -534,6 +535,7 @@ export default function MediaPreviewModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

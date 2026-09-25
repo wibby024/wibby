@@ -13,16 +13,22 @@ function formatCallDuration(seconds: number): string {
   return `${paddedMins}:${paddedSecs}`;
 }
 
+const PIP_CONFIG = {
+  mobile: { width: 108, height: 156, bottomOffset: 96, rightOffset: 12 },
+  laptop: { width: 180, height: 112, bottomOffset: 24, rightOffset: 24 }
+} as const;
+
 const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   viewMode,
+  setViewMode,
   isScreenSharing,
   isRemoteScreenSharing,
   isScreenshareFullscreen,
-  setIsScreenshareFullscreen,
+  setIsScreenshareFullscreen: _setIsScreenshareFullscreen,
   hideFloatingTiles,
-  setHideFloatingTiles,
-  toggleFullscreen,
-  isFullscreen,
+  setHideFloatingTiles: _setHideFloatingTiles,
+  toggleFullscreen: _toggleFullscreen,
+  isFullscreen: _isFullscreen,
   focusedParticipant,
   setFocusedParticipant,
   remoteVideoRef,
@@ -43,9 +49,11 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   initial,
   avatar,
   flipCamera,
-  currentFacingMode
+  currentFacingMode,
+  stopScreenSharing
 }: {
   viewMode: 'grid' | 'stacked' | 'pip' | 'screenshare';
+  setViewMode: React.Dispatch<React.SetStateAction<'stacked' | 'pip' | 'screenshare'>>;
   isScreenSharing: boolean;
   isRemoteScreenSharing: boolean;
   isScreenshareFullscreen: boolean;
@@ -75,14 +83,13 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   avatar?: string;
   flipCamera: () => Promise<boolean>;
   currentFacingMode: 'user' | 'environment';
+  stopScreenSharing?: () => Promise<void> | void;
 }) {
   const localPanelRef = useRef<HTMLDivElement | null>(null);
   const posRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
   const hasDraggedRef = useRef(false);
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; pipX: number; pipY: number } | null>(null);
-  const [remoteAspect, setRemoteAspect] = useState<number>(16 / 9);
-  const [localAspect, setLocalAspect] = useState<number>(16 / 9);
   const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
 
   useEffect(() => {
@@ -93,81 +100,22 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
     return () => window.removeEventListener('resize', handleWinResize);
   }, []);
 
-  // Dynamic aspect ratio calculation from remote camera stream
-  useEffect(() => {
-    const videoEl = remoteVideoRef.current;
-    if (!videoEl) return;
-    const updateAspect = () => {
-      if (videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
-        setRemoteAspect(videoEl.videoWidth / videoEl.videoHeight);
-      }
-    };
-    videoEl.addEventListener('loadedmetadata', updateAspect);
-    videoEl.addEventListener('resize', updateAspect);
-    videoEl.addEventListener('timeupdate', updateAspect);
-    videoEl.addEventListener('play', updateAspect);
-    updateAspect();
-    return () => {
-      videoEl.removeEventListener('loadedmetadata', updateAspect);
-      videoEl.removeEventListener('resize', updateAspect);
-      videoEl.removeEventListener('timeupdate', updateAspect);
-      videoEl.removeEventListener('play', updateAspect);
-    };
-  }, [remoteVideoRef]);
-
-  // Dynamic aspect ratio calculation from local camera stream
-  useEffect(() => {
-    const videoEl = localVideoRef.current;
-    if (!videoEl) return;
-    const updateAspect = () => {
-      if (videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
-        setLocalAspect(videoEl.videoWidth / videoEl.videoHeight);
-      }
-    };
-    videoEl.addEventListener('loadedmetadata', updateAspect);
-    videoEl.addEventListener('resize', updateAspect);
-    videoEl.addEventListener('timeupdate', updateAspect);
-    videoEl.addEventListener('play', updateAspect);
-    updateAspect();
-    return () => {
-      videoEl.removeEventListener('loadedmetadata', updateAspect);
-      videoEl.removeEventListener('resize', updateAspect);
-      videoEl.removeEventListener('timeupdate', updateAspect);
-      videoEl.removeEventListener('play', updateAspect);
-    };
-  }, [localVideoRef]);
-
-  // Update on connection state changes
-  useEffect(() => {
-    if (isConnected) {
-      if (remoteVideoRef.current && remoteVideoRef.current.videoWidth > 0 && remoteVideoRef.current.videoHeight > 0) {
-        setRemoteAspect(remoteVideoRef.current.videoWidth / remoteVideoRef.current.videoHeight);
-      }
-      if (localVideoRef.current && localVideoRef.current.videoWidth > 0 && localVideoRef.current.videoHeight > 0) {
-        setLocalAspect(localVideoRef.current.videoWidth / localVideoRef.current.videoHeight);
-      }
-    }
-  }, [isConnected, remoteVideoRef, localVideoRef]);
-
   const isLocalPip = viewMode === 'pip' || focusedParticipant === 'remote';
 
   // Handle positioning when entering PiP mode vs Stacked mode
   useEffect(() => {
     if (!localPanelRef.current) return;
     if (isLocalPip) {
-      const rect = localPanelRef.current.getBoundingClientRect();
       const mobileActive = window.innerWidth <= 768;
-      const pipW = mobileActive ? 108 : (rect.width || 320);
-      const pipH = mobileActive ? 156 : (rect.height || 180);
-      const bottomOffset = mobileActive ? 96 : 28;
-      const rightOffset = mobileActive ? 12 : 28;
-      const safeX = Math.max(10, window.innerWidth - pipW - rightOffset);
-      const safeY = Math.max(mobileActive ? 64 : 12, window.innerHeight - pipH - bottomOffset);
+      const dims = mobileActive ? PIP_CONFIG.mobile : PIP_CONFIG.laptop;
+      const safeX = Math.max(8, window.innerWidth - dims.width - dims.rightOffset);
+      const safeY = Math.max(mobileActive ? 64 : 8, window.innerHeight - dims.height - dims.bottomOffset);
       posRef.current = { x: safeX, y: safeY };
       localPanelRef.current.style.transform = `translate3d(${safeX}px, ${safeY}px, 0)`;
     } else {
       // In Grid or Stacked mode, or when local is focused, clear inline transform so it naturally docks
       localPanelRef.current.style.transform = '';
+      posRef.current = null;
     }
   }, [isLocalPip, viewMode, focusedParticipant]);
 
@@ -175,16 +123,12 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   useEffect(() => {
     const handleResize = () => {
       if (!isLocalPip || !localPanelRef.current || !posRef.current) return;
-      const rect = localPanelRef.current.getBoundingClientRect();
       const mobileActive = window.innerWidth <= 768;
-      const pipW = mobileActive ? 108 : (rect.width || 320);
-      const pipH = mobileActive ? 156 : (rect.height || 180);
-      const minX = 10;
-      const minY = mobileActive ? 64 : 12;
-      const bottomOffset = mobileActive ? 96 : 12;
-      const rightOffset = mobileActive ? 12 : 12;
-      const maxX = Math.max(minX, window.innerWidth - pipW - rightOffset);
-      const maxY = Math.max(minY, window.innerHeight - pipH - bottomOffset);
+      const dims = mobileActive ? PIP_CONFIG.mobile : PIP_CONFIG.laptop;
+      const minX = 8;
+      const minY = mobileActive ? 64 : 8;
+      const maxX = Math.max(minX, window.innerWidth - dims.width - (mobileActive ? 12 : 16));
+      const maxY = Math.max(minY, window.innerHeight - dims.height - (mobileActive ? 84 : 16));
       const clampedX = Math.max(minX, Math.min(posRef.current.x, maxX));
       const clampedY = Math.max(minY, Math.min(posRef.current.y, maxY));
       posRef.current = { x: clampedX, y: clampedY };
@@ -193,6 +137,25 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [isLocalPip]);
+
+  // Global safety net for pointer releases while dragging
+  useEffect(() => {
+    const handleGlobalPointerUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        dragStartRef.current = null;
+        if (localPanelRef.current) {
+          localPanelRef.current.classList.remove('is-dragging');
+        }
+      }
+    };
+    window.addEventListener('pointerup', handleGlobalPointerUp);
+    window.addEventListener('pointercancel', handleGlobalPointerUp);
+    return () => {
+      window.removeEventListener('pointerup', handleGlobalPointerUp);
+      window.removeEventListener('pointercancel', handleGlobalPointerUp);
+    };
+  }, []);
 
   // Drag handlers for PiP mode (zero React re-renders during dragging)
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -207,15 +170,11 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {}
 
-    const rect = localPanelRef.current.getBoundingClientRect();
     const mobileActive = window.innerWidth <= 768;
-    const pipW = mobileActive ? 108 : (rect.width || 320);
-    const pipH = mobileActive ? 156 : (rect.height || 180);
-    const bottomOffset = mobileActive ? 96 : 28;
-    const rightOffset = mobileActive ? 12 : 28;
+    const dims = mobileActive ? PIP_CONFIG.mobile : PIP_CONFIG.laptop;
     const currentPos = posRef.current || {
-      x: Math.max(10, window.innerWidth - pipW - rightOffset),
-      y: Math.max(mobileActive ? 64 : 12, window.innerHeight - pipH - bottomOffset)
+      x: Math.max(8, window.innerWidth - dims.width - dims.rightOffset),
+      y: Math.max(mobileActive ? 64 : 8, window.innerHeight - dims.height - dims.bottomOffset)
     };
 
     dragStartRef.current = {
@@ -234,24 +193,20 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
 
     const deltaX = e.clientX - dragStartRef.current.pointerX;
     const deltaY = e.clientY - dragStartRef.current.pointerY;
-    if (Math.hypot(deltaX, deltaY) > 6) {
+    if (Math.hypot(deltaX, deltaY) > 3) {
       hasDraggedRef.current = true;
     }
 
     const targetX = dragStartRef.current.pipX + deltaX;
     const targetY = dragStartRef.current.pipY + deltaY;
 
-    const rect = localPanelRef.current.getBoundingClientRect();
     const mobileActive = window.innerWidth <= 768;
-    const pipW = mobileActive ? 108 : (rect.width || 320);
-    const pipH = mobileActive ? 156 : (rect.height || 180);
+    const dims = mobileActive ? PIP_CONFIG.mobile : PIP_CONFIG.laptop;
 
-    const minX = 10;
-    const minY = mobileActive ? 64 : 12;
-    const bottomOffset = mobileActive ? 96 : 12;
-    const rightOffset = mobileActive ? 12 : 12;
-    const maxX = Math.max(minX, window.innerWidth - pipW - rightOffset);
-    const maxY = Math.max(minY, window.innerHeight - pipH - bottomOffset);
+    const minX = 8;
+    const minY = mobileActive ? 64 : 8;
+    const maxX = Math.max(minX, window.innerWidth - dims.width - (mobileActive ? 12 : 16));
+    const maxY = Math.max(minY, window.innerHeight - dims.height - (mobileActive ? 84 : 16));
 
     const clampedX = Math.max(minX, Math.min(targetX, maxX));
     const clampedY = Math.max(minY, Math.min(targetY, maxY));
@@ -276,19 +231,21 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
     if ((e.target as HTMLElement).closest('button')) return;
     // On mobile touch viewports, tapping video should not trigger accidental layout swaps
     if (isMobile) return;
-    setFocusedParticipant(prev => (prev === 'remote' ? 'none' : 'remote'));
+    if (viewMode === 'pip' || focusedParticipant === 'remote') {
+      setViewMode('stacked');
+      setFocusedParticipant('none');
+    } else {
+      setViewMode('pip');
+      setFocusedParticipant('none');
+    }
   };
 
   const handleLocalClick = (e: React.MouseEvent) => {
     if (hasDraggedRef.current) return;
     if ((e.target as HTMLElement).closest('button')) return;
-    // On mobile touch viewports, tapping video should not trigger accidental layout swaps
-    if (isMobile) {
-      if (isLocalPip) {
-        setFocusedParticipant(prev => (prev === 'remote' ? 'none' : 'remote'));
-      }
-      return;
-    }
+    // When in PiP mode (small popup), clicking the popup should NOT disrupt or hijack the other user's video!
+    if (isLocalPip) return;
+    if (isMobile) return;
     setFocusedParticipant(prev => (prev === 'local' ? 'none' : 'local'));
   };
 
@@ -307,99 +264,31 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
         <div className="call-stage-presentation-frame">
           {/* Main Hero: Shared Screen (Uncropped, Crystal 1080p, Black Background, Never Mirrored) */}
           <div className="call-screenshare-main">
-            {/* Top Left Badge */}
-            <div className="call-screenshare-badge-bar">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="3" width="20" height="14" rx="2" />
-                <line x1="8" y1="21" x2="16" y2="21" />
-                <line x1="12" y1="17" x2="12" y2="21" />
-              </svg>
-              <span>{isRemoteSharing ? `${partnerName}'s Screen` : isLocalSharing ? 'Your Screen (Sharing)' : 'Screen Share'}</span>
-              <span className="call-screenshare-hd-pill">1080p Crystal Clear</span>
-            </div>
-
-            {/* Top Right Actions: Toggle Full Screen / Sidebar, Hide/Show Tiles, Browser Fullscreen */}
-            <div className="call-screenshare-top-actions">
-              <button
-                type="button"
-                className="call-screenshare-action-btn"
-                onClick={() => setIsScreenshareFullscreen(prev => !prev)}
-                title={isScreenshareFullscreen ? 'Show both users on right' : 'Expand screen to full view'}
-                aria-label={isScreenshareFullscreen ? 'Show both users on right' : 'Expand screen to full view'}
-              >
-                {isScreenshareFullscreen ? (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="3" width="13" height="18" rx="2" />
-                      <rect x="17" y="3" width="5" height="8" rx="1.5" />
-                      <rect x="17" y="13" width="5" height="8" rx="1.5" />
-                    </svg>
-                    <span>Sidebar View</span>
-                  </>
-                ) : (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="15 3 21 3 21 9" />
-                      <polyline points="9 21 3 21 3 15" />
-                      <line x1="21" y1="3" x2="14" y2="10" />
-                      <line x1="3" y1="21" x2="10" y2="14" />
-                    </svg>
-                    <span>Full Screen</span>
-                  </>
-                )}
-              </button>
-
-              {isScreenshareFullscreen && setHideFloatingTiles && (
+            {/* Clean Screen-Share HUD (Compact, Non-intrusive) */}
+            <div className="call-screenshare-hud">
+              <div className="call-screenshare-hud-info">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="2" y="3" width="20" height="14" rx="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+                <span className="call-screenshare-hud-text">
+                  {isLocalSharing ? "You're sharing" : `${partnerName} is sharing`}
+                </span>
+              </div>
+              {isLocalSharing && stopScreenSharing && (
                 <button
                   type="button"
-                  className={`call-screenshare-action-btn ${hideFloatingTiles ? 'active' : ''}`}
-                  onClick={() => setHideFloatingTiles(prev => !prev)}
-                  title={hideFloatingTiles ? 'Show floating user tiles' : 'Hide floating user tiles for 100% unobstructed view'}
-                  aria-label={hideFloatingTiles ? 'Show floating user tiles' : 'Hide floating user tiles'}
+                  className="call-screenshare-hud-stop-btn"
+                  onClick={() => stopScreenSharing()}
+                  title="Stop sharing"
+                  aria-label="Stop sharing"
                 >
-                  {hideFloatingTiles ? (
-                    <>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                      <span>Show Tiles</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                        <line x1="1" y1="1" x2="23" y2="23" />
-                      </svg>
-                      <span>Hide Tiles</span>
-                    </>
-                  )}
-                </button>
-              )}
-
-              {toggleFullscreen && (
-                <button
-                  type="button"
-                  className="call-screenshare-action-btn icon-only"
-                  onClick={toggleFullscreen}
-                  title={isFullscreen ? 'Exit browser fullscreen' : 'Browser fullscreen'}
-                  aria-label={isFullscreen ? 'Exit browser fullscreen' : 'Browser fullscreen'}
-                >
-                  {isFullscreen ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="4 14 10 14 10 20" />
-                      <polyline points="20 10 14 10 14 4" />
-                      <line x1="14" y1="10" x2="21" y2="3" />
-                      <line x1="3" y1="21" x2="10" y2="14" />
-                    </svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="15 3 21 3 21 9" />
-                      <polyline points="9 21 3 21 3 15" />
-                      <line x1="21" y1="3" x2="14" y2="10" />
-                      <line x1="3" y1="21" x2="10" y2="14" />
-                    </svg>
-                  )}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="18" x2="18" y2="6" />
+                  </svg>
+                  <span>Stop</span>
                 </button>
               )}
             </div>
@@ -603,14 +492,13 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               ? 'is-pip-window'
               : ''
           }`}
-          style={focusedParticipant === 'remote' ? { aspectRatio: `${remoteAspect}` } : undefined}
           onClick={handleRemoteClick}
           aria-label={`Live video of ${partnerName}`}
         >
           {/* Focus Hint on Hover */}
-          <div className={`call-panel-focus-hint ${focusedParticipant === 'remote' ? 'exit' : ''}`}>
+          <div className={`call-panel-focus-hint ${viewMode === 'pip' || focusedParticipant === 'remote' ? 'exit' : ''}`}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              {focusedParticipant === 'remote' ? (
+              {viewMode === 'pip' || focusedParticipant === 'remote' ? (
                 <>
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
@@ -624,7 +512,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                 </>
               )}
             </svg>
-            <span>{focusedParticipant === 'remote' ? 'Exit full screen' : 'Click for full screen'}</span>
+            <span>{viewMode === 'pip' || focusedParticipant === 'remote' ? 'Exit full screen' : 'Click for full screen'}</span>
           </div>
 
           {/* Layer 1: Ambient live video background (Same live stream, cover, subdued, NO blur) */}
@@ -704,7 +592,6 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               ? 'is-pip-window'
               : 'is-stacked-tile'
           }`}
-          style={focusedParticipant === 'local' ? { aspectRatio: `${localAspect}` } : undefined}
           onClick={handleLocalClick}
           onPointerDown={isLocalPip ? handlePointerDown : undefined}
           onPointerMove={isLocalPip ? handlePointerMove : undefined}
@@ -765,7 +652,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               </div>
               <h3 className="call-video-placeholder-name">You</h3>
               <span className="call-video-placeholder-status">
-                {isCameraUnavailable ? '🔴 Camera unavailable' : 'Camera is turned off'}
+                {isCameraUnavailable ? 'Camera unavailable' : 'Camera is turned off'}
               </span>
             </div>
           )}
@@ -1027,6 +914,11 @@ export default function ActiveCallPanel() {
         if (containerRef.current?.requestFullscreen) {
           await containerRef.current.requestFullscreen();
           setIsFullscreen(true);
+          // If in stacked mode, switch layout to full screen (pip)
+          if (viewMode === 'stacked') {
+            setViewMode('pip');
+            setFocusedParticipant('none');
+          }
         }
       } else {
         if (document.exitFullscreen) {
@@ -1068,6 +960,7 @@ export default function ActiveCallPanel() {
       >
         <MemoizedVideoStage
           viewMode={viewMode}
+          setViewMode={setViewMode}
           isScreenSharing={isScreenSharing}
           isRemoteScreenSharing={isRemoteScreenSharing}
           isScreenshareFullscreen={isScreenshareFullscreen}
@@ -1097,6 +990,7 @@ export default function ActiveCallPanel() {
           avatar={activeCall.remoteUser.avatar || undefined}
           flipCamera={flipCamera}
           currentFacingMode={currentFacingMode}
+          stopScreenSharing={stopScreenSharing}
         />
 
           {/* Top Bar Header (Auto-Hiding) */}
@@ -1145,12 +1039,15 @@ export default function ActiveCallPanel() {
             </div>
 
             <div className="call-video-top-actions">
-              {/* If focused, show Split View button to exit full video */}
-              {focusedParticipant !== 'none' && (
+              {/* If full screen or focused, show Split View button to exit full video */}
+              {(viewMode === 'pip' || focusedParticipant !== 'none') && (
                 <button
                   type="button"
                   className="call-restore-split-btn"
-                  onClick={() => setFocusedParticipant('none')}
+                  onClick={() => {
+                    setViewMode('stacked');
+                    setFocusedParticipant('none');
+                  }}
                   title="Exit full video and return to split view"
                   aria-label="Return to split view"
                 >
@@ -1228,33 +1125,39 @@ export default function ActiveCallPanel() {
             </div>
           )}
 
-          {/* Connection Unstable Notification Banner */}
-          {isConnected && callQuality === 'poor' && (
-            <div className="call-status-unstable-pill" role="status">
-              <span className="call-status-toast-dot yellow">●</span>
-              <span>Connection unstable — Adjusting video…</span>
-            </div>
-          )}
-
           {/* Microphone Unavailable Alert */}
           {activeCall?.error && activeCall.error.toLowerCase().includes('mic') && (
             <div className="call-status-toast error" role="alert">
-              <span>🔴 Microphone unavailable</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>Microphone unavailable</span>
             </div>
           )}
-
 
           {/* Remote Mute Notification Banner (Req 16) */}
           {remoteMuteNotification && (
             <div className="call-status-toast muted-toast" role="status">
-              <span>🎙️ {remoteMuteNotification}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="1" y1="1" x2="23" y2="23" />
+                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+              </svg>
+              <span>{remoteMuteNotification}</span>
             </div>
           )}
 
           {/* Screen Share Feedback Toast Notification */}
           {screenShareNotice && (
             <div className="call-status-toast" role="status">
-              <span>🖥️ {screenShareNotice}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
+              <span>{screenShareNotice}</span>
             </div>
           )}
 

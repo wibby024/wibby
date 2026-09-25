@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { resolvePartnerName } from '../utils/partnerName';
 import WibbyLogo from './WibbyLogo';
+import { IconLogOut } from './common/Icons';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -231,7 +232,9 @@ export default function Sidebar({
       {showLogoutConfirm && (
         <div className="logout-confirm-overlay" role="dialog" aria-modal="true" onClick={() => setShowLogoutConfirm(false)}>
           <div className="logout-confirm-card" onClick={e => e.stopPropagation()}>
-            <div className="logout-confirm-icon">🚪</div>
+            <div className="logout-confirm-icon">
+              <IconLogOut size={28} color="var(--wibby-primary)" />
+            </div>
             <h3 className="logout-confirm-title">Log out of Wibby?</h3>
             <p className="logout-confirm-desc">Are you sure you want to log out? You will need to sign in again to access your messages.</p>
             <div className="logout-confirm-actions">

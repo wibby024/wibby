@@ -8,6 +8,17 @@ import { formatFileSize } from '../config/media';
 import { e2eeService } from '../services/e2eeService';
 import { notificationService, NOTIFICATION_TONES, type NotificationTone } from '../services/notificationService';
 import { resolvePartnerName } from '../utils/partnerName';
+import {
+  IconPhone,
+  IconVideo,
+  IconPopcorn,
+  IconSearch,
+  IconStar,
+  IconSettings,
+  IconDocument,
+  IconLink,
+  IconImage
+} from './common/Icons';
 import './ChatInfoDrawer.css';
 
 interface ChatInfoDrawerProps {
@@ -41,7 +52,10 @@ const THEME_PRESETS: Array<{ id: ChatThemePreset; name: string; gradient: string
   { id: 'ocean', name: 'Ocean Breeze', gradient: 'linear-gradient(135deg, #06B6D4, #3B82F6)' },
   { id: 'emerald', name: 'Emerald Forest', gradient: 'linear-gradient(135deg, #059669, #047857)' },
   { id: 'rose', name: 'Rose Quartz', gradient: 'linear-gradient(135deg, #DB2777, #9D174D)' },
-  { id: 'midnight', name: 'Midnight Slate', gradient: 'linear-gradient(135deg, #6366F1, #1E1B4B)' }
+  { id: 'midnight', name: 'Midnight Slate', gradient: 'linear-gradient(135deg, #6366F1, #1E1B4B)' },
+  { id: 'cyberpunk', name: 'Neon Cyberpunk', gradient: 'linear-gradient(135deg, #00F0FF, #FF007A)' },
+  { id: 'sage', name: 'Calm Sage', gradient: 'linear-gradient(135deg, #10B981, #047857)' },
+  { id: 'monochrome', name: 'Monochrome Slate', gradient: 'linear-gradient(135deg, #64748B, #1E293B)' }
 ];
 
 export default function ChatInfoDrawer({
@@ -247,19 +261,19 @@ export default function ChatInfoDrawer({
         {/* Quick Action Grid */}
         <div className="chat-info-quick-actions">
           <button className="chat-quick-btn" onClick={onStartVoiceCall} title="Voice call">
-            <span className="quick-btn-icon">📞</span>
+            <span className="quick-btn-icon"><IconPhone size={20} /></span>
             <span className="quick-btn-txt">Voice</span>
           </button>
           <button className="chat-quick-btn" onClick={onStartVideoCall} title="Video call">
-            <span className="quick-btn-icon">🎥</span>
+            <span className="quick-btn-icon"><IconVideo size={20} /></span>
             <span className="quick-btn-txt">Video</span>
           </button>
           <button className="chat-quick-btn" onClick={onStartTogether} title="Watch Together">
-            <span className="quick-btn-icon">🍿</span>
+            <span className="quick-btn-icon"><IconPopcorn size={20} /></span>
             <span className="quick-btn-txt">Together</span>
           </button>
           <button className="chat-quick-btn" onClick={onOpenSearch} title="Search in chat">
-            <span className="quick-btn-icon">🔍</span>
+            <span className="quick-btn-icon"><IconSearch size={20} /></span>
             <span className="quick-btn-txt">Search</span>
           </button>
         </div>
@@ -276,13 +290,22 @@ export default function ChatInfoDrawer({
             Links
           </button>
           <button className={`info-nav-tab ${activeTab === 'starred' ? 'active' : ''}`} onClick={() => setActiveTab('starred')}>
-            ⭐ Starred
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <IconStar size={13} color="#FBBF24" />
+              <span>Starred</span>
+            </span>
           </button>
           <button className={`info-nav-tab ${activeTab === 'calls' ? 'active' : ''}`} onClick={() => setActiveTab('calls')}>
-            📞 Calls
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <IconPhone size={13} />
+              <span>Calls</span>
+            </span>
           </button>
           <button className={`info-nav-tab ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-            ⚙️ Chat
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <IconSettings size={13} />
+              <span>Chat</span>
+            </span>
           </button>
         </div>
 
@@ -307,7 +330,7 @@ export default function ChatInfoDrawer({
                             alt={item.fileName || 'Shared video'}
                           />
                         ) : null}
-                        <span className="video-badge">🎥</span>
+                        <span className="video-badge"><IconVideo size={12} color="#fff" /></span>
                       </div>
                     ) : item.mediaUrl ? (
                       <AuthenticatedImage
@@ -316,7 +339,7 @@ export default function ChatInfoDrawer({
                         alt={item.fileName || 'Shared thumbnail'}
                       />
                     ) : (
-                      <div className="fallback-thumb">🖼️</div>
+                      <div className="fallback-thumb"><IconImage size={24} color="var(--wibby-text-muted)" /></div>
                     )}
                   </div>
                 ))}
@@ -329,7 +352,7 @@ export default function ChatInfoDrawer({
               <div className="shared-files-list">
                 {sharedItems.map(item => (
                   <div key={item._id} className="shared-file-row" onClick={() => onJumpToMessage(item._id)}>
-                    <span className="file-icon">📄</span>
+                    <span className="file-icon"><IconDocument size={20} color="var(--wibby-primary)" /></span>
                     <div className="file-details">
                       <span className="file-name">{item.fileName || 'Document'}</span>
                       <span className="file-size">{item.fileSize ? formatFileSize(item.fileSize) : 'File'}</span>
@@ -345,7 +368,7 @@ export default function ChatInfoDrawer({
               <div className="shared-links-list">
                 {sharedItems.map(item => (
                   <div key={item._id} className="shared-link-card" onClick={() => onJumpToMessage(item._id)}>
-                    <span className="link-icon">🔗</span>
+                    <span className="link-icon"><IconLink size={18} color="var(--wibby-primary)" /></span>
                     <div className="link-details">
                       <span className="link-title">{item.linkPreview?.title || item.text}</span>
                       <span className="link-url">{item.linkPreview?.url || item.text}</span>
@@ -362,7 +385,10 @@ export default function ChatInfoDrawer({
                 {sharedItems.map(item => (
                   <div key={item._id} className="starred-item-card" onClick={() => onJumpToMessage(item._id)}>
                     <div className="starred-item-top">
-                      <span className="starred-badge">⭐ Starred</span>
+                      <span className="starred-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <IconStar size={13} color="#FBBF24" />
+                        <span>Starred</span>
+                      </span>
                       <span className="starred-time">{formatLastSeen(item.createdAt)}</span>
                     </div>
                     <p className="starred-text">{item.text || `[${item.type || 'Media'}]`}</p>

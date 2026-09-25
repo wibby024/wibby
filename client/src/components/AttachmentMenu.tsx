@@ -1,5 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import './AttachmentMenu.css';
+import {
+  IconCamera,
+  IconImage,
+  IconVideo,
+  IconDocument,
+  IconPoll,
+  IconLocation,
+  IconUser,
+  IconGamepad,
+  IconFolder,
+  IconClose
+} from './common/Icons';
 
 interface AttachmentMenuProps {
   isOpen: boolean;
@@ -68,13 +81,25 @@ export default function AttachmentMenu({
 
   let style: React.CSSProperties = {};
   if (anchorRect) {
-    const bottom = window.innerHeight - anchorRect.top + 10;
-    const left = Math.max(12, Math.min(anchorRect.left - 20, window.innerWidth - 320));
+    const chatPanel = document.querySelector('.chat-panel') as HTMLElement | null;
+    const chatRect = chatPanel
+      ? chatPanel.getBoundingClientRect()
+      : { left: 0, right: window.innerWidth, top: 0, bottom: window.innerHeight, width: window.innerWidth };
+
+    const menuWidth = Math.min(290, chatRect.width - 24);
+    // Menu strictly belongs to the chat area and must never escape into the sidebar
+    const minLeft = chatRect.left + 12;
+    const maxLeft = Math.max(minLeft, chatRect.right - menuWidth - 12);
+    let left = anchorRect.left;
+    left = Math.max(minLeft, Math.min(left, maxLeft));
+
+    const bottom = Math.max(12, window.innerHeight - anchorRect.top + 8);
     style = {
       position: 'fixed',
       bottom: `${bottom}px`,
       left: `${left}px`,
-      zIndex: 1000
+      width: `${menuWidth}px`,
+      zIndex: 150
     };
   }
 
@@ -116,7 +141,7 @@ export default function AttachmentMenu({
     }
   };
 
-  return (
+  const menuContent = (
     <div 
       className="attachment-menu-popover" 
       ref={menuRef} 
@@ -134,7 +159,7 @@ export default function AttachmentMenu({
           aria-label="Close attachment menu"
           title="Close (Esc)"
         >
-          ✕
+          <IconClose size={16} />
         </button>
       </div>
 
@@ -185,7 +210,7 @@ export default function AttachmentMenu({
           tabIndex={0}
         >
           <div className="quick-btn-icon-bg camera-bg">
-            <span className="quick-btn-emoji">📷</span>
+            <IconCamera size={22} color="currentColor" />
           </div>
           <span className="quick-btn-label">Camera</span>
         </button>
@@ -200,7 +225,7 @@ export default function AttachmentMenu({
           tabIndex={0}
         >
           <div className="quick-btn-icon-bg photo-bg">
-            <span className="quick-btn-emoji">🖼️</span>
+            <IconImage size={22} color="currentColor" />
           </div>
           <span className="quick-btn-label">Photo</span>
         </button>
@@ -215,7 +240,7 @@ export default function AttachmentMenu({
           tabIndex={0}
         >
           <div className="quick-btn-icon-bg video-bg">
-            <span className="quick-btn-emoji">🎥</span>
+            <IconVideo size={22} color="currentColor" />
           </div>
           <span className="quick-btn-label">Video</span>
         </button>
@@ -230,7 +255,7 @@ export default function AttachmentMenu({
           tabIndex={0}
         >
           <div className="quick-btn-icon-bg doc-bg">
-            <span className="quick-btn-emoji">📄</span>
+            <IconDocument size={22} color="currentColor" />
           </div>
           <span className="quick-btn-label">Document</span>
         </button>
@@ -246,7 +271,7 @@ export default function AttachmentMenu({
             tabIndex={0}
           >
             <div className="quick-btn-icon-bg poll-bg">
-              <span className="quick-btn-emoji">📊</span>
+              <IconPoll size={22} color="currentColor" />
             </div>
             <span className="quick-btn-label">Poll</span>
           </button>
@@ -263,7 +288,7 @@ export default function AttachmentMenu({
             tabIndex={0}
           >
             <div className="quick-btn-icon-bg loc-bg">
-              <span className="quick-btn-emoji">📍</span>
+              <IconLocation size={22} color="currentColor" />
             </div>
             <span className="quick-btn-label">Location</span>
           </button>
@@ -280,7 +305,7 @@ export default function AttachmentMenu({
             tabIndex={0}
           >
             <div className="quick-btn-icon-bg contact-bg">
-              <span className="quick-btn-emoji">👤</span>
+              <IconUser size={22} color="currentColor" />
             </div>
             <span className="quick-btn-label">Contact</span>
           </button>
@@ -297,7 +322,7 @@ export default function AttachmentMenu({
             tabIndex={0}
           >
             <div className="quick-btn-icon-bg game-bg">
-              <span className="quick-btn-emoji">🎮</span>
+              <IconGamepad size={22} color="currentColor" />
             </div>
             <span className="quick-btn-label">Game</span>
           </button>
@@ -314,9 +339,13 @@ export default function AttachmentMenu({
         type="button"
         tabIndex={0}
       >
-        <span className="browse-all-icon">📁</span>
+        <span className="browse-all-icon">
+          <IconFolder size={18} color="currentColor" />
+        </span>
         <span className="browse-all-text">Browse all files</span>
       </button>
     </div>
   );
+
+  return createPortal(menuContent, document.body);
 }

@@ -1,11 +1,14 @@
 import { useState, useRef } from 'react';
 import type { ChangeEvent } from 'react';
+import { MusicNotePickerModal } from './MusicNotePickerModal';
+import type { SelectedMusicClip } from '../../services/musicCatalog';
+import { IconMusic, IconClose, IconEdit } from '../common/Icons';
 import './CreateStoryModal.css';
 
 interface CreateStoryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onPostStory: (formData: FormData | { type: 'text'; text: string; backgroundColor: string; textStyle?: any }) => Promise<void>;
+  onPostStory: (formData: FormData | { type: 'text'; text: string; backgroundColor: string; musicNote?: any; textStyle?: any }) => Promise<void>;
   onOpenCamera?: () => void;
 }
 
@@ -19,7 +22,6 @@ const BG_COLORS = [
 ];
 
 export default function CreateStoryModal({ isOpen, onClose, onPostStory }: CreateStoryModalProps) {
-
   const [tab, setTab] = useState<'text' | 'media'>('text');
   const [text, setText] = useState('');
   const [bgColor, setBgColor] = useState('#7C3AED');
@@ -27,6 +29,8 @@ export default function CreateStoryModal({ isOpen, onClose, onPostStory }: Creat
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [musicClip, setMusicClip] = useState<SelectedMusicClip | null>(null);
+  const [showMusicPicker, setShowMusicPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -40,16 +44,28 @@ export default function CreateStoryModal({ isOpen, onClose, onPostStory }: Creat
     }
   };
 
-
   const handlePost = async () => {
     setSubmitting(true);
     try {
+      const musicPayload = musicClip ? {
+        id: musicClip.track.id,
+        title: musicClip.track.title,
+        artist: musicClip.track.artist,
+        genre: musicClip.track.genre,
+        artworkUrl: musicClip.track.artworkGradient,
+        duration: musicClip.track.duration,
+        clipStart: musicClip.clipStart,
+        clipDuration: musicClip.clipDuration
+      } : null;
+
       if (tab === 'text') {
-        if (!text.trim()) return;
+        const textContent = text.trim() || (musicClip ? `🎵 ${musicClip.track.title} • ${musicClip.track.artist}` : '');
+        if (!textContent) return;
         await onPostStory({
           type: 'text',
-          text: text.trim(),
-          backgroundColor: bgColor
+          text: textContent,
+          backgroundColor: bgColor,
+          musicNote: musicPayload
         });
       } else {
         if (!mediaFile) return;
@@ -58,6 +74,9 @@ export default function CreateStoryModal({ isOpen, onClose, onPostStory }: Creat
         if (caption.trim()) {
           fd.append('caption', caption.trim());
         }
+        if (musicPayload) {
+          fd.append('musicNote', JSON.stringify(musicPayload));
+        }
         await onPostStory(fd);
       }
       onClose();
@@ -65,6 +84,7 @@ export default function CreateStoryModal({ isOpen, onClose, onPostStory }: Creat
       setMediaFile(null);
       setMediaPreviewUrl(null);
       setCaption('');
+      setMusicClip(null);
     } catch (err) {
       console.error('Post story error:', err);
     } finally {
@@ -72,60 +92,87 @@ export default function CreateStoryModal({ isOpen, onClose, onPostStory }: Creat
     }
   };
 
-  return (
-    <div className="create-story-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Create a story">
-      <div className="create-story-card" onClick={e => e.stopPropagation()}>
-        <div className="create-story-header">
-          <div className="create-story-tabs">
-            <button
-              className={`create-story-tab ${tab === 'text' ? 'active' : ''}`}
-              onClick={() => setTab('text')}
-            >
-              ✍️ Text
-            </button>
-            <button
-              className={`create-story-tab ${tab === 'media' ? 'active' : ''}`}
-              onClick={() => setTab('media')}
-            >
-              🖼️ Photo / Video
-            </button>
-          </div>
-          <button className="create-story-close" onClick={onClose} aria-label="Close">✕</button>
-        </div>
+  const formatSeconds = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
 
-        <div className="create-story-body">
-          {tab === 'text' ? (
-            <div className="story-text-editor" style={{ background: bgColor }}>
-              <textarea
-                className="story-text-input"
-                placeholder="Share a thought or music note (e.g. 🎵 Song • Artist)..."
-                value={text}
-                onChange={e => setText(e.target.value)}
-                maxLength={200}
-                autoFocus
-              />
-              
-              {/* Instagram Music Note Quick Picks */}
-              <div className="music-notes-quick-picks">
-                <span className="quick-pick-label">🎵 Quick Music Notes:</span>
-                <div className="quick-pick-chips">
-                  <button type="button" className="music-chip" onClick={() => setText('🎵 Blinding Lights • The Weeknd')}>
-                    🎵 Blinding Lights
+  return (
+    <>
+      <div className="create-story-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Create a story">
+        <div className="create-story-card" onClick={e => e.stopPropagation()}>
+          <div className="create-story-header">
+            <div className="create-story-tabs">
+              <button
+                className={`create-story-tab ${tab === 'text' ? 'active' : ''}`}
+                onClick={() => setTab('text')}
+              >
+                ✍️ Text
+              </button>
+              <button
+                className={`create-story-tab ${tab === 'media' ? 'active' : ''}`}
+                onClick={() => setTab('media')}
+              >
+                🖼️ Photo / Video
+              </button>
+            </div>
+            <button className="create-story-close" onClick={onClose} aria-label="Close">✕</button>
+          </div>
+
+          <div className="create-story-body">
+            {tab === 'text' ? (
+              <div className="story-text-editor" style={{ background: bgColor }}>
+                <textarea
+                  className="story-text-input"
+                  placeholder="Share a thought or music note..."
+                  value={text}
+                  onChange={e => setText(e.target.value)}
+                  maxLength={200}
+                  autoFocus
+                />
+                
+                {/* Attached Music Note Display */}
+                {musicClip ? (
+                  <div className="story-attached-music-card">
+                    <div className="attached-music-art" style={{ background: musicClip.track.artworkGradient }}>
+                      <span>{musicClip.track.coverEmoji}</span>
+                    </div>
+                    <div className="attached-music-meta">
+                      <span className="attached-title">{musicClip.track.title}</span>
+                      <span className="attached-sub">
+                        {musicClip.track.artist} • Clip: {formatSeconds(musicClip.clipStart)}–{formatSeconds(musicClip.clipStart + musicClip.clipDuration)}
+                      </span>
+                    </div>
+                    <div className="attached-music-actions">
+                      <button
+                        type="button"
+                        className="attached-action-btn"
+                        onClick={() => setShowMusicPicker(true)}
+                        title="Change clip or song"
+                      >
+                        <IconEdit size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="attached-action-btn remove"
+                        onClick={() => setMusicClip(null)}
+                        title="Remove music"
+                      >
+                        <IconClose size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="story-add-music-btn"
+                    onClick={() => setShowMusicPicker(true)}
+                  >
+                    <IconMusic size={16} />
+                    <span>Attach Music Note</span>
                   </button>
-                  <button type="button" className="music-chip" onClick={() => setText('🎵 Die With A Smile • Bruno Mars & Lady Gaga')}>
-                    🎵 Die With A Smile
-                  </button>
-                  <button type="button" className="music-chip" onClick={() => setText('🎵 Golden Hour • JVKE')}>
-                    🎵 Golden Hour
-                  </button>
-                  <button type="button" className="music-chip" onClick={() => setText('🎵 Espresso • Sabrina Carpenter')}>
-                    🎵 Espresso
-                  </button>
-                  <button type="button" className="music-chip" onClick={() => setText('🎵 Birds of a Feather • Billie Eilish')}>
-                    🎵 Birds of a Feather
-                  </button>
-                </div>
-              </div>
+                )}
 
               <div className="story-bg-picker">
                 {BG_COLORS.map(c => (
@@ -178,6 +225,49 @@ export default function CreateStoryModal({ isOpen, onClose, onPostStory }: Creat
                 </div>
               )}
 
+              {/* Attached Music Note Display for Media Tab */}
+              {musicClip ? (
+                <div className="story-attached-music-card" style={{ margin: '8px 0' }}>
+                  <div className="attached-music-art" style={{ background: musicClip.track.artworkGradient }}>
+                    <span>{musicClip.track.coverEmoji}</span>
+                  </div>
+                  <div className="attached-music-meta">
+                    <span className="attached-title">{musicClip.track.title}</span>
+                    <span className="attached-sub">
+                      {musicClip.track.artist} • Clip: {formatSeconds(musicClip.clipStart)}–{formatSeconds(musicClip.clipStart + musicClip.clipDuration)}
+                    </span>
+                  </div>
+                  <div className="attached-music-actions">
+                    <button
+                      type="button"
+                      className="attached-action-btn"
+                      onClick={() => setShowMusicPicker(true)}
+                      title="Change clip or song"
+                    >
+                      <IconEdit size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="attached-action-btn remove"
+                      onClick={() => setMusicClip(null)}
+                      title="Remove music"
+                    >
+                      <IconClose size={14} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="story-add-music-btn"
+                  style={{ margin: '8px 0' }}
+                  onClick={() => setShowMusicPicker(true)}
+                >
+                  <IconMusic size={16} />
+                  <span>Attach Music Note</span>
+                </button>
+              )}
+
               <input
                 type="text"
                 className="story-caption-input"
@@ -197,7 +287,7 @@ export default function CreateStoryModal({ isOpen, onClose, onPostStory }: Creat
           <button
             type="button"
             className="create-story-btn-post"
-            disabled={submitting || (tab === 'text' ? !text.trim() : !mediaFile)}
+            disabled={submitting || (tab === 'text' ? (!text.trim() && !musicClip) : !mediaFile)}
             onClick={handlePost}
           >
             {submitting ? 'Sharing…' : 'Share Story (24h)'}
@@ -205,5 +295,13 @@ export default function CreateStoryModal({ isOpen, onClose, onPostStory }: Creat
         </div>
       </div>
     </div>
-  );
+
+    <MusicNotePickerModal
+      isOpen={showMusicPicker}
+      onClose={() => setShowMusicPicker(false)}
+      onSelectClip={(clip) => setMusicClip(clip)}
+      initialClip={musicClip}
+    />
+  </>
+);
 }

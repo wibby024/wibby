@@ -78,6 +78,7 @@ router.get('/', async (req: Request, res: Response) => {
       backgroundColor: s.backgroundColor || null,
       textStyle: s.textStyle || null,
       duration: s.duration || 5,
+      musicNote: s.musicNote || null,
       viewers: Array.isArray(s.viewers) ? s.viewers : [],
       reactions: Array.isArray(s.reactions) ? s.reactions : [],
       createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
@@ -112,6 +113,15 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
     let backgroundColor = typeof req.body.backgroundColor === 'string' ? req.body.backgroundColor : '#7C3AED';
     let duration = Number(req.body.duration) || 5;
 
+    let musicNote = null;
+    if (req.body.musicNote) {
+      try {
+        musicNote = typeof req.body.musicNote === 'string' ? JSON.parse(req.body.musicNote) : req.body.musicNote;
+      } catch {
+        musicNote = null;
+      }
+    }
+
     if (req.file) {
       const { originalname, mimetype, size, buffer } = req.file;
       const detectedType = determineMediaType(mimetype, originalname);
@@ -136,8 +146,8 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
       mediaUrl = `/api/conversations/${conversationId}/media/${storageKey}`;
     } else {
       storyType = 'text';
-      if (!text) {
-        return res.status(400).json({ error: 'Text content is required for text stories' });
+      if (!text && !musicNote) {
+        return res.status(400).json({ error: 'Content or music note is required for stories' });
       }
     }
 
@@ -151,6 +161,7 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
       caption,
       backgroundColor,
       duration,
+      musicNote,
       viewers: [{ uid: user.uid, viewedAt: now }],
       reactions: [],
       createdAt: now,

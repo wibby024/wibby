@@ -204,6 +204,7 @@ export class RTCService {
   private prevFramesDropped = 0;
   private prevTimestamp = 0;
   private currentAudioQuality: CallAudioQuality = 'excellent';
+  private consecutivePoorStatsCount = 0;
   private lastAudioLevelFromStats = 0; // Updated by stats loop, used for native-mode speaking detection
   private onQualityChangeCallback: ((quality: CallAudioQuality, metrics: CallQualityMetrics) => void) | null = null;
   private onTelemetryCallback: ((telemetry: RealtimeCallTelemetry) => void) | null = null;
@@ -2975,13 +2976,24 @@ export class RTCService {
 
         const jitterMs = jitter * 1000;
         let quality: CallAudioQuality = 'excellent';
-        if (packetLossRate > 0.12 || jitterMs > 120 || rtt > 400) {
-          quality = 'poor';
-        } else if (packetLossRate > 0.05 || jitterMs > 60 || rtt > 250) {
-          quality = 'degraded';
-        }
+
         if (this.peerConnection.iceConnectionState === 'disconnected') {
           quality = 'poor';
+          this.consecutivePoorStatsCount = 3;
+        } else if (packetLossRate > 0.15 || jitterMs > 150 || rtt > 500) {
+          this.consecutivePoorStatsCount++;
+          // Require at least 3 consecutive poor telemetry intervals (3s) to flag connection as poor
+          if (this.consecutivePoorStatsCount >= 3) {
+            quality = 'poor';
+          } else {
+            quality = 'degraded';
+          }
+        } else if (packetLossRate > 0.05 || jitterMs > 70 || rtt > 250) {
+          this.consecutivePoorStatsCount = 0;
+          quality = 'degraded';
+        } else {
+          this.consecutivePoorStatsCount = 0;
+          quality = 'excellent';
         }
 
         // Check current camera track for capture res/fps
@@ -3349,6 +3361,7 @@ export class RTCService {
     this.onIceRestartNeededCallback = null;
     this.onQualityChangeCallback = null;
     this.currentAudioQuality = 'excellent';
+    this.consecutivePoorStatsCount = 0;
     this.onScreenSharingEndedCallback = null;
   }
 }

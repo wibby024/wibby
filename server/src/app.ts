@@ -67,10 +67,12 @@ import pairingRoutes from "./routes/pairing.js";
 import messagesRouter from "./routes/messages.js";
 import mediaRouter from "./routes/media.js";
 import storiesRouter from "./routes/stories.js";
+import storageRouter from "./routes/adminStorage.js";
 
 app.use("/health", healthRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/pairing", pairingRoutes);
+app.use("/api/storage", storageRouter);
 app.use("/api/conversations/:conversationId/messages", messagesRouter);
 app.use("/api/conversations/:conversationId/media", mediaRouter);
 app.use("/api/conversations/:conversationId/stories", storiesRouter);

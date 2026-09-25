@@ -3,6 +3,18 @@ import { useAuth } from '../context/AuthContext';
 import type { ChatThemePreset } from '../types/chat';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { notificationService, NOTIFICATION_TONES, type NotificationTone } from '../services/notificationService';
+import {
+  IconSettings,
+  IconClose,
+  IconUser,
+  IconPalette,
+  IconBell,
+  IconLock,
+  IconShield,
+  IconAlertTriangle,
+  IconFolder,
+  IconInfo
+} from './common/Icons';
 import './SettingsModal.css';
 
 interface SettingsModalProps {
@@ -20,7 +32,10 @@ const THEME_PRESETS: Array<{ id: ChatThemePreset; name: string; gradient: string
   { id: 'ocean', name: 'Ocean Breeze', gradient: 'linear-gradient(135deg, #06B6D4, #3B82F6)', description: 'Deep Cyan & Electric Blue' },
   { id: 'emerald', name: 'Emerald Forest', gradient: 'linear-gradient(135deg, #059669, #047857)', description: 'Sage, Mint & Emerald' },
   { id: 'rose', name: 'Rose Quartz', gradient: 'linear-gradient(135deg, #DB2777, #9D174D)', description: 'Blush Pink & Berry' },
-  { id: 'midnight', name: 'Midnight Slate', gradient: 'linear-gradient(135deg, #6366F1, #1E1B4B)', description: 'Slate, Indigo & Monochrome' }
+  { id: 'midnight', name: 'Midnight Slate', gradient: 'linear-gradient(135deg, #6366F1, #1E1B4B)', description: 'Slate, Indigo & Monochrome' },
+  { id: 'cyberpunk', name: 'Neon Cyberpunk', gradient: 'linear-gradient(135deg, #00F0FF, #FF007A)', description: 'Electric Cyan & Neon Magenta' },
+  { id: 'sage', name: 'Calm Sage', gradient: 'linear-gradient(135deg, #10B981, #047857)', description: 'Eucalyptus & Earthy Greens' },
+  { id: 'monochrome', name: 'Monochrome Slate', gradient: 'linear-gradient(135deg, #64748B, #1E293B)', description: 'Minimalist Steel & Charcoal' }
 ];
 
 export default function SettingsModal({
@@ -33,7 +48,13 @@ export default function SettingsModal({
 }: SettingsModalProps) {
 
   const { user, profile, refreshProfile, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'privacy' | 'security' | 'account'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'privacy' | 'security' | 'storage' | 'account'>('profile');
+
+  // Storage Audit State
+  const [storageAudit, setStorageAudit] = useState<any>(null);
+  const [loadingStorage, setLoadingStorage] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<string | null>(null);
+  const [cleaningUp, setCleaningUp] = useState(false);
 
   // Notification Sound & Browser Notification State
   const [soundEnabled, setSoundEnabled] = useState(() => notificationService.isSoundEnabled());
@@ -164,6 +185,49 @@ export default function SettingsModal({
 
     fetchPrivacyAndDevices();
   }, [isOpen, user]);
+
+  const fetchStorageAudit = async () => {
+    setLoadingStorage(true);
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${baseUrl}/api/storage/status`);
+      if (res.ok) {
+        const data = await res.json();
+        setStorageAudit(data);
+      }
+    } catch (err) {
+      console.error('Fetch storage audit error:', err);
+    } finally {
+      setLoadingStorage(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'storage') {
+      fetchStorageAudit();
+    }
+  }, [activeTab]);
+
+  const handleRunSafeCleanup = async () => {
+    setCleaningUp(true);
+    setCleanupResult(null);
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${baseUrl}/api/storage/cleanup-temporary`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const r = data.result;
+        setCleanupResult(`Cleaned ${r.deletedPairingCodes} expired codes, ${r.deletedExpiredStories} expired stories, and ${r.deletedOrphanedChunks} orphaned chunks. All permanent messages and user data are 100% protected.`);
+        fetchStorageAudit();
+      }
+    } catch {
+      setCleanupResult('Failed to run safe cleanup');
+    } finally {
+      setCleaningUp(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -298,10 +362,12 @@ export default function SettingsModal({
         {/* Settings Header */}
         <div className="settings-modal-header">
           <div className="settings-header-title-wrap">
-            <span className="settings-header-icon">⚙️</span>
+            <span className="settings-header-icon"><IconSettings size={20} color="var(--wibby-primary)" /></span>
             <h3 className="settings-header-title">Settings</h3>
           </div>
-          <button className="settings-modal-close" onClick={onClose} aria-label="Close">✕</button>
+          <button className="settings-modal-close" onClick={onClose} aria-label="Close">
+            <IconClose size={18} />
+          </button>
         </div>
 
         <div className="settings-modal-layout">
@@ -311,37 +377,50 @@ export default function SettingsModal({
               className={`settings-nav-item ${activeTab === 'profile' ? 'active' : ''}`}
               onClick={() => setActiveTab('profile')}
             >
-              👤 Profile
+              <IconUser size={16} />
+              <span>Profile</span>
             </button>
             <button
               className={`settings-nav-item ${activeTab === 'appearance' ? 'active' : ''}`}
               onClick={() => setActiveTab('appearance')}
             >
-              🎨 Appearance
+              <IconPalette size={16} />
+              <span>Appearance</span>
             </button>
             <button
               className={`settings-nav-item ${activeTab === 'notifications' ? 'active' : ''}`}
               onClick={() => setActiveTab('notifications')}
             >
-              🔔 Notifications & Sound
+              <IconBell size={16} />
+              <span>Notifications & Sound</span>
             </button>
             <button
               className={`settings-nav-item ${activeTab === 'privacy' ? 'active' : ''}`}
               onClick={() => setActiveTab('privacy')}
             >
-              🔒 Privacy
+              <IconLock size={16} />
+              <span>Privacy</span>
             </button>
             <button
               className={`settings-nav-item ${activeTab === 'security' ? 'active' : ''}`}
               onClick={() => setActiveTab('security')}
             >
-              🛡️ Security & Sessions
+              <IconShield size={16} />
+              <span>Security & Sessions</span>
+            </button>
+            <button
+              className={`settings-nav-item ${activeTab === 'storage' ? 'active' : ''}`}
+              onClick={() => setActiveTab('storage')}
+            >
+              <IconFolder size={16} />
+              <span>Storage & Data</span>
             </button>
             <button
               className={`settings-nav-item danger ${activeTab === 'account' ? 'active' : ''}`}
               onClick={() => setActiveTab('account')}
             >
-              ⚠️ Account
+              <IconAlertTriangle size={16} />
+              <span>Account</span>
             </button>
           </nav>
 
@@ -671,6 +750,132 @@ export default function SettingsModal({
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Storage & Data Protection Tab */}
+            {activeTab === 'storage' && (
+              <div className="settings-storage-section">
+                <div className="storage-status-card">
+                  <div className="storage-card-header">
+                    <div>
+                      <h4 className="storage-card-title">MongoDB Storage Capacity</h4>
+                      <p className="storage-card-sub">Real-time database utilization and threshold status</p>
+                    </div>
+                    {storageAudit && (
+                      <span className={`storage-status-pill status-${storageAudit.status.toLowerCase()}`}>
+                        {storageAudit.status} ({storageAudit.percentUsed}%)
+                      </span>
+                    )}
+                  </div>
+
+                  {loadingStorage ? (
+                    <div className="storage-loading">Auditing MongoDB storage…</div>
+                  ) : storageAudit ? (
+                    <>
+                      <div className="storage-meter-wrap">
+                        <div className="storage-meter-track">
+                          <div
+                            className={`storage-meter-fill fill-${storageAudit.status.toLowerCase()}`}
+                            style={{ width: `${Math.min(100, storageAudit.percentUsed)}%` }}
+                          />
+                        </div>
+                        <div className="storage-meter-labels">
+                          <span>{storageAudit.usedMb} MB Used</span>
+                          <span>{storageAudit.limitMb} MB Limit ({storageAudit.percentUsed}%)</span>
+                        </div>
+                      </div>
+
+                      <div className="storage-threshold-legend">
+                        <span className="legend-chip normal">&lt;60% Normal</span>
+                        <span className="legend-chip watch">60-75% Watch</span>
+                        <span className="legend-chip warning">75-85% Warning</span>
+                        <span className="legend-chip critical">85-90% Critical</span>
+                        <span className="legend-chip emergency">&gt;90% Emergency</span>
+                      </div>
+                    </>
+                  ) : (
+                    <button type="button" className="refresh-audit-btn" onClick={fetchStorageAudit}>
+                      Load Storage Metrics
+                    </button>
+                  )}
+                </div>
+
+                {/* Permanent Data Safety Guarantee */}
+                <div className="storage-guarantee-card">
+                  <div className="guarantee-header">
+                    <IconShield size={20} color="#10B981" />
+                    <h4>Permanent User Data Protected</h4>
+                  </div>
+                  <p className="guarantee-text">
+                    Wibby <strong>never automatically wipes</strong> your messages, two-user conversations, call history, media files, or profiles based on age. All permanent user content is strictly preserved and protected from scheduled wipes.
+                  </p>
+                </div>
+
+                {/* Safe Temporary Cleanup */}
+                <div className="storage-cleanup-card">
+                  <div className="cleanup-header">
+                    <IconInfo size={18} color="var(--wibby-primary)" />
+                    <h4>Safe Temporary Cleanup</h4>
+                  </div>
+                  <p className="cleanup-text">
+                    Safely purges only temporary artifacts: expired 15-minute pairing codes, expired stories past retention grace period, and abandoned upload chunks. Permanent messages and user files are never touched.
+                  </p>
+
+                  {cleanupResult && (
+                    <div className="cleanup-result-banner">
+                      {cleanupResult}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    className="run-cleanup-btn"
+                    disabled={cleaningUp}
+                    onClick={handleRunSafeCleanup}
+                  >
+                    {cleaningUp ? 'Running Safe Cleanup…' : 'Run Safe Temporary Cleanup'}
+                  </button>
+                </div>
+
+                {/* Collections Breakdown */}
+                {storageAudit?.collections && (
+                  <div className="storage-breakdown-card">
+                    <h4 className="breakdown-title">Database Collections Breakdown</h4>
+                    <div className="breakdown-table">
+                      <div className="breakdown-row header">
+                        <span>Collection</span>
+                        <span>Type</span>
+                        <span>Documents</span>
+                        <span>Size</span>
+                      </div>
+                      {storageAudit.collections.permanent.map((col: any) => (
+                        <div key={col.name} className="breakdown-row">
+                          <span className="col-name font-mono">{col.name}</span>
+                          <span className="col-badge permanent">Permanent</span>
+                          <span className="col-count">{col.count}</span>
+                          <span className="col-size">{col.sizeFormatted}</span>
+                        </div>
+                      ))}
+                      {storageAudit.collections.media.map((col: any) => (
+                        <div key={col.name} className="breakdown-row">
+                          <span className="col-name font-mono">{col.name}</span>
+                          <span className="col-badge media">Media GridFS</span>
+                          <span className="col-count">{col.count}</span>
+                          <span className="col-size">{col.sizeFormatted}</span>
+                        </div>
+                      ))}
+                      {storageAudit.collections.temporary.map((col: any) => (
+                        <div key={col.name} className="breakdown-row">
+                          <span className="col-name font-mono">{col.name}</span>
+                          <span className="col-badge temp">Temporary</span>
+                          <span className="col-count">{col.count}</span>
+                          <span className="col-size">{col.sizeFormatted}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

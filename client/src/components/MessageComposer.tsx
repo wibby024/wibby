@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import EmojiPicker from './EmojiPicker';
 import AttachmentMenu from './AttachmentMenu';
 import MediaPreviewModal, { type InitialMediaFile } from './MediaPreviewModal';
@@ -66,6 +66,8 @@ export default function MessageComposer({
   const isTypingRef = useRef<boolean>(false);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isComposingRef = useRef<boolean>(false);
+  const cursorPosRef = useRef<number | null>(null);
 
   const showComposerToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -129,12 +131,44 @@ export default function MessageComposer({
     textareaRef.current?.focus();
   }, [editingMessage, replyingTo]);
 
-  // Auto-resize textarea
-  useEffect(() => {
+  // Auto-resize textarea with strict cursor/caret preservation for mobile IME/virtual keyboards
+  useLayoutEffect(() => {
     const textarea = textareaRef.current;
-    if (textarea) {
+    if (!textarea) return;
+
+    // Do not disrupt active IME composition on mobile
+    if (isComposingRef.current) return;
+
+    const isFocused = document.activeElement === textarea;
+
+    if (!message) {
+      textarea.style.height = '';
+      return;
+    }
+
+    // Save active selection before any style adjustments
+    const savedStart = textarea.selectionStart;
+    const savedEnd = textarea.selectionEnd;
+
+    // Only adjust height if needed (avoids collapsing height to 'auto' on every keystroke which resets Android caret to 0)
+    const currentHeight = textarea.offsetHeight;
+    const currentScrollHeight = textarea.scrollHeight;
+
+    if (currentScrollHeight > currentHeight || message.includes('\n')) {
       textarea.style.height = 'auto';
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+      const targetHeight = Math.min(textarea.scrollHeight, 120);
+      textarea.style.height = `${targetHeight}px`;
+    }
+
+    // Restore caret position to ensure mobile Android/iOS keyboards never reset to index 0
+    if (isFocused) {
+      const preferredPos = cursorPosRef.current ?? savedEnd ?? message.length;
+      // If the browser glitched and snapped selection to 0 while message has length and user was typing ahead
+      if (textarea.selectionEnd === 0 && message.length > 0 && preferredPos > 0) {
+        textarea.setSelectionRange(preferredPos, preferredPos);
+      } else if (savedStart !== null && savedEnd !== null) {
+        textarea.setSelectionRange(savedStart, savedEnd);
+      }
     }
   }, [message]);
 
@@ -156,6 +190,11 @@ export default function MessageComposer({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
+    const target = e.target;
+    // Capture user's real cursor position from the DOM event before state update
+    const selEnd = target.selectionEnd;
+    cursorPosRef.current = typeof selEnd === 'number' ? selEnd : val.length;
+
     setMessage(val);
 
     if (!val.trim()) {
@@ -434,7 +473,20 @@ export default function MessageComposer({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
+              onCompositionStart={() => {
+                isComposingRef.current = true;
+              }}
+              onCompositionEnd={(e) => {
+                isComposingRef.current = false;
+                const target = e.currentTarget;
+                cursorPosRef.current = target.selectionEnd ?? target.value.length;
+              }}
               rows={1}
+              dir="ltr"
+              inputMode="text"
+              autoComplete="off"
+              autoCorrect="on"
+              spellCheck={true}
               aria-label="Type a message"
             />
           </div>

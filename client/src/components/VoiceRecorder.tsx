@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { getBestAudioRecorderMimeType, formatAudioDuration } from '../config/media';
+import { IconTrash, IconPause, IconPlay, IconStop } from './common/Icons';
 import './VoiceRecorder.css';
 
 export type RecordingState = 
@@ -666,7 +667,7 @@ export default function VoiceRecorder({
                 title="Discard recording"
                 aria-label="Discard recording"
               >
-                🗑️
+                <IconTrash size={20} color="#ef4444" />
               </button>
 
               {state === 'RECORDING' ? (
@@ -676,7 +677,7 @@ export default function VoiceRecorder({
                   title="Pause recording"
                   aria-label="Pause recording"
                 >
-                  ⏸️
+                  <IconPause size={18} color="currentColor" />
                 </button>
               ) : (
                 <button 
@@ -685,7 +686,7 @@ export default function VoiceRecorder({
                   title="Resume recording"
                   aria-label="Resume recording"
                 >
-                  ▶️
+                  <IconPlay size={18} color="currentColor" />
                 </button>
               )}
 
@@ -695,7 +696,7 @@ export default function VoiceRecorder({
                 title="Stop and preview"
                 aria-label="Stop recording"
               >
-                ⏹️
+                <IconStop size={18} color="currentColor" />
               </button>
             </div>
           </div>
@@ -718,7 +719,7 @@ export default function VoiceRecorder({
                 onClick={togglePreviewPlay}
                 aria-label={isPreviewPlaying ? 'Pause preview' : 'Play preview'}
               >
-                {isPreviewPlaying ? '⏸' : '▶'}
+                {isPreviewPlaying ? <IconPause size={16} color="currentColor" /> : <IconPlay size={16} color="currentColor" />}
               </button>
 
               {/* Seekable Waveform Preview */}
