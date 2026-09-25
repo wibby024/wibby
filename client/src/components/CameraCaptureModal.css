@@ -108,6 +108,15 @@
   transform: scaleX(-1);
 }
 
+/* Rear camera: never mirrored, fill the viewport cleanly */
+.camera-video-stream.rear-camera {
+  transform: none;
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+  max-height: unset;
+}
+
 /* Camera Switch Button */
 .camera-switch-btn {
   position: absolute;

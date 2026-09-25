@@ -75,15 +75,34 @@ export default function CameraCaptureModal({
     }
 
     try {
+      const isRear = preferredFacingMode === 'environment';
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: preferredFacingMode,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        },
-        audio: false // Strict video-only: do NOT request microphone
-      });
+      let stream: MediaStream | null = null;
+
+      // For rear camera: try exact first (forces hardware rear cam), fall back to ideal
+      const constraintLadder: MediaStreamConstraints[] = isRear
+        ? [
+            { video: { facingMode: { exact: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
+            { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
+            { video: { facingMode: { ideal: 'environment' } }, audio: false },
+          ]
+        : [
+            { video: { facingMode: { ideal: 'user' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
+            { video: { facingMode: { ideal: 'user' } }, audio: false },
+          ];
+
+      for (const constraints of constraintLadder) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          break;
+        } catch {
+          // try next constraint tier
+        }
+      }
+
+      if (!stream) {
+        throw new Error('Could not access camera with the requested facing mode.');
+      }
 
       if (!isMountedRef.current) {
         stream.getTracks().forEach(t => t.stop());
@@ -311,7 +330,7 @@ export default function CameraCaptureModal({
                 autoPlay 
                 playsInline 
                 muted 
-                className={`camera-video-stream ${facingMode === 'user' ? 'mirrored' : ''}`}
+                className={`camera-video-stream ${facingMode === 'user' ? 'mirrored' : 'rear-camera'}`}
                 aria-label="Live camera preview"
               />
 
@@ -322,7 +341,11 @@ export default function CameraCaptureModal({
                 title={facingMode === 'user' ? 'Switch to Rear Camera' : 'Switch to Front Camera'}
                 aria-label="Switch between front and back cameras"
               >
-                <span>{facingMode === 'user' ? '📷 Rear' : '🤳 Front'}</span>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 7h-3a2 2 0 0 1-2-2 1 1 0 0 0-1-1H10a1 1 0 0 0-1 1 2 2 0 0 1-2 2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z" />
+                  <circle cx="12" cy="13" r="3" />
+                </svg>
+                <span>{facingMode === 'user' ? 'Rear' : 'Front'}</span>
               </button>
             </div>
           )}
