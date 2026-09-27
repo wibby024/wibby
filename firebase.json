@@ -44,7 +44,7 @@
         ]
       },
       {
-        "source": "/@(favicon|icon)*.png",
+        "source": "/@(favicon|icon|apple-touch-icon)*.png",
         "headers": [
           {
             "key": "Content-Type",

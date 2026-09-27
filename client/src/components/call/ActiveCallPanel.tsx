@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useCall } from '../../context/CallContext';
 import { rtcService } from '../../services/rtcService';
 import { resolvePartnerName } from '../../utils/partnerName';
+import { resolveAvatarUrl } from '../../utils/avatar';
 import './CallModal.css';
 
 function formatCallDuration(seconds: number): string {
@@ -987,7 +988,7 @@ export default function ActiveCallPanel() {
           isRemoteSpeaking={isRemoteSpeaking}
           partnerName={partnerName}
           initial={initial}
-          avatar={activeCall.remoteUser.avatar || undefined}
+          avatar={resolveAvatarUrl(activeCall.remoteUser.avatar) || undefined}
           flipCamera={flipCamera}
           currentFacingMode={currentFacingMode}
           stopScreenSharing={stopScreenSharing}
@@ -1408,7 +1409,13 @@ export default function ActiveCallPanel() {
           {isConnected && isRemoteSpeaking && <div className="call-pulse-ring speaking" />}
           <div className={`call-avatar ${isRemoteSpeaking ? 'avatar-speaking' : ''}`}>
             {activeCall.remoteUser.avatar ? (
-              <img src={activeCall.remoteUser.avatar} alt={partnerName} />
+              <img 
+                src={resolveAvatarUrl(activeCall.remoteUser.avatar) || activeCall.remoteUser.avatar} 
+                alt={partnerName} 
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
             ) : (
               <span>{initial}</span>
             )}

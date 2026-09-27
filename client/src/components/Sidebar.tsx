@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { resolvePartnerName } from '../utils/partnerName';
 import WibbyLogo from './WibbyLogo';
 import { IconLogOut } from './common/Icons';
+import { resolveAvatarUrl } from '../utils/avatar';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -14,6 +15,7 @@ interface SidebarProps {
     displayName?: string;
     username?: string;
     email?: string;
+    avatarUrl?: string;
     online?: boolean;
     lastSeen?: string;
   };
@@ -35,6 +37,8 @@ export default function Sidebar({
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [partnerAvatarError, setPartnerAvatarError] = useState(false);
+  const [myAvatarError, setMyAvatarError] = useState(false);
   const { user, profile, signOut } = useAuth();
 
   const rawDisplayName = profile?.displayName || user?.displayName;
@@ -156,7 +160,16 @@ export default function Sidebar({
             <button className="conversation-item active" onClick={onClose} title="Return to chat">
               <div className="conversation-avatar">
                 <div className="avatar" style={{ background: 'linear-gradient(135deg, #A78BFA, #7C3AED)' }}>
-                  <span>{partnerInitial}</span>
+                  {partner?.avatarUrl && !partnerAvatarError ? (
+                    <img
+                      src={resolveAvatarUrl(partner.avatarUrl)}
+                      alt={partnerName}
+                      className="user-avatar-img"
+                      onError={() => setPartnerAvatarError(true)}
+                    />
+                  ) : (
+                    <span>{partnerInitial}</span>
+                  )}
                 </div>
                 <div className={`avatar-status ${partner?.online ? 'online' : 'offline'}`} />
               </div>
@@ -192,14 +205,12 @@ export default function Sidebar({
               onClick={onOpenSettings}
               title="Edit Profile Settings"
             >
-              {profile?.avatarUrl ? (
+              {profile?.avatarUrl && !myAvatarError ? (
                 <img 
-                  src={profile.avatarUrl} 
+                  src={resolveAvatarUrl(profile.avatarUrl)} 
                   alt={displayName} 
                   className="user-avatar-img"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
+                  onError={() => setMyAvatarError(true)}
                 />
               ) : (
                 <span>{initial}</span>

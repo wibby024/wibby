@@ -579,7 +579,8 @@
   height: 100%;
   max-width: 100%;
   max-height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #000;
   display: block;
 }
 
@@ -2540,9 +2541,10 @@ video.is-screen-share {
     border: 1px solid rgba(255, 255, 255, 0.22);
   }
 
-  /* Mobile Video Rendering & Camera View Enhancements */
+  /* Mobile Video Rendering: uncropped native framing (preserves 16:9 widescreen laptop camera view) */
   .call-video-stage .call-video-fg-live {
-    object-fit: cover !important;
+    object-fit: contain !important;
+    background: #000 !important;
   }
 
   /* Screenshare must ALWAYS be fully visible, uncropped, and centered */

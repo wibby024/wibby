@@ -15,6 +15,7 @@ import {
   IconFolder,
   IconInfo
 } from './common/Icons';
+import { resolveAvatarUrl } from '../utils/avatar';
 import './SettingsModal.css';
 
 interface SettingsModalProps {
@@ -285,11 +286,61 @@ export default function SettingsModal({
         body: fd
       });
       if (res.ok) {
-        setProfileMsg('Avatar updated!');
-        if (refreshProfile) refreshProfile();
+        setProfileMsg('Avatar photo updated!');
+        setIsProfileError(false);
+        if (refreshProfile) await refreshProfile();
       }
     } catch {
       setProfileMsg('Failed to upload avatar');
+      setIsProfileError(true);
+    }
+  };
+
+  const handleSwitchAvatarType = async (type: 'initial' | 'photo') => {
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/users/profile`;
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ avatarType: type })
+      });
+      if (res.ok) {
+        setProfileMsg(type === 'initial' ? "Switched to Username's First Letter" : 'Switched to Original Photo');
+        setIsProfileError(false);
+        if (refreshProfile) await refreshProfile();
+      }
+    } catch {
+      setProfileMsg('Failed to update avatar style');
+      setIsProfileError(true);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/users/profile`;
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ avatarUrl: null, customAvatarUrl: null, avatarType: 'initial' })
+      });
+      if (res.ok) {
+        setProfileMsg('Photo removed. Using default initial avatar.');
+        setIsProfileError(false);
+        if (refreshProfile) await refreshProfile();
+      }
+    } catch {
+      setProfileMsg('Failed to remove photo');
+      setIsProfileError(true);
     }
   };
 
@@ -430,16 +481,71 @@ export default function SettingsModal({
             {activeTab === 'profile' && (
               <form onSubmit={handleSaveProfile} className="settings-panel-form">
                 <div className="avatar-edit-section">
-                  <div className="settings-avatar-preview" style={{ background: 'linear-gradient(135deg, #7C3AED, #5B21B6)' }}>
-                    <span>{(displayName || profile?.username || 'You').charAt(0).toUpperCase()}</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="avatar-change-btn"
-                    onClick={() => avatarInputRef.current?.click()}
+                  <div 
+                    className="settings-avatar-preview" 
+                    style={{ background: 'linear-gradient(135deg, #7C3AED, #5B21B6)' }}
                   >
-                    Change Picture
-                  </button>
+                    {profile?.avatarUrl ? (
+                      <img 
+                        src={resolveAvatarUrl(profile.avatarUrl)} 
+                        alt={displayName || 'Avatar'} 
+                        className="settings-avatar-preview-img"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <span>{(displayName || profile?.username || 'You').charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+
+                  <div className="avatar-controls-column">
+                    <div className="avatar-type-segmented-control">
+                      <button
+                        type="button"
+                        className={`avatar-segment-btn ${!profile?.avatarUrl ? 'active' : ''}`}
+                        onClick={() => handleSwitchAvatarType('initial')}
+                        title="Display default initial of your username"
+                      >
+                        🔤 Default Letter
+                      </button>
+                      <button
+                        type="button"
+                        className={`avatar-segment-btn ${profile?.avatarUrl ? 'active' : ''} ${!profile?.customAvatarUrl && !profile?.avatarUrl ? 'disabled' : ''}`}
+                        onClick={() => {
+                          if (profile?.customAvatarUrl || profile?.avatarUrl) {
+                            handleSwitchAvatarType('photo');
+                          } else {
+                            avatarInputRef.current?.click();
+                          }
+                        }}
+                        title={profile?.customAvatarUrl || profile?.avatarUrl ? "Display your original uploaded photo" : "Upload a photo first"}
+                      >
+                        🖼️ Original Photo
+                      </button>
+                    </div>
+
+                    <div className="avatar-actions-row">
+                      <button
+                        type="button"
+                        className="avatar-change-btn"
+                        onClick={() => avatarInputRef.current?.click()}
+                      >
+                        {profile?.customAvatarUrl || profile?.avatarUrl ? 'Change Photo' : 'Upload Photo'}
+                      </button>
+                      {(profile?.customAvatarUrl || profile?.avatarUrl) && (
+                        <button
+                          type="button"
+                          className="avatar-remove-btn"
+                          onClick={handleRemovePhoto}
+                          title="Remove custom photo permanently"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                   <input
                     ref={avatarInputRef}
                     type="file"

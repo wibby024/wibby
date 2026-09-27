@@ -127,7 +127,7 @@ export class RTCService {
   private currentCaptureHeight = 0;
   private currentCaptureFps = 0;
   private videoQualityMode: VideoQualityMode = 'auto';
-  private videoBitrateTargetMbps = 3.2; // 3.2 Mbps optimal smooth motion budget
+  private videoBitrateTargetMbps = 3.8; // 3.8 Mbps optimal smooth HD motion budget
   private peakMotionBitrateMbps = 0;
   private minStaticBitrateMbps = 0;
 
@@ -2195,7 +2195,7 @@ export class RTCService {
         // If camera capture is 1080p (or standard), scaleResolutionDownBy is 1.0 to transmit 1080p.
         const is4KCapture = this.currentCaptureWidth >= 3840;
         const baseScale = is4KCapture ? 2.0 : 1.0;
-        const targetBps = Math.min(Math.max(Math.round(this.videoBitrateTargetMbps * 1_000_000), 2_000_000), 3_500_000);
+        const targetBps = Math.min(Math.max(Math.round(this.videoBitrateTargetMbps * 1_000_000), 2_000_000), 4_000_000);
 
         if (currentMode === 'data-saver') {
           params.degradationPreference = 'balanced';

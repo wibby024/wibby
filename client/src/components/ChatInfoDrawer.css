@@ -85,6 +85,14 @@
   font-weight: 700;
   margin-bottom: 0.75rem;
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  overflow: hidden;
+}
+
+.chat-info-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .chat-info-name {

@@ -78,6 +78,24 @@ app.use("/api/gifs", gifsRouter);
 app.use("/api/conversations/:conversationId/messages", messagesRouter);
 app.use("/api/conversations/:conversationId/media", mediaRouter);
 app.use("/api/conversations/:conversationId/stories", storiesRouter);
-app.use("/api/conversations/:conversationId", messagesRouter);
+// Public cached avatar stream endpoint (allows cross-origin img tags in browser & mobile)
+app.get(["/api/users/avatar-file/*", "/api/conversations/media/avatars/*"], async (req, res) => {
+  try {
+    const rawParam = (req.params as any)[0] as string;
+    const key = rawParam.startsWith("avatars/") ? rawParam : `avatars/${rawParam}`;
+    if (!key || key.includes("..")) {
+      return res.status(400).json({ error: "Invalid avatar key" });
+    }
+    const { getStorageProvider } = await import("./services/storage/index.js");
+    const storage = getStorageProvider();
+    const result = await storage.getStream(key);
+    res.setHeader("Content-Type", result.mimeType || "image/jpeg");
+    res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+    if (result.size) res.setHeader("Content-Length", result.size);
+    result.stream.pipe(res);
+  } catch {
+    res.status(404).json({ error: "Avatar not found" });
+  }
+});
 
 export default app;

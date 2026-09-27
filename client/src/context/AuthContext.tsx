@@ -13,6 +13,8 @@ export interface UserProfile {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  customAvatarUrl?: string | null;
+  avatarType?: 'initial' | 'photo';
   bio: string;
 }
 

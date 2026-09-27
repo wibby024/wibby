@@ -51,8 +51,10 @@ const contactSchema = z.object({
 const stickerSchema = z.object({
   packId: z.string().optional(),
   stickerId: z.string().optional(),
-  url: z.string().url().optional(),
-  emoji: z.string().optional()
+  url: z.string().optional(),
+  emoji: z.string().optional(),
+  name: z.string().optional(),
+  label: z.string().optional()
 });
 
 const e2eeSchema = z.object({

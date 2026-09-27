@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCall } from '../context/CallContext';
 import { formatLastSeen } from '../utils/time';
 import { resolvePartnerName } from '../utils/partnerName';
+import { resolveAvatarUrl } from '../utils/avatar';
 import './ChatHeader.css';
 
 interface ChatHeaderProps {
@@ -42,10 +43,15 @@ export default function ChatHeader({
   const { startCall, callState } = useCall();
   const [isTyping, setIsTyping] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const name = resolvePartnerName(partner);
   const initial = name.charAt(0).toUpperCase();
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [partner?.avatarUrl]);
 
   useEffect(() => {
     if (!socket || !conversationId) return;
@@ -157,7 +163,16 @@ export default function ChatHeader({
           title="View profile & shared media"
         >
           <div className="chat-header-avatar" style={{ background: 'linear-gradient(135deg, #A78BFA, #7C3AED)' }}>
-            <span>{initial}</span>
+            {partner?.avatarUrl && !avatarError ? (
+              <img
+                src={resolveAvatarUrl(partner.avatarUrl)}
+                alt={name}
+                className="chat-header-avatar-img"
+                onError={() => setAvatarError(true)}
+              />
+            ) : (
+              <span>{initial}</span>
+            )}
           </div>
           <div className="chat-header-info">
             <h2 className="chat-header-name">{name}</h2>

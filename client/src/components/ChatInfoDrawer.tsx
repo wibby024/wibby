@@ -8,6 +8,7 @@ import { formatFileSize } from '../config/media';
 import { e2eeService } from '../services/e2eeService';
 import { notificationService, NOTIFICATION_TONES, type NotificationTone } from '../services/notificationService';
 import { resolvePartnerName } from '../utils/partnerName';
+import { resolveAvatarUrl } from '../utils/avatar';
 import {
   IconPhone,
   IconVideo,
@@ -73,6 +74,12 @@ export default function ChatInfoDrawer({
   onSelectThemePreset
 }: ChatInfoDrawerProps) {
   const { user } = useAuth();
+  const [partnerAvatarError, setPartnerAvatarError] = useState(false);
+
+  useEffect(() => {
+    setPartnerAvatarError(false);
+  }, [partner?.avatarUrl]);
+
   const [activeTab, setActiveTab] = useState<'media' | 'files' | 'links' | 'starred' | 'calls' | 'settings'>('media');
   const [sharedItems, setSharedItems] = useState<Message[]>([]);
   const [callHistory, setCallHistory] = useState<Array<{
@@ -248,7 +255,16 @@ export default function ChatInfoDrawer({
         {/* Profile Card */}
         <div className="chat-info-profile">
           <div className="chat-info-avatar" style={{ background: 'linear-gradient(135deg, #A78BFA, #7C3AED)' }}>
-            <span>{initial}</span>
+            {partner?.avatarUrl && !partnerAvatarError ? (
+              <img
+                src={resolveAvatarUrl(partner.avatarUrl)}
+                alt={name}
+                className="chat-info-avatar-img"
+                onError={() => setPartnerAvatarError(true)}
+              />
+            ) : (
+              <span>{initial}</span>
+            )}
           </div>
           <h4 className="chat-info-name">{name}</h4>
           <div className="chat-info-status-pill">

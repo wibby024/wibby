@@ -1,5 +1,6 @@
 import { useCall } from '../../context/CallContext';
 import { resolvePartnerName } from '../../utils/partnerName';
+import { resolveAvatarUrl } from '../../utils/avatar';
 import './CallModal.css';
 
 export default function OutgoingCallModal() {
@@ -18,7 +19,13 @@ export default function OutgoingCallModal() {
           <div className="call-pulse-ring ring-2" />
           <div className="call-avatar">
             {activeCall.remoteUser.avatar ? (
-              <img src={activeCall.remoteUser.avatar} alt={partnerName} />
+              <img 
+                src={resolveAvatarUrl(activeCall.remoteUser.avatar) || activeCall.remoteUser.avatar} 
+                alt={partnerName}
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
             ) : (
               <span>{initial}</span>
             )}

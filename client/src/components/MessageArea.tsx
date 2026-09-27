@@ -319,11 +319,18 @@ function MessageBubbleBody({
 
   // Sticker block
   if (msg.sticker || msg.type === 'sticker') {
-    const s = msg.sticker;
-    if (s && s.url) {
+    const s = msg.sticker || (typeof msg.text === 'string' && msg.text.trim() && !msg.text.startsWith('[Encrypted') ? { emoji: msg.text.trim() } : null);
+    if (s && (s.url || s.emoji || s.name || s.label)) {
       return (
         <div className="message-sticker-block">
-          <img src={s.url} alt="Sticker" className="sticker-img" loading="lazy" />
+          {s.url ? (
+            <img src={s.url} alt={s.name || s.label || 'Sticker'} className="sticker-img" loading="lazy" />
+          ) : (
+            <div className="sticker-emoji-display" title={s.label || s.name || 'Sticker'}>
+              <span className="sticker-large-emoji">{s.emoji || '✨'}</span>
+              {(s.label || s.name) && <span className="sticker-badge-label">{s.label || s.name}</span>}
+            </div>
+          )}
         </div>
       );
     }
@@ -578,10 +585,11 @@ function IncomingMessage({
   }, [msg._id, msg.status, onVisible]);
 
   const isStarred = currentUserId && msg.starredBy ? msg.starredBy.includes(currentUserId) : false;
+  const isSticker = Boolean(msg.type === 'sticker' || msg.sticker);
 
   return (
     <>
-      <div className={`message-bubble ${msg.deletedAt ? 'deleted' : ''}`} ref={ref}>
+      <div className={`message-bubble ${msg.deletedAt ? 'deleted' : ''} ${isSticker ? 'is-sticker-bubble' : ''}`} ref={ref}>
         {msg.deletedAt ? (
           <div className="message-row">
             <div className="message-content deleted-text">
@@ -738,6 +746,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
             const parsed = JSON.parse(plaintext);
             return {
               ...msg,
+              type: parsed.type || (parsed.sticker ? 'sticker' : msg.type),
               text: parsed.text !== undefined ? parsed.text : (parsed.caption || msg.text),
               gifUrl: parsed.gifUrl || msg.gifUrl,
               fileName: parsed.fileName || msg.fileName,
@@ -1404,6 +1413,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       if (e2eeService.hasSession(partnerUid)) {
         try {
           const encPayload = JSON.stringify({
+            type: specialData.type,
             text: specialData.text || '',
             gifUrl: specialData.gifUrl || specialData.mediaUrl,
             fileName: specialData.fileName,
@@ -2062,10 +2072,11 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
               };
 
               const isStarred = Boolean(user?.uid && msg.starredBy?.includes(user.uid));
+              const isSticker = Boolean(msg.type === 'sticker' || msg.sticker);
 
               const content = isOwn ? (
                 <div key={msg._id} {...messageWrapperProps}>
-                  <div className={`message-bubble ${msg.deletedAt ? 'deleted' : ''}`}>
+                  <div className={`message-bubble ${msg.deletedAt ? 'deleted' : ''} ${isSticker ? 'is-sticker-bubble' : ''}`}>
                     {msg.deletedAt ? (
                       <div className="message-row">
                         <div className="message-content deleted-text">

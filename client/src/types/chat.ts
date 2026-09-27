@@ -34,6 +34,8 @@ export interface StickerData {
   stickerId?: string;
   url?: string;
   emoji?: string;
+  name?: string;
+  label?: string;
 }
 
 export interface LinkPreviewData {

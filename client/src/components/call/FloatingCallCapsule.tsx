@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useCall } from '../../context/CallContext';
 import { rtcService } from '../../services/rtcService';
 import { resolvePartnerName } from '../../utils/partnerName';
+import { resolveAvatarUrl } from '../../utils/avatar';
 import './FloatingCallCapsule.css';
 
 function formatDuration(seconds: number): string {
@@ -337,7 +338,7 @@ export default function FloatingCallCapsule() {
             <div className="mini-video-placeholder">
               <div className={`mini-placeholder-avatar ${isRemoteSpeaking ? 'speaking' : ''}`}>
                 {activeCall.remoteUser.avatar ? (
-                  <img src={activeCall.remoteUser.avatar} alt={partnerName} />
+                  <img src={resolveAvatarUrl(activeCall.remoteUser.avatar)!} alt={partnerName} />
                 ) : (
                   <span>{initial}</span>
                 )}
@@ -515,7 +516,7 @@ export default function FloatingCallCapsule() {
         <div className={`floating-capsule-avatar-wrap ${isRemoteSpeaking ? 'speaking' : ''}`}>
           {activeCall.remoteUser.avatar ? (
             <img
-              src={activeCall.remoteUser.avatar}
+              src={resolveAvatarUrl(activeCall.remoteUser.avatar)!}
               alt={partnerName}
               className="floating-capsule-avatar"
             />

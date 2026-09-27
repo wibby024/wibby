@@ -29,7 +29,9 @@ const updateProfileSchema = z.object({
   displayName: z.string().min(1).max(50).optional(),
   username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores').optional(),
   bio: z.string().max(200).optional(),
-  avatarUrl: z.string().url().nullable().optional(),
+  avatarUrl: z.string().nullable().optional(),
+  customAvatarUrl: z.string().nullable().optional(),
+  avatarType: z.enum(['initial', 'photo']).optional(),
   customStatus: z.string().max(100).optional()
 });
 
@@ -202,8 +204,29 @@ router.put('/profile', requireAuth, async (req: Request, res: Response) => {
       updateFields.display_name = parsed.displayName;
     }
     if (parsed.bio !== undefined) updateFields.bio = parsed.bio;
-    if (parsed.avatarUrl !== undefined) updateFields.avatarUrl = parsed.avatarUrl;
     if (parsed.customStatus !== undefined) updateFields.customStatus = parsed.customStatus;
+
+    if (parsed.avatarType !== undefined) {
+      updateFields.avatarType = parsed.avatarType;
+      if (parsed.avatarType === 'initial') {
+        updateFields.avatarUrl = null;
+      } else if (parsed.avatarType === 'photo') {
+        const existing = await db.collection('users').findOne({ firebaseUid: user.uid });
+        if (existing?.customAvatarUrl) {
+          updateFields.avatarUrl = existing.customAvatarUrl;
+        }
+      }
+    }
+    if (parsed.customAvatarUrl !== undefined) updateFields.customAvatarUrl = parsed.customAvatarUrl;
+    if (parsed.avatarUrl !== undefined) {
+      updateFields.avatarUrl = parsed.avatarUrl;
+      if (parsed.avatarUrl) {
+        updateFields.customAvatarUrl = parsed.avatarUrl;
+        updateFields.avatarType = 'photo';
+      } else {
+        updateFields.avatarType = 'initial';
+      }
+    }
 
     await db.collection('users').updateOne(
       { firebaseUid: user.uid },
@@ -219,6 +242,30 @@ router.put('/profile', requireAuth, async (req: Request, res: Response) => {
     }
     console.error('Error updating profile:', error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Public cached avatar stream endpoint (allows cross-origin img tags in browser & mobile)
+router.get('/avatar-file/*', async (req: Request, res: Response) => {
+  try {
+    const rawKey = (req.params as any)[0] as string;
+    const key = rawKey.startsWith('avatars/') ? rawKey : `avatars/${rawKey}`;
+    if (!key || key.includes('..')) {
+      return res.status(400).json({ error: 'Invalid avatar key' });
+    }
+
+    const storage = getStorageProvider();
+    const result = await storage.getStream(key);
+
+    res.setHeader('Content-Type', result.mimeType || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    if (result.size) {
+      res.setHeader('Content-Length', result.size);
+    }
+
+    result.stream.pipe(res);
+  } catch {
+    res.status(404).json({ error: 'Avatar not found' });
   }
 });
 
@@ -244,14 +291,21 @@ router.post('/avatar', requireAuth, upload.single('avatar'), async (req: Request
       type: 'avatar'
     });
 
-    const avatarUrl = `/api/conversations/media/${storageKey}`;
+    const avatarUrl = `/api/users/avatar-file/${storageKey}`;
     const db = getDb();
     await db.collection('users').updateOne(
       { firebaseUid: user.uid },
-      { $set: { avatarUrl, updatedAt: new Date() } }
+      { 
+        $set: { 
+          avatarUrl, 
+          customAvatarUrl: avatarUrl,
+          avatarType: 'photo',
+          updatedAt: new Date() 
+        } 
+      }
     );
 
-    res.json({ avatarUrl });
+    res.json({ avatarUrl, customAvatarUrl: avatarUrl, avatarType: 'photo' });
   } catch (error) {
     console.error('Avatar upload error:', error);
     res.status(500).json({ error: 'Failed to upload avatar' });
