@@ -13,6 +13,7 @@ import {
 } from '../config/media.js';
 import { getStorageProvider } from '../services/storage/index.js';
 import { serializeMessage } from '../utils/serializer.js';
+import { getNextMessageSeq } from '../utils/sequence.js';
 
 const router = Router({ mergeParams: true });
 
@@ -137,8 +138,12 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
     uploadedKey = storageKey;
 
     // 5. Create MongoDB message document
+    const seq = await getNextMessageSeq(conversationId);
+
     const messageDoc = {
+      seq,
       clientMessageId: clientMessageId || null,
+      serverReceivedAt: now,
       conversationId: new ObjectId(conversationId),
       senderId: user.uid,
       type: mediaType,

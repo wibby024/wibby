@@ -49,10 +49,13 @@ export interface LinkPreviewData {
 export interface Message {
   _id: string;
   id?: string;
+  seq?: number | null;
   clientMessageId?: string;
+  clientCreatedAt?: string | null;
+  serverReceivedAt?: string | null;
   conversationId: string;
   senderId: string;
-  type?: 'text' | 'image' | 'video' | 'file' | 'audio' | 'call' | 'poll' | 'location' | 'contact' | 'sticker';
+  type?: 'text' | 'image' | 'video' | 'file' | 'audio' | 'call' | 'poll' | 'location' | 'contact' | 'sticker' | 'gif';
   text?: string;
   mediaUrl?: string;
   mediaKey?: string;
@@ -84,6 +87,8 @@ export interface Message {
   contact?: ContactData | null;
   sticker?: StickerData | null;
   linkPreview?: LinkPreviewData | null;
+  gifUrl?: string | null;
+  e2ee?: { ciphertext: string; iv: string; version: number } | null;
 }
 
 export interface MusicNoteTrack {

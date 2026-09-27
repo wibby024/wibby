@@ -213,6 +213,11 @@ export class RTCService {
   private iceDisconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private isRestartingIce = false;
 
+  // Autonomous Frozen-Video Recovery Watchdog state
+  private lastRemoteVideoCurrentTime = -1;
+  private lastRemoteVideoProgressTimestamp = 0;
+  private lastWatchdogRecoveryTimestamp = 0;
+
   private onIceCandidateCallback: ((candidate: RTCIceCandidateInit) => void) | null = null;
   private onConnectionStateChangeCallback: ((state: RTCPeerConnectionState) => void) | null = null;
   private onIceConnectionStateChangeCallback: ((state: RTCIceConnectionState) => void) | null = null;
@@ -947,14 +952,14 @@ export class RTCService {
         );
       }
 
-      // 2. Mobile/Tablet standard: Prioritize facingMode constraints ladder
+      // 2. Mobile/Tablet standard: Prioritize facingMode constraints ladder without forcing landscape width/height
       candidateConstraints.push(
-        { facingMode: { exact: nextFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         { facingMode: { exact: nextFacing } },
-        { facingMode: nextFacing, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        { facingMode: { exact: nextFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         { facingMode: nextFacing },
-        { facingMode: { ideal: nextFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        { facingMode: { ideal: nextFacing } }
+        { facingMode: nextFacing, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        { facingMode: { ideal: nextFacing } },
+        { facingMode: { ideal: nextFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } }
       );
 
       // 3. Fallback for desktop / environments without native facingMode support: try enumerated deviceId
@@ -2977,18 +2982,25 @@ export class RTCService {
         const jitterMs = jitter * 1000;
         let quality: CallAudioQuality = 'excellent';
 
-        if (this.peerConnection.iceConnectionState === 'disconnected') {
+        const isTransportDisconnected = this.peerConnection.iceConnectionState === 'disconnected' || (this.peerConnection.connectionState as string) === 'disconnected';
+        const hasSeverePacketLoss = packetLossRate > 0.15;
+        const hasModeratePacketLoss = packetLossRate > 0.05;
+        const hasSevereJitter = jitterMs > 150;
+        const hasModerateJitter = jitterMs > 80;
+        const hasHighDrops = droppedFps > 5;
+        const hasSevereRtt = rtt > 600;
+
+        if (isTransportDisconnected) {
           quality = 'poor';
           this.consecutivePoorStatsCount = 3;
-        } else if (packetLossRate > 0.15 || jitterMs > 150 || rtt > 500) {
+        } else if (hasSeverePacketLoss || (hasSevereJitter && hasModeratePacketLoss) || (hasSevereRtt && hasModeratePacketLoss)) {
           this.consecutivePoorStatsCount++;
-          // Require at least 3 consecutive poor telemetry intervals (3s) to flag connection as poor
           if (this.consecutivePoorStatsCount >= 3) {
             quality = 'poor';
           } else {
             quality = 'degraded';
           }
-        } else if (packetLossRate > 0.05 || jitterMs > 70 || rtt > 250) {
+        } else if ((hasModeratePacketLoss && (hasModerateJitter || hasHighDrops)) || (rtt > 400 && hasModeratePacketLoss)) {
           this.consecutivePoorStatsCount = 0;
           quality = 'degraded';
         } else {
@@ -3106,6 +3118,46 @@ export class RTCService {
         // Update lastAudioLevelFromStats for native-mode speaking detection fallback
         this.lastAudioLevelFromStats = inAudioLevel;
 
+        // Autonomous Frozen-Video Recovery Watchdog (Requirement #3)
+        if (this.callType === 'video' && this.remoteVideoStream) {
+          const videoEl = this.remoteVideoElement || (this.remoteVideoElements.size > 0 ? this.remoteVideoElements.values().next().value : null);
+          const liveVideoTrack = this.remoteVideoStream.getVideoTracks().find(t => t.readyState === 'live');
+
+          if (videoEl && liveVideoTrack && !this.isCameraOff) {
+            const curTime = videoEl.currentTime;
+            const nowTs = Date.now();
+
+            if (this.lastRemoteVideoCurrentTime >= 0 && Math.abs(curTime - this.lastRemoteVideoCurrentTime) < 0.001) {
+              const stalledDurationMs = nowTs - this.lastRemoteVideoProgressTimestamp;
+
+              // Tier 1 (2.5s stall): Nudge HTMLVideoElement.play() in case browser suspended playback
+              if (stalledDurationMs >= 2500 && (nowTs - this.lastWatchdogRecoveryTimestamp) >= 3000) {
+                console.warn(`[WIBBY WEBRTC WATCHDOG] Remote video playback stalled at ${curTime.toFixed(2)}s for ${stalledDurationMs}ms. Kicking video play().`);
+                videoEl.play().catch(() => {});
+                this.lastWatchdogRecoveryTimestamp = nowTs;
+              }
+
+              // Tier 2 (5.0s stall): Full pipeline recovery + request IDR keyframe from sender
+              if (stalledDurationMs >= 5000 && (nowTs - this.lastWatchdogRecoveryTimestamp) >= 5000) {
+                console.warn(`[WIBBY WEBRTC WATCHDOG] Remote video stalled for ${stalledDurationMs}ms. Triggering recoverVideoPlayback() & keyframe request.`);
+                this.recoverVideoPlayback();
+                this.sendKeyframe();
+                this.lastWatchdogRecoveryTimestamp = nowTs;
+              }
+
+              // Tier 3 (8.0s stall): Transport stall. Trigger ICE restart
+              if (stalledDurationMs >= 8000 && (nowTs - this.lastWatchdogRecoveryTimestamp) >= 8000) {
+                console.error(`[WIBBY WEBRTC WATCHDOG] Remote video frozen for ${stalledDurationMs}ms. Triggering attemptIceRestart().`);
+                this.attemptIceRestart();
+                this.lastWatchdogRecoveryTimestamp = nowTs;
+              }
+            } else {
+              this.lastRemoteVideoCurrentTime = curTime;
+              this.lastRemoteVideoProgressTimestamp = nowTs;
+            }
+          }
+        }
+
         // Log 1s stats sample for developer forensic analysis
         console.log(
           `[WIBBY RTP STATS][1s] Capture: ${this.currentCaptureWidth}x${this.currentCaptureHeight}@${this.currentCaptureFps}fps | Send: ${sendWidth}x${sendHeight}@${sendFps}fps (${sendBitrateMbps}Mbps, enc: ${encoderImplementation || 'default'}, limit: ${qualityLimitationReason}) | Recv: ${receiveWidth}x${receiveHeight}@${receiveFps}fps (${receiveBitrateMbps}Mbps, dec: ${decoderImplementation || 'default'}, drop: ${framesDropped}) | Motion: ${this.peakMotionBitrateMbps}Mbps | RTT: ${rtt}ms`
@@ -3121,6 +3173,9 @@ export class RTCService {
       clearInterval(this.statsInterval);
       this.statsInterval = null;
     }
+    this.lastRemoteVideoCurrentTime = -1;
+    this.lastRemoteVideoProgressTimestamp = 0;
+    this.lastWatchdogRecoveryTimestamp = 0;
   }
 
   /**

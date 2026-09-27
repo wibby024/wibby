@@ -30,7 +30,10 @@ export function serializeMessage(doc: any): any {
   return {
     _id,
     id: _id, // Alias for legacy/convenience
+    seq: typeof doc.seq === 'number' ? doc.seq : null,
     clientMessageId: doc.clientMessageId || null,
+    clientCreatedAt: doc.clientCreatedAt || null,
+    serverReceivedAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : (doc.createdAt || new Date().toISOString()),
     conversationId,
     senderId: doc.senderId,
     type,
@@ -63,6 +66,7 @@ export function serializeMessage(doc: any): any {
     location: doc.location || null,
     contact: doc.contact || null,
     sticker: doc.sticker || null,
-    linkPreview: doc.linkPreview || null
+    linkPreview: doc.linkPreview || null,
+    e2ee: doc.e2ee || null
   };
 }

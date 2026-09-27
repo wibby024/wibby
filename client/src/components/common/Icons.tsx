@@ -277,3 +277,12 @@ export const IconLink: React.FC<IconProps> = ({ size = 18, color = 'currentColor
   </svg>
 );
 
+export const IconGif: React.FC<IconProps> = ({ size = 18, color = 'currentColor', strokeWidth = 2, className = '', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className} {...props}>
+    <rect x="2" y="4" width="20" height="16" rx="3" ry="3" />
+    <path d="M7 10h1.5a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5H7" />
+    <line x1="12" y1="10" x2="12" y2="14" />
+    <path d="M15 10h2.5M15 12h2M15 10v4" />
+  </svg>
+);
+

@@ -16,7 +16,8 @@ import LinkPlayerModal from './LinkPlayerModal';
 import MiniMapWidget from './MiniMapWidget';
 import { AuthenticatedImage, AuthenticatedVideo } from './AuthenticatedMedia';
 import { resolvePartnerName } from '../utils/partnerName';
-import { IconPin, IconStar, IconBan } from './common/Icons';
+import { IconPin, IconStar, IconBan, IconLock } from './common/Icons';
+import { e2eeService } from '../services/e2eeService';
 import type { Message, PollData } from '../types/chat';
 import './MessageArea.css';
 
@@ -50,6 +51,8 @@ export function normalizeMessage(raw: any): Message {
     type = 'contact';
   } else if (type === 'sticker' || raw.sticker) {
     type = 'sticker';
+  } else if (type === 'gif') {
+    type = 'gif';
   } else if (!type || (type as string) === 'voice') {
     if (raw.mediaUrl?.includes('voice_') || raw.mimeType?.startsWith('audio/') || (type as string) === 'voice') {
       type = 'audio';
@@ -67,7 +70,10 @@ export function normalizeMessage(raw: any): Message {
   return {
     _id,
     id: _id,
+    seq: typeof raw.seq === 'number' ? raw.seq : null,
     clientMessageId: raw.clientMessageId || undefined,
+    clientCreatedAt: raw.clientCreatedAt || null,
+    serverReceivedAt: raw.serverReceivedAt || null,
     conversationId,
     senderId: raw.senderId || '',
     type,
@@ -99,13 +105,16 @@ export function normalizeMessage(raw: any): Message {
     location: raw.location || null,
     contact: raw.contact || null,
     sticker: raw.sticker || null,
-    linkPreview: raw.linkPreview || null
+    linkPreview: raw.linkPreview || null,
+    gifUrl: raw.gifUrl || (type === 'gif' ? (raw.mediaUrl || null) : null),
+    e2ee: raw.e2ee || null
   };
 }
 
 function getMediaReplySnippet(msg?: Message | null): string {
   if (!msg) return 'Original message';
   if (msg.deletedAt) return '🚫 This message was deleted';
+  if (msg.type === 'gif') return msg.text ? `👾 ${msg.text}` : '👾 GIF';
   if (msg.type === 'image') return msg.text ? `🖼️ ${msg.text}` : '🖼️ Photo';
   if (msg.type === 'video') return msg.text ? `🎥 ${msg.text}` : '🎥 Video';
   if (msg.type === 'file') return `📄 ${msg.fileName || 'Document'}`;
@@ -136,11 +145,12 @@ function MessageBubbleBody({
   onOpenLink?: (url: string, title?: string) => void;
   onStopLiveLocation?: (msgId: string) => void;
 }) {
+  const isGif = msg.type === 'gif' || Boolean(msg.gifUrl) || (Boolean(msg.mediaUrl) && (msg.mimeType === 'image/gif' || /\.gif($|\?)/i.test(msg.fileName || msg.mediaUrl || '')));
   const isCall = msg.type === 'call';
   const isAudio = msg.type === 'audio' || (msg as any).type === 'voice' || (Boolean(msg.mediaUrl) && (msg.mimeType?.startsWith('audio/') || msg.mediaUrl?.includes('voice_')));
-  const isImage = msg.type === 'image' || (Boolean(msg.mediaUrl) && (msg.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(msg.fileName || '')));
+  const isImage = !isGif && (msg.type === 'image' || (Boolean(msg.mediaUrl) && (msg.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(msg.fileName || ''))));
   const isVideo = msg.type === 'video' || (Boolean(msg.mediaUrl) && (msg.mimeType?.startsWith('video/') || /\.(mp4|webm|mov|qt)$/i.test(msg.fileName || '')));
-  const isFile = msg.type === 'file' || Boolean(msg.mediaUrl && !isAudio && !isImage && !isVideo && !isCall);
+  const isFile = msg.type === 'file' || Boolean(msg.mediaUrl && !isAudio && !isImage && !isVideo && !isCall && !isGif);
 
   if (isCall) {
     const isMissed = msg.text?.toLowerCase().includes('missed') || msg.text?.toLowerCase().includes('declined') || msg.text?.toLowerCase().includes('cancelled');
@@ -157,6 +167,48 @@ function MessageBubbleBody({
             <span className="message-call-duration">{formatAudioDuration(msg.duration)}</span>
           ) : null}
         </div>
+      </div>
+    );
+  }
+
+  // GIF block
+  if (isGif) {
+    const gifSrc = msg.mediaUrl || msg.gifUrl || msg.text || '';
+    return (
+      <div className="message-media-block message-gif-block">
+        <div 
+          className="bubble-image-wrap bubble-gif-wrap" 
+          onClick={(e) => {
+            e.stopPropagation();
+            onImageClick(msg);
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="View GIF"
+        >
+          {gifSrc.startsWith('http') ? (
+            <img 
+              src={gifSrc} 
+              alt={msg.fileName || 'GIF'} 
+              className="bubble-image bubble-gif-img" 
+              loading="lazy" 
+            />
+          ) : (
+            <AuthenticatedImage 
+              conversationId={msg.conversationId}
+              mediaUrl={gifSrc} 
+              alt={msg.fileName || 'GIF'} 
+              className="bubble-image bubble-gif-img" 
+            />
+          )}
+          <span className="bubble-gif-badge">GIF</span>
+        </div>
+        {msg.text && msg.text !== gifSrc && msg.text !== '[Encrypted Message]' && (
+          <div className="bubble-caption-text">
+            {msg.text}
+            {msg.editedAt && <span className="edited-indicator">(edited)</span>}
+          </div>
+        )}
       </div>
     );
   }
@@ -590,6 +642,7 @@ function IncomingMessage({
               <div className="message-meta">
                 {msg.isPinned && <span className="badge-pin" title="Pinned message"><IconPin size={11} color="var(--wibby-primary)" /></span>}
                 {isStarred && <span className="badge-star" title="Starred message"><IconStar size={11} color="#FBBF24" /></span>}
+                {msg.e2ee && <span className="badge-e2ee" title="End-to-End Encrypted (AES-GCM-256)"><IconLock size={11} color="var(--wibby-primary-light, #c084fc)" /></span>}
                 <span className="message-time">{formatMessageTime(msg.createdAt)}</span>
               </div>
             </div>
@@ -605,10 +658,14 @@ function IncomingMessage({
 interface MessageAreaProps {
   conversationId: string;
   partner?: {
+    uid?: string;
+    id?: string;
     display_name?: string;
     displayName?: string;
     username?: string;
     email?: string;
+    e2eePublicKey?: string;
+    [key: string]: any;
   };
   onOpenGame?: () => void;
 }
@@ -643,12 +700,80 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
   const chatDragCounterRef = useRef<number>(0);
 
   const partnerName = resolvePartnerName(partner);
+  const partnerUid = partner?.uid || partner?.id;
+
+  // Initialize E2EE and establish ECDH session with partner
+  useEffect(() => {
+    if (!user) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const token = await user.getIdToken();
+        await e2eeService.init(user.uid, token);
+        if (partnerUid && mounted) {
+          await e2eeService.ensureSession(partnerUid, partner?.e2eePublicKey, token);
+        }
+      } catch (err) {
+        console.error('Failed to init E2EE session:', err);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [user, partnerUid, partner?.e2eePublicKey]);
+
+  const decryptMessage = useCallback(async (msg: Message): Promise<Message> => {
+    if (!msg.e2ee || !msg.e2ee.ciphertext || !msg.e2ee.iv) return msg;
+    const targetUid = partnerUid;
+    if (!targetUid) return msg;
+    try {
+      const plaintext = await e2eeService.decrypt({
+        ciphertext: msg.e2ee.ciphertext,
+        iv: msg.e2ee.iv,
+        version: msg.e2ee.version || 1
+      }, targetUid);
+      if (plaintext) {
+        if (plaintext.startsWith('{') && plaintext.endsWith('}')) {
+          try {
+            const parsed = JSON.parse(plaintext);
+            return {
+              ...msg,
+              text: parsed.text !== undefined ? parsed.text : (parsed.caption || msg.text),
+              gifUrl: parsed.gifUrl || msg.gifUrl,
+              fileName: parsed.fileName || msg.fileName,
+              poll: parsed.poll || msg.poll,
+              location: parsed.location || msg.location,
+              contact: parsed.contact || msg.contact,
+              sticker: parsed.sticker || msg.sticker
+            };
+          } catch {}
+        }
+        return { ...msg, text: plaintext };
+      }
+    } catch (err) {
+      console.warn('Failed to decrypt message:', msg._id, err);
+    }
+    return msg;
+  }, [partnerUid]);
+
+  // Sequential send queue to prevent 1->3->2 race conditions on the network layer
+  const sendQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const sortedMessages = useMemo(() => {
     return [...messages].sort((a, b) => {
-      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return (Number.isNaN(timeA) ? 0 : timeA) - (Number.isNaN(timeB) ? 0 : timeB);
+      // 1. Authoritative integer sequence comparison if both have sequence assigned by server
+      if (typeof a.seq === 'number' && typeof b.seq === 'number') {
+        return a.seq - b.seq;
+      }
+      // 2. Primary timestamp comparison (using clientCreatedAt if available, or createdAt)
+      const timeA = a.clientCreatedAt ? new Date(a.clientCreatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+      const timeB = b.clientCreatedAt ? new Date(b.clientCreatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+      const timeDiff = (Number.isNaN(timeA) ? 0 : timeA) - (Number.isNaN(timeB) ? 0 : timeB);
+      if (timeDiff !== 0) return timeDiff;
+      // 3. Fallback to stable ID comparison to ensure deterministic stable order
+      const idA = a._id || a.clientMessageId || '';
+      const idB = b._id || b.clientMessageId || '';
+      return idA.localeCompare(idB);
     });
   }, [messages]);
 
@@ -807,7 +932,8 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       const data = await response.json();
       if (response.ok) {
         const loaded = (data.messages || []).map(normalizeMessage);
-        setMessages(loaded);
+        const decryptedList = await Promise.all(loaded.map(decryptMessage));
+        setMessages(decryptedList);
         setTimeout(scrollToBottom, 100);
 
         // Bulk delivery-ack: for any partner messages that are still 'sent' (not yet delivered),
@@ -829,7 +955,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
     } finally {
       setLoading(false);
     }
-  }, [user, conversationId, scrollToBottom]);
+  }, [user, conversationId, scrollToBottom, decryptMessage]);
 
   useEffect(() => {
     fetchMessages();
@@ -848,12 +974,16 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
 
     socket.on('connect', joinRoom);
 
-    const handleNewMessage = (rawMessage: any) => {
-      const message = normalizeMessage(rawMessage);
+    const handleNewMessage = async (rawMessage: any) => {
+      let message = normalizeMessage(rawMessage);
 
       // Filter by conversationId if present
       if (message.conversationId && message.conversationId !== conversationId) {
         return;
+      }
+
+      if (message.e2ee) {
+        message = await decryptMessage(message);
       }
 
       setMessages(prev => {
@@ -1129,6 +1259,45 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
   const handleSend = async (text: string, forwardedFromMessageId?: string, mediaProps?: Partial<Message>) => {
     if (!user || !conversationId) return;
 
+    let e2eeData: { ciphertext: string; iv: string; version: number } | undefined;
+
+    // Strict E2EE: Partner key agreement check
+    if (partnerUid) {
+      if (!e2eeService.hasSession(partnerUid)) {
+        try {
+          const token = await user.getIdToken();
+          await e2eeService.ensureSession(partnerUid, partner?.e2eePublicKey, token);
+        } catch (err) {
+          console.warn('[E2EE] Key exchange check error:', err);
+        }
+      }
+
+      if (e2eeService.hasSession(partnerUid)) {
+        try {
+          // If mediaProps are attached, encrypt metadata alongside text
+          const payloadToEncrypt = mediaProps?.fileName ? JSON.stringify({
+            text,
+            fileName: mediaProps.fileName,
+            fileSize: mediaProps.fileSize,
+            mimeType: mediaProps.mimeType
+          }) : text;
+
+          const enc = await e2eeService.encrypt(payloadToEncrypt, partnerUid);
+          if (enc) {
+            e2eeData = { ...enc, version: 1 };
+          }
+        } catch (err) {
+          console.error('[E2EE] Encryption failed:', err);
+        }
+      }
+
+      // CRITICAL: Block sending if E2EE encryption failed or partner key is missing. NEVER silently fall back to plaintext.
+      if (!e2eeData) {
+        showToast('Message blocked: E2EE key for partner is unavailable. Plaintext fallback is disabled.');
+        return;
+      }
+    }
+
     const tempId = generateUUID();
     const tempMsg: Message = {
       _id: tempId,
@@ -1136,6 +1305,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       conversationId,
       senderId: user.uid,
       text,
+      e2ee: e2eeData,
       type: mediaProps?.type || 'text',
       mediaUrl: mediaProps?.mediaUrl,
       mediaKey: mediaProps?.mediaKey,
@@ -1152,51 +1322,111 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
     setMessages(prev => [...prev, tempMsg]);
     setTimeout(() => scrollToBottom('smooth'), 50);
 
-    try {
-      const token = await user.getIdToken();
-      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations/${conversationId}/messages`;
-      
-      const payload: any = { 
-        text, 
-        clientMessageId: tempId,
-        type: mediaProps?.type || 'text',
-        mediaUrl: mediaProps?.mediaUrl,
-        mediaKey: mediaProps?.mediaKey,
-        mimeType: mediaProps?.mimeType,
-        fileName: mediaProps?.fileName,
-        fileSize: mediaProps?.fileSize,
-        thumbnailUrl: mediaProps?.thumbnailUrl
-      };
-      if (replyingTo) {
-        payload.replyToMessageId = replyingTo.id;
+    sendQueueRef.current = sendQueueRef.current.then(async () => {
+      try {
+        const token = await user.getIdToken();
+        const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations/${conversationId}/messages`;
+        
+        // Plaintext NEVER reaches the server or MongoDB Atlas for encrypted messages
+        const payload: any = { 
+          text: e2eeData ? '[Encrypted Message]' : text, 
+          e2ee: e2eeData,
+          clientMessageId: tempId,
+          clientCreatedAt: tempMsg.createdAt,
+          type: mediaProps?.type || 'text',
+          mediaUrl: mediaProps?.mediaUrl,
+          mediaKey: mediaProps?.mediaKey,
+          mimeType: mediaProps?.mimeType,
+          fileName: mediaProps?.fileName,
+          fileSize: mediaProps?.fileSize,
+          thumbnailUrl: mediaProps?.thumbnailUrl
+        };
+        if (replyingTo) {
+          payload.replyToMessageId = replyingTo.id;
+        }
+        if (forwardedFromMessageId) {
+          payload.forwardedFromMessageId = forwardedFromMessageId;
+        }
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error('Failed to send');
+
+        const data = await response.json();
+        const normalizedSent = normalizeMessage(data.message);
+        if (e2eeData) {
+          normalizedSent.text = text;
+        }
+        setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? normalizedSent : m));
+      } catch (err) {
+        console.error('Send error:', err);
+        setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? { ...m, status: 'failed' } : m));
       }
-      if (forwardedFromMessageId) {
-        payload.forwardedFromMessageId = forwardedFromMessageId;
-      }
+    });
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) throw new Error('Failed to send');
-
-      const data = await response.json();
-      const normalizedSent = normalizeMessage(data.message);
-      setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? normalizedSent : m));
-    } catch (err) {
-      console.error('Send error:', err);
-      setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? { ...m, status: 'failed' } : m));
-      throw err;
-    }
+    return sendQueueRef.current;
   };
 
-  const handleSendSpecial = async (specialData: { type: string; poll?: any; location?: any; contact?: any; sticker?: any }) => {
+  const handleSendSpecial = async (specialData: { 
+    type: string; 
+    poll?: any; 
+    location?: any; 
+    contact?: any; 
+    sticker?: any;
+    mediaUrl?: string;
+    gifUrl?: string;
+    fileName?: string;
+    mimeType?: string;
+    text?: string;
+  }) => {
     if (!user || !conversationId) return;
+
+    let e2eeData: { ciphertext: string; iv: string; version: number } | undefined;
+
+    // Strict E2EE for special/GIF messages
+    if (partnerUid) {
+      if (!e2eeService.hasSession(partnerUid)) {
+        try {
+          const token = await user.getIdToken();
+          await e2eeService.ensureSession(partnerUid, partner?.e2eePublicKey, token);
+        } catch (err) {
+          console.warn('[E2EE] Key exchange check error:', err);
+        }
+      }
+
+      if (e2eeService.hasSession(partnerUid)) {
+        try {
+          const encPayload = JSON.stringify({
+            text: specialData.text || '',
+            gifUrl: specialData.gifUrl || specialData.mediaUrl,
+            fileName: specialData.fileName,
+            poll: specialData.poll,
+            location: specialData.location,
+            contact: specialData.contact,
+            sticker: specialData.sticker
+          });
+          const enc = await e2eeService.encrypt(encPayload, partnerUid);
+          if (enc) {
+            e2eeData = { ...enc, version: 1 };
+          }
+        } catch (err) {
+          console.error('[E2EE] Special payload encryption failed:', err);
+        }
+      }
+
+      // Block sending if E2EE encryption failed
+      if (!e2eeData) {
+        showToast('Message blocked: E2EE key for partner is unavailable. Plaintext fallback is disabled.');
+        return;
+      }
+    }
 
     const tempId = generateUUID();
     const tempMsg: Message = {
@@ -1205,10 +1435,16 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       conversationId,
       senderId: user.uid,
       type: specialData.type as any,
+      e2ee: e2eeData,
       poll: specialData.poll,
       location: specialData.location,
       contact: specialData.contact,
       sticker: specialData.sticker,
+      mediaUrl: specialData.mediaUrl,
+      gifUrl: specialData.gifUrl || specialData.mediaUrl,
+      fileName: specialData.fileName,
+      mimeType: specialData.mimeType,
+      text: specialData.text,
       createdAt: new Date().toISOString(),
       status: 'sending'
     };
@@ -1216,29 +1452,40 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
     setMessages(prev => [...prev, tempMsg]);
     setTimeout(() => scrollToBottom('smooth'), 50);
 
-    try {
-      const token = await user.getIdToken();
-      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations/${conversationId}/messages`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          ...specialData,
-          clientMessageId: tempId
-        })
-      });
+    sendQueueRef.current = sendQueueRef.current.then(async () => {
+      try {
+        const token = await user.getIdToken();
+        const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations/${conversationId}/messages`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            ...specialData,
+            text: e2eeData ? `[Encrypted ${specialData.type.toUpperCase()}]` : specialData.text,
+            e2ee: e2eeData,
+            clientMessageId: tempId,
+            clientCreatedAt: tempMsg.createdAt
+          })
+        });
 
-      if (!res.ok) throw new Error('Failed to send special message');
-      const data = await res.json();
-      const normalized = normalizeMessage(data.message);
-      setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? normalized : m));
-    } catch (err) {
-      console.error('Special send error:', err);
-      setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? { ...m, status: 'failed' } : m));
-    }
+        if (!res.ok) throw new Error('Failed to send special message');
+        const data = await res.json();
+        const normalized = normalizeMessage(data.message);
+        if (e2eeData) {
+          normalized.text = specialData.text;
+          normalized.gifUrl = specialData.gifUrl || specialData.mediaUrl;
+        }
+        setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? normalized : m));
+      } catch (err) {
+        console.error('Special send error:', err);
+        setMessages(prev => prev.map(m => m.clientMessageId === tempId || m._id === tempId ? { ...m, status: 'failed' } : m));
+      }
+    });
+
+    return sendQueueRef.current;
   };
 
   const handleVotePoll = async (msgId: string, optionIndex: number) => {
@@ -1889,6 +2136,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
                           <div className="message-meta">
                             {msg.isPinned && <span className="badge-pin" title="Pinned message"><IconPin size={11} color="var(--wibby-primary)" /></span>}
                             {isStarred && <span className="badge-star" title="Starred message"><IconStar size={11} color="#FBBF24" /></span>}
+                            {msg.e2ee && <span className="badge-e2ee" title="End-to-End Encrypted (AES-GCM-256)"><IconLock size={11} color="var(--wibby-primary-light, #c084fc)" /></span>}
                             <span className="message-time">{formatMessageTime(msg.createdAt)}</span>
                             <span className="message-status">
                               {msg.status === 'failed' ? (

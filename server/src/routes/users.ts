@@ -552,10 +552,50 @@ router.get('/ice-servers', requireAuth, async (req: Request, res: Response) => {
     });
   }
 
-  res.json({
-    iceServers,
-    iceCandidatePoolSize: 10
-  });
+  res.json({ iceServers });
+});
+
+/**
+ * POST /api/users/keys
+ * Publish user's ECDH public key for genuine Web Crypto E2EE
+ */
+router.post('/keys', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { publicKey } = req.body;
+    if (!publicKey || typeof publicKey !== 'string') {
+      return res.status(400).json({ error: 'Public key string required' });
+    }
+    const db = getDb();
+    await db.collection('users').updateOne(
+      { firebaseUid: user.uid },
+      { $set: { e2eePublicKey: publicKey, updatedAt: new Date() } },
+      { upsert: true }
+    );
+    res.json({ success: true, publicKey });
+  } catch (error) {
+    console.error('Error saving E2EE public key:', error);
+    res.status(500).json({ error: 'Failed to save public key' });
+  }
+});
+
+/**
+ * GET /api/users/:uid/keys
+ * Retrieve a user's ECDH public key for establishing E2EE session
+ */
+router.get('/:uid/keys', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const targetUid = req.params.uid;
+    const db = getDb();
+    const targetUser = await db.collection('users').findOne({ firebaseUid: targetUid });
+    if (!targetUser || !targetUser.e2eePublicKey) {
+      return res.status(404).json({ error: 'Public key not found' });
+    }
+    res.json({ uid: targetUid, publicKey: targetUser.e2eePublicKey });
+  } catch (error) {
+    console.error('Error fetching E2EE public key:', error);
+    res.status(500).json({ error: 'Failed to fetch public key' });
+  }
 });
 
 export default router;

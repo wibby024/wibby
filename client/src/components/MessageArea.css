@@ -1415,12 +1415,49 @@
   overflow: hidden;
 }
 
-/* Star and Pin Badges */
-.badge-star, .badge-pin {
+/* Star, Pin, and E2EE Badges */
+.badge-star, .badge-pin, .badge-e2ee {
   font-size: 11px;
   margin-right: 3px;
   display: inline-flex;
   align-items: center;
+}
+
+.badge-e2ee {
+  color: var(--wibby-primary-light, #c084fc);
+  opacity: 0.9;
+}
+
+/* GIF Message Bubble */
+.bubble-gif-wrap {
+  position: relative;
+  display: inline-block;
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 280px;
+  cursor: pointer;
+}
+
+.bubble-gif-img {
+  width: 100%;
+  height: auto;
+  max-height: 320px;
+  object-fit: cover;
+  display: block;
+}
+
+.bubble-gif-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+  pointer-events: none;
 }
 
 /* ============================================

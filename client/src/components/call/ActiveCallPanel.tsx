@@ -1271,50 +1271,51 @@ export default function ActiveCallPanel() {
               </div>
             )}
 
-            {/* Screen Share Button */}
-            <div className="call-control-item">
-              <button
-                type="button"
-                id="screen-share-btn"
-                className={`call-btn screen-share ${isScreenSharing ? 'active' : ''} ${!isScreenShareSupported ? 'disabled' : ''}`}
-                onClick={() => {
-                  if (!isScreenShareSupported) {
-                    setScreenShareNotice('Screen sharing is not supported on this browser or device');
-                    setTimeout(() => setScreenShareNotice(null), 3500);
-                    return;
-                  }
-                  if (isScreenSharing) {
-                    stopScreenSharing();
-                  } else {
-                    startScreenSharing();
-                  }
-                }}
-                title={!isScreenShareSupported ? 'Screen sharing is not supported on this device/browser' : isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
-                aria-label={!isScreenShareSupported ? 'Screen sharing not supported' : isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
-                style={!isScreenShareSupported ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
-              >
-                {isScreenSharing ? (
-                  /* Stop-share icon: monitor with X */
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="20" height="14" rx="2" />
-                    <line x1="8" y1="21" x2="16" y2="21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
-                    <line x1="9" y1="8" x2="15" y2="14" />
-                    <line x1="15" y1="8" x2="9" y2="14" />
-                  </svg>
-                ) : (
-                  /* Share icon: monitor with upward arrow */
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="20" height="14" rx="2" />
-                    <line x1="8" y1="21" x2="16" y2="21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
-                    <polyline points="8 9 12 5 16 9" />
-                    <line x1="12" y1="5" x2="12" y2="13" />
-                  </svg>
-                )}
-              </button>
-              <span className="call-btn-label">{isScreenSharing ? 'Stop screen' : 'Screen'}</span>
-            </div>
+            {/* Screen Share Button (Capability detected: only shown when supported) */}
+            {isScreenShareSupported && (
+              <div className="call-control-item">
+                <button
+                  type="button"
+                  id="screen-share-btn"
+                  className={`call-btn screen-share ${isScreenSharing ? 'active' : ''}`}
+                  onClick={async () => {
+                    try {
+                      if (isScreenSharing) {
+                        stopScreenSharing();
+                      } else {
+                        await startScreenSharing();
+                      }
+                    } catch (err: any) {
+                      setScreenShareNotice(err?.message || 'Failed to start screen sharing');
+                      setTimeout(() => setScreenShareNotice(null), 3500);
+                    }
+                  }}
+                  title={isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
+                  aria-label={isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
+                >
+                  {isScreenSharing ? (
+                    /* Stop-share icon: monitor with X */
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="3" width="20" height="14" rx="2" />
+                      <line x1="8" y1="21" x2="16" y2="21" />
+                      <line x1="12" y1="17" x2="12" y2="21" />
+                      <line x1="9" y1="8" x2="15" y2="14" />
+                      <line x1="15" y1="8" x2="9" y2="14" />
+                    </svg>
+                  ) : (
+                    /* Share icon: monitor with upward arrow */
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="3" width="20" height="14" rx="2" />
+                      <line x1="8" y1="21" x2="16" y2="21" />
+                      <line x1="12" y1="17" x2="12" y2="21" />
+                      <polyline points="8 9 12 5 16 9" />
+                      <line x1="12" y1="5" x2="12" y2="13" />
+                    </svg>
+                  )}
+                </button>
+                <span className="call-btn-label">{isScreenSharing ? 'Stop screen' : 'Screen'}</span>
+              </div>
+            )}
 
             {/* Microphone Mute Button */}
             <div className="call-control-item">

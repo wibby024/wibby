@@ -3,13 +3,16 @@ import EmojiPicker from './EmojiPicker';
 import AttachmentMenu from './AttachmentMenu';
 import MediaPreviewModal, { type InitialMediaFile } from './MediaPreviewModal';
 import VoiceRecorder, { type VoiceRecordingResult } from './VoiceRecorder';
-import CameraCaptureModal from './CameraCaptureModal';
 import { uploadMedia } from '../services/mediaService';
 import { validateClientFile, ACCEPT_PATTERNS, type MediaCategory } from '../config/media';
+import type { SelectedGifPayload } from './GifPickerModal';
 
-import PollCreateModal from './PollCreateModal';
-import LocationShareModal from './LocationShareModal';
-import ContactShareModal from './ContactShareModal';
+// Code-split heavy attachment modals
+const CameraCaptureModal = React.lazy(() => import('./CameraCaptureModal'));
+const PollCreateModal = React.lazy(() => import('./PollCreateModal'));
+const LocationShareModal = React.lazy(() => import('./LocationShareModal'));
+const ContactShareModal = React.lazy(() => import('./ContactShareModal'));
+const GifPickerModal = React.lazy(() => import('./GifPickerModal'));
 
 import './MessageComposer.css';
 
@@ -53,6 +56,7 @@ export default function MessageComposer({
   const [showPollModal, setShowPollModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -549,6 +553,7 @@ export default function MessageComposer({
           onSelectPhoto={() => photoInputRef.current?.click()}
           onSelectVideo={() => videoInputRef.current?.click()}
           onSelectDocument={() => docInputRef.current?.click()}
+          onSelectGif={() => setShowGifPicker(true)}
           onSelectPoll={() => setShowPollModal(true)}
           onSelectLocation={() => setShowLocationModal(true)}
           onSelectContact={() => setShowContactModal(true)}
@@ -559,62 +564,92 @@ export default function MessageComposer({
         />
       )}
 
+      {/* WhatsApp-Style GIF Picker Modal */}
+      {showGifPicker && (
+        <React.Suspense fallback={null}>
+          <GifPickerModal
+            isOpen={showGifPicker}
+            onClose={() => setShowGifPicker(false)}
+            onSelectGif={(gif: SelectedGifPayload) => {
+              setShowGifPicker(false);
+              if (onSendSpecial) {
+                onSendSpecial({
+                  type: 'gif',
+                  mediaUrl: gif.url,
+                  text: gif.caption || gif.title || '',
+                  fileName: (gif.title || 'animation') + '.gif',
+                  mimeType: 'image/gif'
+                } as any);
+              }
+            }}
+          />
+        </React.Suspense>
+      )}
+
       {/* Instant Camera Capture Modal */}
       {showCameraModal && (
-        <CameraCaptureModal
-          isOpen={showCameraModal}
-          onCapture={(photoFile) => {
-            setShowCameraModal(false);
-            setSelectedFilesForPreview([{
-              file: photoFile,
-              category: 'image'
-            }]);
-          }}
-          onSelectPhotoFallback={() => {
-            setShowCameraModal(false);
-            photoInputRef.current?.click();
-          }}
-          onClose={() => setShowCameraModal(false)}
-        />
+        <React.Suspense fallback={null}>
+          <CameraCaptureModal
+            isOpen={showCameraModal}
+            onCapture={(photoFile) => {
+              setShowCameraModal(false);
+              setSelectedFilesForPreview([{
+                file: photoFile,
+                category: 'image'
+              }]);
+            }}
+            onSelectPhotoFallback={() => {
+              setShowCameraModal(false);
+              photoInputRef.current?.click();
+            }}
+            onClose={() => setShowCameraModal(false)}
+          />
+        </React.Suspense>
       )}
 
       {/* Poll Creation Modal */}
       {showPollModal && (
-        <PollCreateModal
-          isOpen={showPollModal}
-          onClose={() => setShowPollModal(false)}
-          onCreatePoll={(pollData) => {
-            if (onSendSpecial) {
-              onSendSpecial({ type: 'poll', poll: pollData });
-            }
-          }}
-        />
+        <React.Suspense fallback={null}>
+          <PollCreateModal
+            isOpen={showPollModal}
+            onClose={() => setShowPollModal(false)}
+            onCreatePoll={(pollData) => {
+              if (onSendSpecial) {
+                onSendSpecial({ type: 'poll', poll: pollData });
+              }
+            }}
+          />
+        </React.Suspense>
       )}
 
       {/* Location Share Modal */}
       {showLocationModal && (
-        <LocationShareModal
-          isOpen={showLocationModal}
-          onClose={() => setShowLocationModal(false)}
-          onSendLocation={(loc) => {
-            if (onSendSpecial) {
-              onSendSpecial({ type: 'location', location: loc });
-            }
-          }}
-        />
+        <React.Suspense fallback={null}>
+          <LocationShareModal
+            isOpen={showLocationModal}
+            onClose={() => setShowLocationModal(false)}
+            onSendLocation={(loc) => {
+              if (onSendSpecial) {
+                onSendSpecial({ type: 'location', location: loc });
+              }
+            }}
+          />
+        </React.Suspense>
       )}
 
       {/* Contact Share Modal */}
       {showContactModal && (
-        <ContactShareModal
-          isOpen={showContactModal}
-          onClose={() => setShowContactModal(false)}
-          onSendContact={(contact) => {
-            if (onSendSpecial) {
-              onSendSpecial({ type: 'contact', contact });
-            }
-          }}
-        />
+        <React.Suspense fallback={null}>
+          <ContactShareModal
+            isOpen={showContactModal}
+            onClose={() => setShowContactModal(false)}
+            onSendContact={(contact) => {
+              if (onSendSpecial) {
+                onSendSpecial({ type: 'contact', contact });
+              }
+            }}
+          />
+        </React.Suspense>
       )}
 
       {/* Reusable Emoji Picker for Composer */}

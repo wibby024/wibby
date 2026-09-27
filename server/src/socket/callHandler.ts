@@ -2,6 +2,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { ObjectId } from 'mongodb';
 import { getDb } from '../lib/mongodb.js';
 import { serializeMessage } from '../utils/serializer.js';
+import { getNextMessageSeq } from '../utils/sequence.js';
 import { CALL_RECONNECT_GRACE_PERIOD_MS } from '../config/callConfig.js';
 
 export interface ActiveCallSession {
@@ -115,7 +116,9 @@ export function registerCallHandlers(
       else if (status === 'declined') callText = isVideo ? 'Declined video call' : 'Declined voice call';
       else if (status === 'cancelled') callText = isVideo ? 'Cancelled video call' : 'Cancelled voice call';
 
+      const seq = await getNextMessageSeq(convId);
       const callMessageDoc = {
+        seq,
         conversationId: convId,
         senderId: session.callerId,
         type: 'call',

@@ -348,7 +348,8 @@ router.get('/status', requireAuth, statusLimiter, async (req: Request, res: Resp
       avatarUrl: partner?.avatarUrl || null,
       bio: partner?.bio || '',
       customStatus: partner?.customStatus || '',
-      lastSeen: partner?.lastSeen || null
+      lastSeen: partner?.lastSeen || null,
+      e2eePublicKey: partner?.e2eePublicKey || null
     };
 
     res.json({

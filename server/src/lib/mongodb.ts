@@ -39,6 +39,7 @@ export async function connectToDatabase(): Promise<{ client: MongoClient; db: Db
       db.collection('conversations').createIndex({ updatedAt: -1 }),
 
       // Messages collection
+      db.collection('messages').createIndex({ conversationId: 1, seq: -1 }, { sparse: true }),
       db.collection('messages').createIndex({ conversationId: 1, createdAt: -1 }),
       db.collection('messages').createIndex({ conversationId: 1, createdAt: 1 }),
       db.collection('messages').createIndex({ senderId: 1 }),

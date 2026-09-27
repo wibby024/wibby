@@ -112,10 +112,10 @@ export async function getStorageAudit(): Promise<StorageAuditResult> {
   const percentUsed = parseFloat(((usedMb / limitMb) * 100).toFixed(1));
 
   let status: StorageHealthStatus = 'Normal';
-  if (percentUsed >= 90) status = 'Emergency';
+  if (percentUsed >= 95) status = 'Emergency';
   else if (percentUsed >= 85) status = 'Critical';
-  else if (percentUsed >= 75) status = 'Warning';
-  else if (percentUsed >= 60) status = 'Watch';
+  else if (percentUsed >= 70) status = 'Warning';
+  else if (percentUsed >= 50) status = 'Watch';
 
   return {
     status,

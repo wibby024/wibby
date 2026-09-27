@@ -8,6 +8,7 @@ import rateLimit from 'express-rate-limit';
 import { getStorageProvider } from '../services/storage/index.js';
 import { serializeMessage } from '../utils/serializer.js';
 import { fetchLinkPreview } from '../services/linkPreviewService.js';
+import { getNextMessageSeq } from '../utils/sequence.js';
 
 const router = Router({ mergeParams: true });
 
@@ -54,9 +55,15 @@ const stickerSchema = z.object({
   emoji: z.string().optional()
 });
 
+const e2eeSchema = z.object({
+  ciphertext: z.string().min(1),
+  iv: z.string().min(1),
+  version: z.number().default(1)
+});
+
 const messageSchema = z.object({
   text: z.string().max(2000, 'Message is too long').default(''),
-  type: z.enum(['text', 'image', 'video', 'file', 'audio', 'poll', 'location', 'contact', 'sticker']).default('text'),
+  type: z.enum(['text', 'image', 'video', 'file', 'audio', 'poll', 'location', 'contact', 'sticker', 'gif']).default('text'),
   mediaUrl: z.string().optional(),
   mediaKey: z.string().optional(),
   mimeType: z.string().optional(),
@@ -64,6 +71,7 @@ const messageSchema = z.object({
   fileSize: z.number().optional(),
   thumbnailUrl: z.string().nullable().optional(),
   clientMessageId: z.string().uuid().optional(),
+  clientCreatedAt: z.string().optional(),
   replyToMessageId: z.string().optional(),
   forwardedFromMessageId: z.string().optional(),
   poll: z.object({
@@ -73,9 +81,10 @@ const messageSchema = z.object({
   }).optional(),
   location: locationSchema.optional(),
   contact: contactSchema.optional(),
-  sticker: stickerSchema.optional()
+  sticker: stickerSchema.optional(),
+  e2ee: e2eeSchema.optional()
 }).refine(data => {
-  if (data.type === 'text') {
+  if (data.type === 'text' && !data.e2ee) {
     return data.text.trim().length > 0;
   }
   return true;
@@ -191,7 +200,7 @@ router.get('/search', async (req: Request, res: Response) => {
 
     const messages = await db.collection('messages')
       .find(query)
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .limit(100)
       .toArray();
 
@@ -228,7 +237,7 @@ router.get('/shared-media', async (req: Request, res: Response) => {
 
     const messages = await db.collection('messages')
       .find(query)
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .limit(200)
       .toArray();
 
@@ -329,7 +338,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     const messages = await db.collection('messages')
       .find(query)
-      .sort({ createdAt: -1 })
+      .sort({ seq: -1, createdAt: -1, _id: -1 })
       .limit(limit)
       .toArray();
 
@@ -426,9 +435,9 @@ router.post('/', messageLimiter, async (req: Request, res: Response) => {
       expiresAt = new Date(now.getTime() + conversation.disappearingTimer * 1000);
     }
 
-    // Optional Smart Link check on text messages
+    // Optional Smart Link check on text messages (strictly bypassed for E2EE messages to preserve privacy)
     let linkPreview: any = null;
-    if (validatedData.data.type === 'text' && validatedData.data.text) {
+    if (!validatedData.data.e2ee && validatedData.data.type === 'text' && validatedData.data.text) {
       const urlMatch = validatedData.data.text.match(/https?:\/\/[^\s]+/i);
       if (urlMatch) {
         try {
@@ -439,8 +448,13 @@ router.post('/', messageLimiter, async (req: Request, res: Response) => {
       }
     }
 
+    const seq = await getNextMessageSeq(conversationId);
+
     const messageDoc: any = {
+      seq,
       clientMessageId: validatedData.data.clientMessageId || null,
+      clientCreatedAt: validatedData.data.clientCreatedAt || null,
+      serverReceivedAt: now,
       replyToMessageId: validatedData.data.replyToMessageId ? new ObjectId(validatedData.data.replyToMessageId) : null,
       forwardedFromMessageId: validatedData.data.forwardedFromMessageId ? new ObjectId(validatedData.data.forwardedFromMessageId) : null,
       reactions: [],
@@ -452,7 +466,10 @@ router.post('/', messageLimiter, async (req: Request, res: Response) => {
       conversationId: new ObjectId(conversationId),
       senderId: user.uid,
       type: validatedData.data.type || 'text',
-      text: validatedData.data.text || '',
+      // Privacy guarantee: Plaintext is never stored in DB when e2ee is present
+      text: validatedData.data.e2ee 
+        ? (validatedData.data.text?.startsWith('[Encrypted') ? validatedData.data.text : '[Encrypted Message]') 
+        : (validatedData.data.text || ''),
       mediaUrl: validatedData.data.mediaUrl || null,
       mediaKey: validatedData.data.mediaKey || null,
       mimeType: validatedData.data.mimeType || null,
@@ -463,6 +480,7 @@ router.post('/', messageLimiter, async (req: Request, res: Response) => {
       location: validatedData.data.location || null,
       contact: validatedData.data.contact || null,
       sticker: validatedData.data.sticker || null,
+      e2ee: validatedData.data.e2ee || null,
       linkPreview,
       createdAt: now,
       updatedAt: now,

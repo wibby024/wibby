@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { useAuth } from './context/AuthContext'
 import { useSocket, SocketProvider } from './context/SocketContext'
 import { CallProvider, useCall } from './context/CallContext'
@@ -9,15 +9,17 @@ import ChatHeader from './components/ChatHeader'
 import MessageArea from './components/MessageArea'
 import PairingScreen from './components/PairingScreen'
 import StoriesBar from './components/stories/StoriesBar'
-import TogetherPlayer from './components/together/TogetherPlayer'
-import ChatInfoDrawer from './components/ChatInfoDrawer'
-import ChatSearchModal from './components/ChatSearchModal'
-import SettingsModal from './components/SettingsModal'
-import MiniGameModal from './components/games/MiniGameModal'
 import { notificationService } from './services/notificationService'
 import { resolvePartnerName, resolvePartnerUsername } from './utils/partnerName'
 import type { ChatThemePreset } from './types/chat'
 import './App.css'
+
+// Lazy-load non-critical heavy overlays and the 10 games engine to keep initial bundle lean
+const TogetherPlayer = lazy(() => import('./components/together/TogetherPlayer'));
+const ChatInfoDrawer = lazy(() => import('./components/ChatInfoDrawer'));
+const ChatSearchModal = lazy(() => import('./components/ChatSearchModal'));
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const MiniGameModal = lazy(() => import('./components/games/MiniGameModal'));
 
 function LoadingScreen() {
   return (
@@ -528,11 +530,13 @@ function WibbyAppWrapper() {
               partnerName={partnerName} 
             />
             {showTogether && (
-              <TogetherPlayer 
-                conversationId={conversationId} 
-                partnerName={partnerName}
-                onClose={() => setShowTogether(false)} 
-              />
+              <Suspense fallback={null}>
+                <TogetherPlayer 
+                  conversationId={conversationId} 
+                  partnerName={partnerName}
+                  onClose={() => setShowTogether(false)} 
+                />
+              </Suspense>
             )}
             <MessageArea 
               key={`${conversationId}_${chatClearCount}`}
@@ -548,62 +552,68 @@ function WibbyAppWrapper() {
 
       {/* Slide-out Chat Info Drawer */}
       {isPaired && conversationId && showInfoDrawer && (
-        <ChatInfoDrawer
-          isOpen={showInfoDrawer}
-          onClose={() => setShowInfoDrawer(false)}
-          partner={partner}
-          conversationId={conversationId}
-          onStartVoiceCall={() => {
-            setShowInfoDrawer(false);
-            startCall(conversationId, partner, 'voice');
-          }}
-          onStartVideoCall={() => {
-            setShowInfoDrawer(false);
-            startCall(conversationId, partner, 'video');
-          }}
-          onStartTogether={() => {
-            setShowInfoDrawer(false);
-            setShowTogether(true);
-          }}
-          onOpenSearch={() => {
-            setShowInfoDrawer(false);
-            setShowSearchModal(true);
-          }}
-          onJumpToMessage={(msgId) => {
-            setShowInfoDrawer(false);
-            const el = document.querySelector(`[data-message-id="${msgId}"]`) as HTMLDivElement | null;
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }}
-          onUnpair={handleUnpairAction}
-          currentThemePreset={chatThemePreset}
-          onSelectThemePreset={handleSelectThemePreset}
-        />
+        <Suspense fallback={null}>
+          <ChatInfoDrawer
+            isOpen={showInfoDrawer}
+            onClose={() => setShowInfoDrawer(false)}
+            partner={partner}
+            conversationId={conversationId}
+            onStartVoiceCall={() => {
+              setShowInfoDrawer(false);
+              startCall(conversationId, partner, 'voice');
+            }}
+            onStartVideoCall={() => {
+              setShowInfoDrawer(false);
+              startCall(conversationId, partner, 'video');
+            }}
+            onStartTogether={() => {
+              setShowInfoDrawer(false);
+              setShowTogether(true);
+            }}
+            onOpenSearch={() => {
+              setShowInfoDrawer(false);
+              setShowSearchModal(true);
+            }}
+            onJumpToMessage={(msgId) => {
+              setShowInfoDrawer(false);
+              const el = document.querySelector(`[data-message-id="${msgId}"]`) as HTMLDivElement | null;
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }}
+            onUnpair={handleUnpairAction}
+            currentThemePreset={chatThemePreset}
+            onSelectThemePreset={handleSelectThemePreset}
+          />
+        </Suspense>
       )}
 
       {/* Chat Search Modal */}
       {isPaired && conversationId && showSearchModal && (
-        <ChatSearchModal
-          isOpen={showSearchModal}
-          conversationId={conversationId}
-          onClose={() => setShowSearchModal(false)}
-          onSelectMessage={(msgId) => {
-            setShowSearchModal(false);
-            const el = document.querySelector(`[data-message-id="${msgId}"]`) as HTMLDivElement | null;
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }}
-        />
+        <Suspense fallback={null}>
+          <ChatSearchModal
+            isOpen={showSearchModal}
+            conversationId={conversationId}
+            onClose={() => setShowSearchModal(false)}
+            onSelectMessage={(msgId) => {
+              setShowSearchModal(false);
+              const el = document.querySelector(`[data-message-id="${msgId}"]`) as HTMLDivElement | null;
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Global Settings & Profile Modal */}
       {showSettingsModal && (
-        <SettingsModal
-          isOpen={showSettingsModal}
-          onClose={() => setShowSettingsModal(false)}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          currentThemePreset={chatThemePreset}
-          onSelectThemePreset={handleSelectThemePreset}
-        />
+        <Suspense fallback={null}>
+          <SettingsModal
+            isOpen={showSettingsModal}
+            onClose={() => setShowSettingsModal(false)}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            currentThemePreset={chatThemePreset}
+            onSelectThemePreset={handleSelectThemePreset}
+          />
+        </Suspense>
       )}
 
       {/* Single Active Browser Session Conflict Dialog */}
@@ -637,14 +647,16 @@ function WibbyAppWrapper() {
 
       {/* Mini Games Modal (Req 21) */}
       {isPaired && conversationId && showGameModal && (
-        <MiniGameModal
-          isOpen={showGameModal}
-          onClose={() => setShowGameModal(false)}
-          conversationId={conversationId}
-          socket={socket}
-          currentUserId={user?.uid || ''}
-          partnerName={partnerName}
-        />
+        <Suspense fallback={null}>
+          <MiniGameModal
+            isOpen={showGameModal}
+            onClose={() => setShowGameModal(false)}
+            conversationId={conversationId}
+            socket={socket}
+            currentUserId={user?.uid || ''}
+            partnerName={partnerName}
+          />
+        </Suspense>
       )}
 
       <CallModals />

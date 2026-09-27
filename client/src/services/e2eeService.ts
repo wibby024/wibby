@@ -27,15 +27,16 @@ class E2EEService {
   private sharedKeys = new Map<string, CryptoKey>(); // partnerUid -> AES-GCM CryptoKey
 
   /**
-   * Initialize or load user's persistent ECDH key pair
+   * Initialize or load user's persistent ECDH key pair and optionally publish to backend
    */
-  async init(userUid: string): Promise<string> {
+  async init(userUid: string, token?: string): Promise<string> {
     if (!window.crypto?.subtle) {
       console.warn('[WIBBY E2EE] Web Crypto API not available');
       return '';
     }
 
     try {
+      let pubBase64 = '';
       const storedPrivKey = localStorage.getItem(`${KEY_STORAGE_PREFIX}priv_${userUid}`);
       const storedPubKey = localStorage.getItem(`${KEY_STORAGE_PREFIX}pub_${userUid}`);
 
@@ -60,33 +61,53 @@ class E2EEService {
         );
 
         const exportedPub = await window.crypto.subtle.exportKey('spki', publicKey);
-        const pubBase64 = btoa(String.fromCharCode(...new Uint8Array(exportedPub)));
+        pubBase64 = btoa(String.fromCharCode(...new Uint8Array(exportedPub)));
 
         this.keyPair = { publicKeyBase64: pubBase64, privateKey, publicKey };
-        return pubBase64;
+      } else {
+        // Generate fresh ECDH P-256 Key Pair
+        const keyPair = await window.crypto.subtle.generateKey(
+          { name: 'ECDH', namedCurve: 'P-256' },
+          true,
+          ['deriveKey', 'deriveBits']
+        );
+
+        const privJwk = await window.crypto.subtle.exportKey('jwk', keyPair.privateKey);
+        const pubJwk = await window.crypto.subtle.exportKey('jwk', keyPair.publicKey);
+
+        localStorage.setItem(`${KEY_STORAGE_PREFIX}priv_${userUid}`, JSON.stringify(privJwk));
+        localStorage.setItem(`${KEY_STORAGE_PREFIX}pub_${userUid}`, JSON.stringify(pubJwk));
+
+        const exportedPub = await window.crypto.subtle.exportKey('spki', keyPair.publicKey);
+        pubBase64 = btoa(String.fromCharCode(...new Uint8Array(exportedPub)));
+
+        this.keyPair = {
+          publicKeyBase64: pubBase64,
+          privateKey: keyPair.privateKey,
+          publicKey: keyPair.publicKey
+        };
       }
 
-      // Generate fresh ECDH P-256 Key Pair
-      const keyPair = await window.crypto.subtle.generateKey(
-        { name: 'ECDH', namedCurve: 'P-256' },
-        true,
-        ['deriveKey', 'deriveBits']
-      );
-
-      const privJwk = await window.crypto.subtle.exportKey('jwk', keyPair.privateKey);
-      const pubJwk = await window.crypto.subtle.exportKey('jwk', keyPair.publicKey);
-
-      localStorage.setItem(`${KEY_STORAGE_PREFIX}priv_${userUid}`, JSON.stringify(privJwk));
-      localStorage.setItem(`${KEY_STORAGE_PREFIX}pub_${userUid}`, JSON.stringify(pubJwk));
-
-      const exportedPub = await window.crypto.subtle.exportKey('spki', keyPair.publicKey);
-      const pubBase64 = btoa(String.fromCharCode(...new Uint8Array(exportedPub)));
-
-      this.keyPair = {
-        publicKeyBase64: pubBase64,
-        privateKey: keyPair.privateKey,
-        publicKey: keyPair.publicKey
-      };
+      // If token provided, sync public key with backend
+      if (token && pubBase64) {
+        const syncedKey = localStorage.getItem(`${KEY_STORAGE_PREFIX}synced_${userUid}`);
+        if (syncedKey !== pubBase64) {
+          try {
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+            await fetch(`${baseUrl}/api/users/keys`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ publicKey: pubBase64 })
+            });
+            localStorage.setItem(`${KEY_STORAGE_PREFIX}synced_${userUid}`, pubBase64);
+          } catch (syncErr) {
+            console.warn('[WIBBY E2EE] Key sync with server failed:', syncErr);
+          }
+        }
+      }
 
       return pubBase64;
     } catch (err) {
@@ -125,6 +146,39 @@ class E2EEService {
       console.error('[WIBBY E2EE] Derive shared key error:', err);
       return false;
     }
+  }
+
+  /**
+   * Ensure session is established with partner
+   */
+  async ensureSession(partnerUid: string, partnerPublicKeyBase64?: string, token?: string): Promise<boolean> {
+    if (this.hasSharedKey(partnerUid)) {
+      return true;
+    }
+
+    let pubKey = partnerPublicKeyBase64;
+    if (!pubKey && token) {
+      try {
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        const res = await fetch(`${baseUrl}/api/users/${partnerUid}/keys`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          pubKey = data.publicKey;
+        }
+      } catch (e) {
+        console.warn('[WIBBY E2EE] Failed to fetch partner public key:', e);
+      }
+    }
+
+    if (pubKey) {
+      return await this.establishSession(partnerUid, pubKey);
+    }
+
+    return false;
   }
 
   /**
@@ -208,6 +262,10 @@ class E2EEService {
   }
 
   hasSharedKey(partnerUid: string): boolean {
+    return this.sharedKeys.has(partnerUid);
+  }
+
+  hasSession(partnerUid: string): boolean {
     return this.sharedKeys.has(partnerUid);
   }
 }

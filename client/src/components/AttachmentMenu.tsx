@@ -11,7 +11,8 @@ import {
   IconUser,
   IconGamepad,
   IconFolder,
-  IconClose
+  IconClose,
+  IconGif
 } from './common/Icons';
 
 interface AttachmentMenuProps {
@@ -21,6 +22,7 @@ interface AttachmentMenuProps {
   onSelectPhoto: () => void;
   onSelectVideo: () => void;
   onSelectDocument: () => void;
+  onSelectGif?: () => void;
   onSelectPoll?: () => void;
   onSelectLocation?: () => void;
   onSelectContact?: () => void;
@@ -37,6 +39,7 @@ export default function AttachmentMenu({
   onSelectPhoto,
   onSelectVideo,
   onSelectDocument,
+  onSelectGif,
   onSelectPoll,
   onSelectLocation,
   onSelectContact,
@@ -259,6 +262,24 @@ export default function AttachmentMenu({
           </div>
           <span className="quick-btn-label">Document</span>
         </button>
+
+        {onSelectGif && (
+          <button
+            className="attachment-quick-btn gif-btn"
+            onClick={() => {
+              onClose();
+              onSelectGif();
+            }}
+            type="button"
+            tabIndex={0}
+            aria-label="Send a GIF"
+          >
+            <div className="quick-btn-icon-bg gif-bg">
+              <IconGif size={22} color="currentColor" />
+            </div>
+            <span className="quick-btn-label">GIF</span>
+          </button>
+        )}
 
         {onSelectPoll && (
           <button
