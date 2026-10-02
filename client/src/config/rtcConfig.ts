@@ -53,7 +53,7 @@ export const AUDIO_MEDIA_CONSTRAINTS: MediaStreamConstraints = {
     echoCancellation: true,
     noiseSuppression: true,
     autoGainControl: true,
-    channelCount: 1,
+    channelCount: 2,
     sampleRate: { ideal: 48000 }
   },
   video: false
@@ -228,10 +228,10 @@ export function formatSdpForVideo(
 
   // 2. Controlled Bandwidth Signaling under m=video
   if (enableSdpBandwidthPacing && result.includes('m=video')) {
-    // Inject b=AS:4000 and b=TIAS:4000000 beneath m=video if not present (pristine 4.0 Mbps ceiling for ultra-sharp 30fps 1080p)
+    // Inject b=AS:6000 and b=TIAS:6000000 beneath m=video if not present
     const mVideoRegex = /(m=video[^\r\n]+(?:\r?\n[c=][^\r\n]+)?)/;
-    if (!result.includes('b=AS:4000') && !result.includes('b=TIAS:4000000')) {
-      result = result.replace(mVideoRegex, `$1\r\nb=AS:4000\r\nb=TIAS:4000000`);
+    if (!result.includes('b=AS:6000') && !result.includes('b=TIAS:6000000')) {
+      result = result.replace(mVideoRegex, `$1\r\nb=AS:6000\r\nb=TIAS:6000000`);
     }
 
     // Locate video payload types (H264, VP8, VP9) and add start/min/max bitrates in a=fmtp
@@ -255,7 +255,7 @@ export function formatSdpForVideo(
             updated += ';x-google-start-bitrate=2200';
           }
           if (!updated.includes('x-google-max-bitrate=')) {
-            updated += ';x-google-max-bitrate=4000';
+            updated += ';x-google-max-bitrate=6000';
           }
           return `a=fmtp:${pt} ${updated}`;
         });
@@ -264,7 +264,7 @@ export function formatSdpForVideo(
         const rtpmapLine = new RegExp(`(a=rtpmap:${pt}\\s+[^\\r\\n]+)`, 'i');
         result = result.replace(
           rtpmapLine,
-          `$1\r\na=fmtp:${pt} x-google-min-bitrate=800;x-google-start-bitrate=2200;x-google-max-bitrate=4000`
+          `$1\r\na=fmtp:${pt} x-google-min-bitrate=800;x-google-start-bitrate=3000;x-google-max-bitrate=6000`
         );
       }
     }

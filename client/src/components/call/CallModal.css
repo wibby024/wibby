@@ -858,7 +858,7 @@
 
 /* Right Stacked Column for Both Users (Compact Floating Cards) */
 .call-screenshare-sidebar {
-  width: clamp(200px, 20vw, 300px);
+  width: clamp(280px, 28vw, 450px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -894,7 +894,7 @@
 .call-screenshare-sidebar .call-sidebar-user-tile video {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 

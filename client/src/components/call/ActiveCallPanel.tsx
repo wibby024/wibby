@@ -5,6 +5,7 @@ import { useSocket } from '../../context/SocketContext';
 import { rtcService } from '../../services/rtcService';
 import { resolvePartnerName } from '../../utils/partnerName';
 import { resolveAvatarUrl } from '../../utils/avatar';
+import TogetherPlayer from '../together/TogetherPlayer';
 import './CallModal.css';
 
 function formatCallDuration(seconds: number): string {
@@ -81,8 +82,6 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   socket,
   movieUrl,
   setMovieUrl,
-  movieType,
-  setMovieType: _setMovieType,
   movieInput,
   setMovieInput,
   handleStartMovie
@@ -123,8 +122,6 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   socket?: any;
   movieUrl?: string;
   setMovieUrl?: React.Dispatch<React.SetStateAction<string>>;
-  movieType?: 'youtube' | 'direct' | 'custom';
-  setMovieType?: React.Dispatch<React.SetStateAction<'youtube' | 'direct' | 'custom'>>;
   movieInput?: string;
   setMovieInput?: React.Dispatch<React.SetStateAction<string>>;
   handleStartMovie?: (url: string) => void;
@@ -212,7 +209,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
 
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {}
+    } catch { }
 
     const mobileActive = window.innerWidth <= 768;
     const dims = mobileActive ? PIP_CONFIG.mobile : PIP_CONFIG.laptop;
@@ -268,7 +265,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
     }
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {}
+    } catch { }
   };
 
   const handleRemoteClick = (e: React.MouseEvent) => {
@@ -296,7 +293,6 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   const isScreenshareActive = Boolean(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare');
 
   if (isScreenshareActive) {
-    const isRemoteSharing = isRemoteScreenSharing;
     const isLocalSharing = isScreenSharing;
 
     return (
@@ -348,7 +344,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                     if (stream && el.srcObject !== stream) {
                       el.srcObject = stream;
                     }
-                    el.play().catch(() => {});
+                    el.play().catch(() => { });
                   }
                 }}
                 className="call-video-fg-live is-screen-share"
@@ -361,12 +357,12 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                 ref={(el) => {
                   if (remoteScreenVideoRef) (remoteScreenVideoRef as any).current = el;
                   if (el) {
-                    rtcService.bindRemoteVideoElement(el);
-                    const stream = rtcService.getRemoteVideoStream();
+                    rtcService.bindScreenVideoElement(el);
+                    const stream = rtcService.getRemoteScreenStream() || rtcService.getRemoteVideoStream();
                     if (stream && el.srcObject !== stream) {
                       el.srcObject = stream;
                     }
-                    el.play().catch(() => {});
+                    el.play().catch(() => { });
                   }
                 }}
                 className="call-video-fg-live is-screen-share"
@@ -379,82 +375,34 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
 
           {/* Right Stacked Column: Both users stacked vertically (floating when full screen) */}
           <div className={`call-screenshare-sidebar ${isScreenshareFullscreen && hideFloatingTiles ? 'tiles-hidden' : ''}`}>
-            {/* Top Tile: Partner User (Live Remote Camera Feed when local user is sharing, or Presenter Card when remote user is sharing) */}
+            {/* Top Tile: Partner User (Live Remote Video Feed) */}
             <div className="call-sidebar-user-tile remote">
-              {isRemoteSharing ? (
-                /* Partner is presenting screen in Main Hero; show presenter badge & speaking indicator here */
-                <>
-                  <video ref={remoteVideoRef} style={{ display: 'none' }} aria-hidden="true" muted playsInline />
-                  <div className="call-video-placeholder">
-                    <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
-                      {isConnected && isRemoteSpeaking && <div className="call-pulse-ring speaking" />}
-                      <div className={`call-avatar ${isRemoteSpeaking ? 'avatar-speaking' : ''}`} style={{ width: 50, height: 50, fontSize: 20 }}>
-                        {avatar ? <img src={avatar} alt={partnerName} /> : <span>{initial}</span>}
-                      </div>
+              <video
+                ref={(el) => {
+                  if (remoteVideoRef) (remoteVideoRef as any).current = el;
+                  if (el) {
+                    rtcService.bindRemoteVideoElement(el);
+                    const stream = rtcService.getRemoteVideoStream();
+                    if (stream && el.srcObject !== stream) {
+                      el.srcObject = stream;
+                    }
+                    el.play().catch(() => { });
+                  }
+                }}
+                className={`call-video-fg-live ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
+                autoPlay
+                playsInline
+                muted
+              />
+              {(isRemoteCameraOff || !isConnected) && (
+                <div className="call-video-placeholder">
+                  <div className="call-avatar-wrapper" style={{ width: 56, height: 56 }}>
+                    <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
+                      {avatar ? <img src={avatar} alt="" /> : <span>{initial}</span>}
                     </div>
-                    <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>{partnerName}</span>
                   </div>
-                </>
-              ) : (
-                /* Local user is presenting screen; partner's live webcam video displays here */
-                <>
-                  <video
-                    ref={(el) => {
-                      if (remoteVideoRef) (remoteVideoRef as any).current = el;
-                      if (el) {
-                        rtcService.bindRemoteVideoElement(el);
-                        const stream = rtcService.getRemoteVideoStream();
-                        if (stream && el.srcObject !== stream) {
-                          el.srcObject = stream;
-                        }
-                        el.play().catch(() => {});
-                      }
-                    }}
-                    className={`call-video-fg-live ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
-                    autoPlay
-                    playsInline
-                    muted
-                  />
-                  {(isRemoteCameraOff || !isConnected) && (
-                    <div className="call-video-placeholder">
-                      <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
-                        {isConnected && isRemoteSpeaking && <div className="call-pulse-ring speaking" />}
-                        <div className={`call-avatar ${isRemoteSpeaking ? 'avatar-speaking' : ''}`} style={{ width: 50, height: 50, fontSize: 20 }}>
-                          {avatar ? <img src={avatar} alt={partnerName} /> : <span>{initial}</span>}
-                        </div>
-                      </div>
-                      <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>{partnerName}</span>
-                    </div>
-                  )}
-                </>
+                </div>
               )}
-
-              {/* Partner Badge */}
-              <div className="call-panel-identity-label" style={{ bottom: 8, left: 8, padding: '3px 8px', fontSize: 11 }}>
-                <span className={`call-identity-dot ${isConnected ? 'online' : 'reconnecting'}`} />
-                <span className="call-identity-name">{partnerName}</span>
-                {isRemoteSharing && (
-                  <span style={{ fontSize: 10, color: '#c4b5fd', background: 'rgba(167, 139, 250, 0.2)', padding: '1px 5px', borderRadius: 4, marginLeft: 4 }}>
-                    Presenting
-                  </span>
-                )}
-                {isRemoteSpeaking && isConnected && !isRemoteMuted && (
-                  <span className="call-speaking-wave-tag" title="Speaking" style={{ marginLeft: 4 }}>
-                    <span className="call-wave-bar b1" />
-                    <span className="call-wave-bar b2" />
-                    <span className="call-wave-bar b3" />
-                  </span>
-                )}
-                {isRemoteMuted && (
-                  <span className="call-muted-tag" title="Muted" style={{ marginLeft: 4, color: '#f87171' }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
-                    </svg>
-                  </span>
-                )}
-              </div>
             </div>
 
             {/* Bottom Tile: You (Live Local Camera Feed) */}
@@ -468,7 +416,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                     if (stream && el.srcObject !== stream) {
                       el.srcObject = stream;
                     }
-                    el.play().catch(() => {});
+                    el.play().catch(() => { });
                   }
                 }}
                 className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
@@ -478,45 +426,48 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               />
               {(isCameraOff || isCameraUnavailable) && (
                 <div className="call-video-placeholder">
-                  <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
+                  <div className="call-avatar-wrapper" style={{ width: 56, height: 56 }}>
                     <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
                       <span>Y</span>
                     </div>
                   </div>
-                  <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>You</span>
                 </div>
               )}
-
-              {/* Local Badge & Flip Camera */}
-              <div className="call-panel-identity-label" style={{ bottom: 8, left: 8, right: 8, display: 'flex', justifyContent: 'space-between', padding: '3px 8px', fontSize: 11 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span className="call-identity-dot online" />
-                  <span className="call-identity-name">You</span>
-                  {isLocalSharing && (
-                    <span style={{ fontSize: 10, color: '#c4b5fd', background: 'rgba(167, 139, 250, 0.2)', padding: '1px 5px', borderRadius: 4, marginLeft: 4 }}>
-                      Presenting
-                    </span>
-                  )}
-                </div>
-                {!isCameraOff && !isCameraUnavailable && (
-                  <button
-                    type="button"
-                    className="call-panel-switch-cam-btn"
-                    style={{ width: 22, height: 22 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      flipCamera();
-                    }}
-                    title={currentFacingMode === 'user' ? 'Switch camera' : 'Front camera'}
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polyline points="23 4 23 10 17 10" />
-                      <polyline points="1 20 1 14 7 14" />
-                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                    </svg>
-                  </button>
-                )}
-              </div>
+              {!isCameraOff && !isCameraUnavailable && (
+                <button
+                  type="button"
+                  className="call-panel-switch-cam-btn"
+                  style={{
+                    position: 'absolute',
+                    bottom: 8,
+                    right: 8,
+                    zIndex: 10,
+                    width: 26,
+                    height: 26,
+                    background: 'rgba(0, 0, 0, 0.45)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#fff'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    flipCamera();
+                  }}
+                  title={currentFacingMode === 'user' ? 'Switch camera' : 'Front camera'}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="23 4 23 10 17 10" />
+                    <polyline points="1 20 1 14 7 14" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -581,23 +532,12 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
 
             {movieUrl ? (
               <div className="call-moviemode-player-container">
-                {movieType === 'youtube' ? (
-                  <iframe
-                    src={movieUrl}
-                    className="call-moviemode-iframe"
-                    title="Movie Mode Stream"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                ) : (
-                  <video
-                    src={movieUrl}
-                    className="call-moviemode-video"
-                    controls
-                    playsInline
-                    autoPlay
-                  />
-                )}
+                <TogetherPlayer 
+                  inline
+                  conversationId={conversationId || ''} 
+                  partnerName={partnerName}
+                  onClose={() => setMovieUrl?.('')} 
+                />
               </div>
             ) : (
               <div className="call-moviemode-prompt">
@@ -650,7 +590,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                     if (stream && el.srcObject !== stream) {
                       el.srcObject = stream;
                     }
-                    el.play().catch(() => {});
+                    el.play().catch(() => { });
                   }
                 }}
                 className={`call-video-fg-live ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
@@ -660,37 +600,13 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               />
               {(isRemoteCameraOff || !isConnected) && (
                 <div className="call-video-placeholder">
-                  <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
-                    {isConnected && isRemoteSpeaking && <div className="call-pulse-ring speaking" />}
-                    <div className={`call-avatar ${isRemoteSpeaking ? 'avatar-speaking' : ''}`} style={{ width: 50, height: 50, fontSize: 20 }}>
-                      {avatar ? <img src={avatar} alt={partnerName} /> : <span>{initial}</span>}
+                  <div className="call-avatar-wrapper" style={{ width: 56, height: 56 }}>
+                    <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
+                      {avatar ? <img src={avatar} alt="" /> : <span>{initial}</span>}
                     </div>
                   </div>
-                  <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>{partnerName}</span>
                 </div>
               )}
-
-              {/* Partner Badge */}
-              <div className="call-panel-identity-label" style={{ bottom: 8, left: 8, padding: '3px 8px', fontSize: 11 }}>
-                <span className={`call-identity-dot ${isConnected ? 'online' : 'reconnecting'}`} />
-                <span className="call-identity-name">{partnerName}</span>
-                {isRemoteSpeaking && isConnected && !isRemoteMuted && (
-                  <span className="call-speaking-wave-tag" title="Speaking" style={{ marginLeft: 4 }}>
-                    <span className="call-wave-bar b1" />
-                    <span className="call-wave-bar b2" />
-                    <span className="call-wave-bar b3" />
-                  </span>
-                )}
-                {isRemoteMuted && (
-                  <span className="call-muted-tag" title="Muted" style={{ marginLeft: 4, color: '#f87171' }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
-                    </svg>
-                  </span>
-                )}
-              </div>
             </div>
 
             {/* Bottom Tile: You (Live Local Camera Feed) */}
@@ -704,7 +620,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                     if (stream && el.srcObject !== stream) {
                       el.srcObject = stream;
                     }
-                    el.play().catch(() => {});
+                    el.play().catch(() => { });
                   }
                 }}
                 className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
@@ -714,40 +630,48 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               />
               {(isCameraOff || isCameraUnavailable) && (
                 <div className="call-video-placeholder">
-                  <div className="call-avatar-wrapper" style={{ width: 56, height: 56, marginBottom: 6 }}>
+                  <div className="call-avatar-wrapper" style={{ width: 56, height: 56 }}>
                     <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
                       <span>Y</span>
                     </div>
                   </div>
-                  <span className="call-video-placeholder-name" style={{ fontSize: 13 }}>You</span>
                 </div>
               )}
-
-              {/* Local Badge & Flip Camera */}
-              <div className="call-panel-identity-label" style={{ bottom: 8, left: 8, right: 8, display: 'flex', justifyContent: 'space-between', padding: '3px 8px', fontSize: 11 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span className="call-identity-dot online" />
-                  <span className="call-identity-name">You</span>
-                </div>
-                {!isCameraOff && !isCameraUnavailable && (
-                  <button
-                    type="button"
-                    className="call-panel-switch-cam-btn"
-                    style={{ width: 22, height: 22 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      flipCamera();
-                    }}
-                    title={currentFacingMode === 'user' ? 'Switch camera' : 'Front camera'}
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polyline points="23 4 23 10 17 10" />
-                      <polyline points="1 20 1 14 7 14" />
-                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                    </svg>
-                  </button>
-                )}
-              </div>
+              {!isCameraOff && !isCameraUnavailable && (
+                <button
+                  type="button"
+                  className="call-panel-switch-cam-btn"
+                  style={{
+                    position: 'absolute',
+                    bottom: 8,
+                    right: 8,
+                    zIndex: 10,
+                    width: 26,
+                    height: 26,
+                    background: 'rgba(0, 0, 0, 0.45)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#fff'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    flipCamera();
+                  }}
+                  title={currentFacingMode === 'user' ? 'Switch camera' : 'Front camera'}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="23 4 23 10 17 10" />
+                    <polyline points="1 20 1 14 7 14" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -760,13 +684,12 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
       <div className="call-stage-presentation-frame">
         {/* REMOTE PARTICIPANT (Phone or Laptop) */}
         <div
-          className={`call-video-panel remote-panel ${
-            focusedParticipant === 'remote'
+          className={`call-video-panel remote-panel ${focusedParticipant === 'remote'
               ? 'is-focused-main'
               : focusedParticipant === 'local'
-              ? 'is-pip-window'
-              : ''
-          }`}
+                ? 'is-pip-window'
+                : ''
+            }`}
           onClick={handleRemoteClick}
           aria-label={`Live video of ${partnerName}`}
         >
@@ -830,8 +753,8 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                 {isReconnecting
                   ? (reconnectStatusMessage || 'Connection lost / Trying to reconnect…')
                   : isConnected
-                  ? 'Camera is turned off'
-                  : 'Connecting video…'}
+                    ? 'Camera is turned off'
+                    : 'Connecting video…'}
               </span>
             </div>
           )}
@@ -858,15 +781,13 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
         {/* LOCAL PARTICIPANT (You) */}
         <div
           ref={localPanelRef}
-          className={`call-video-panel local-panel ${
-            currentFacingMode === 'environment' ? 'is-rear-camera' : ''
-          } ${
-            focusedParticipant === 'local'
+          className={`call-video-panel local-panel ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''
+            } ${focusedParticipant === 'local'
               ? 'is-focused-main'
               : isLocalPip
-              ? 'is-pip-window'
-              : 'is-stacked-tile'
-          }`}
+                ? 'is-pip-window'
+                : 'is-stacked-tile'
+            }`}
           onClick={handleLocalClick}
           onPointerDown={isLocalPip ? handlePointerDown : undefined}
           onPointerMove={isLocalPip ? handlePointerMove : undefined}
@@ -1030,7 +951,7 @@ export default function ActiveCallPanel() {
 
   // Movie Mode States
   const [movieUrl, setMovieUrl] = useState<string>('');
-  const [movieType, setMovieType] = useState<'youtube' | 'direct' | 'custom'>('direct');
+
   const [_moviePlaying, setMoviePlaying] = useState<boolean>(true);
   const [movieInput, setMovieInput] = useState<string>('');
   const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
@@ -1052,7 +973,6 @@ export default function ActiveCallPanel() {
     const handleTogetherState = (s: any) => {
       if (s && s.mediaUrl) {
         setMovieUrl(s.mediaUrl);
-        setMovieType(s.mediaType || 'direct');
         setMoviePlaying(s.isPlaying ?? true);
         if (!isMobile) {
           setViewMode('moviemode');
@@ -1074,7 +994,6 @@ export default function ActiveCallPanel() {
   const handleStartMovie = (url: string) => {
     const parsed = parseMediaUrl(url);
     setMovieUrl(parsed.url);
-    setMovieType(parsed.type);
     setMoviePlaying(true);
     if (socket && activeCall?.conversationId) {
       socket.emit('together:start', {
@@ -1131,7 +1050,7 @@ export default function ActiveCallPanel() {
         rtcService.bindRemoteVideoElement(remoteVideoRef.current);
       }
       if (remoteScreenVideoRef.current) {
-        rtcService.bindRemoteVideoElement(remoteScreenVideoRef.current);
+        rtcService.bindScreenVideoElement(remoteScreenVideoRef.current);
       }
       if (isScreenSharing && screenVideoRef.current) {
         rtcService.bindScreenVideoElement(screenVideoRef.current);
@@ -1151,9 +1070,9 @@ export default function ActiveCallPanel() {
       if (remoteEl) rtcService.unbindRemoteVideoElement(remoteEl);
       if (remoteBgEl) rtcService.unbindRemoteVideoElement(remoteBgEl);
       if (screenEl) rtcService.unbindScreenVideoElement(screenEl);
-      if (remoteScreenEl) rtcService.unbindRemoteVideoElement(remoteScreenEl);
+      if (remoteScreenEl) rtcService.unbindScreenVideoElement(remoteScreenEl);
     };
-  }, [activeCall?.callType, callState, isScreenSharing, isRemoteScreenSharing, requestKeyframe]);
+  }, [activeCall?.callType, callState, isScreenSharing, isRemoteScreenSharing, requestKeyframe, viewMode]);
 
   // Imperatively attach screen share stream to hero video element as soon as available
   useEffect(() => {
@@ -1163,15 +1082,15 @@ export default function ActiveCallPanel() {
         if (screenVideoRef.current.srcObject !== stream) {
           screenVideoRef.current.srcObject = stream;
         }
-        screenVideoRef.current.play().catch(() => {});
+        screenVideoRef.current.play().catch(() => { });
       }
     } else if (isRemoteScreenSharing && remoteScreenVideoRef.current) {
-      const stream = rtcService.getRemoteVideoStream();
+      const stream = rtcService.getRemoteScreenStream() || rtcService.getRemoteVideoStream();
       if (stream) {
         if (remoteScreenVideoRef.current.srcObject !== stream) {
           remoteScreenVideoRef.current.srcObject = stream;
         }
-        remoteScreenVideoRef.current.play().catch(() => {});
+        remoteScreenVideoRef.current.play().catch(() => { });
       }
     }
   }, [isScreenSharing, isRemoteScreenSharing]);
@@ -1329,418 +1248,415 @@ export default function ActiveCallPanel() {
           socket={socket}
           movieUrl={movieUrl}
           setMovieUrl={setMovieUrl}
-          movieType={movieType}
-          setMovieType={setMovieType}
           movieInput={movieInput}
           setMovieInput={setMovieInput}
           handleStartMovie={handleStartMovie}
         />
 
-          {/* Top Bar Header (Auto-Hiding) */}
-          <div className={`call-video-top-bar ${showControls ? 'visible' : 'hidden'}`}>
-            <div className="call-video-header-info">
-              <span className="call-video-partner-name">{partnerName}</span>
-              {partnerUsername && <span className="call-video-partner-handle" style={{ opacity: 0.75, fontSize: '0.85em', marginLeft: '4px' }}>{partnerUsername}</span>}
-              <span className="call-status-divider">•</span>
-              <span className="call-duration">{formatCallDuration(activeCall.duration)}</span>
-              <span className="call-status-divider">•</span>
-              {/* Human-Readable In-Call Status Pill (Phase 9 Final) */}
-              <span className={`call-header-status-pill ${isReconnecting ? 'reconnecting' : showRestoredToast ? 'restored' : callQuality === 'poor' ? 'unstable' : 'connected'}`}>
-                {isReconnecting ? (
-                  <>
-                    <span className="call-status-dot yellow">●</span>
-                    <span>Reconnecting…</span>
-                  </>
-                ) : showRestoredToast ? (
-                  <>
-                    <span className="call-status-dot green">●</span>
-                    <span>Connection restored</span>
-                  </>
-                ) : callQuality === 'poor' ? (
-                  <>
-                    <span className="call-status-dot yellow">●</span>
-                    <span>Connection unstable</span>
-                  </>
-                ) : isConnected ? (
-                  <>
-                    <span className="call-status-dot green">●</span>
-                    <span>Connected</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="call-status-dot yellow">●</span>
-                    <span>Connecting…</span>
-                  </>
-                )}
-              </span>
-              {isRemoteSpeaking && isConnected && (
+        {/* Top Bar Header (Auto-Hiding) */}
+        <div className={`call-video-top-bar ${showControls ? 'visible' : 'hidden'}`}>
+          <div className="call-video-header-info">
+            <span className="call-video-partner-name">{partnerName}</span>
+            {partnerUsername && <span className="call-video-partner-handle" style={{ opacity: 0.75, fontSize: '0.85em', marginLeft: '4px' }}>{partnerUsername}</span>}
+            <span className="call-status-divider">•</span>
+            <span className="call-duration">{formatCallDuration(activeCall.duration)}</span>
+            <span className="call-status-divider">•</span>
+            {/* Human-Readable In-Call Status Pill (Phase 9 Final) */}
+            <span className={`call-header-status-pill ${isReconnecting ? 'reconnecting' : showRestoredToast ? 'restored' : callQuality === 'poor' ? 'unstable' : 'connected'}`}>
+              {isReconnecting ? (
                 <>
-                  <span className="call-status-divider">•</span>
-                  <span className="call-speaking-tag active">Speaking</span>
+                  <span className="call-status-dot yellow">●</span>
+                  <span>Reconnecting…</span>
+                </>
+              ) : showRestoredToast ? (
+                <>
+                  <span className="call-status-dot green">●</span>
+                  <span>Connection restored</span>
+                </>
+              ) : callQuality === 'poor' ? (
+                <>
+                  <span className="call-status-dot yellow">●</span>
+                  <span>Connection unstable</span>
+                </>
+              ) : isConnected ? (
+                <>
+                  <span className="call-status-dot green">●</span>
+                  <span>Connected</span>
+                </>
+              ) : (
+                <>
+                  <span className="call-status-dot yellow">●</span>
+                  <span>Connecting…</span>
                 </>
               )}
-            </div>
-
-            <div className="call-video-top-actions">
-              {/* If full screen or focused, show Split View button to exit full video */}
-              {(viewMode === 'pip' || focusedParticipant !== 'none') && (
-                <button
-                  type="button"
-                  className="call-restore-split-btn"
-                  onClick={() => {
-                    setViewMode('stacked');
-                    setFocusedParticipant('none');
-                  }}
-                  title="Exit full video and return to split view"
-                  aria-label="Return to split view"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="8" rx="2" />
-                    <rect x="3" y="13" width="18" height="8" rx="2" />
-                  </svg>
-                  <span>Split View</span>
-                </button>
-              )}
-
-              {/* Fullscreen Button */}
-              <button
-                type="button"
-                className="call-icon-btn"
-                onClick={toggleFullscreen}
-                title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-              >
-                {isFullscreen ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="4 14 10 14 10 20" />
-                    <polyline points="20 10 14 10 14 4" />
-                    <line x1="14" y1="10" x2="21" y2="3" />
-                    <line x1="3" y1="21" x2="10" y2="14" />
-                  </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 3 21 3 21 9" />
-                    <polyline points="9 21 3 21 3 15" />
-                    <line x1="21" y1="3" x2="14" y2="10" />
-                    <line x1="3" y1="21" x2="10" y2="14" />
-                  </svg>
-                )}
-              </button>
-
-              {/* Minimize Button */}
-              <button
-                type="button"
-                className="call-icon-btn"
-                onClick={minimizeCall}
-                title="Minimize call to chat"
-                aria-label="Minimize call to floating capsule"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-              </button>
-            </div>
+            </span>
+            {isRemoteSpeaking && isConnected && (
+              <>
+                <span className="call-status-divider">•</span>
+                <span className="call-speaking-tag active">Speaking</span>
+              </>
+            )}
           </div>
 
-          
-
-          {/* Dedicated In-Call Connection Status Overlay Card (Phase 9 Final) */}
-          {isReconnecting && (
-            <div className="call-status-card warning" role="alert">
-              <div className="call-status-card-header">
-                <span className="call-status-card-spinner" />
-                <span className="call-status-card-title">Reconnecting…</span>
-                <span className="call-status-dots-anim">
-                  <span>•</span><span>•</span><span>•</span>
-                </span>
-              </div>
-              <p className="call-status-card-subtitle">
-                {reconnectStatusMessage || 'Connection lost / Trying to reconnect…'}
-              </p>
-            </div>
-          )}
-
-          {/* Connection Restored Temporary Toast Notification */}
-          {showRestoredToast && (
-            <div className="call-status-toast success" role="status">
-              <span className="call-status-toast-dot green">●</span>
-              <span>Connection restored</span>
-            </div>
-          )}
-
-          {/* Microphone Unavailable Alert */}
-          {activeCall?.error && activeCall.error.toLowerCase().includes('mic') && (
-            <div className="call-status-toast error" role="alert">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <span>Microphone unavailable</span>
-            </div>
-          )}
-
-          {/* Remote Mute Notification Banner (Req 16) */}
-          {remoteMuteNotification && (
-            <div className="call-status-toast muted-toast" role="status">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="1" y1="1" x2="23" y2="23" />
-                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
-              </svg>
-              <span>{remoteMuteNotification}</span>
-            </div>
-          )}
-
-          {/* Screen Share Feedback Toast Notification */}
-          {screenShareNotice && (
-            <div className="call-status-toast" role="status">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="2" y="3" width="20" height="14" rx="2" />
-                <line x1="8" y1="21" x2="16" y2="21" />
-                <line x1="12" y1="17" x2="12" y2="21" />
-              </svg>
-              <span>{screenShareNotice}</span>
-            </div>
-          )}
-
-          {/* Bottom Floating Control Bar (Auto-Hiding) */}
-          <div className={`call-video-controls-bar ${showControls ? 'visible' : 'hidden'}`}>
-            {/* View Layout Toggle Button: Exactly 2 options (Stacked & Full Screen) */}
-            <div className="call-control-item">
+          <div className="call-video-top-actions">
+            {/* If full screen or focused, show Split View button to exit full video */}
+            {(viewMode === 'pip' || focusedParticipant !== 'none') && (
               <button
                 type="button"
-                className={`call-btn view-ctrl ${viewMode === 'pip' || focusedParticipant !== 'none' || isScreenshareFullscreen ? 'active' : ''}`}
+                className="call-restore-split-btn"
                 onClick={() => {
-                  if (isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') {
-                    setIsScreenshareFullscreen(prev => !prev);
-                  } else {
-                    if (viewMode === 'pip' || focusedParticipant !== 'none') {
-                      setFocusedParticipant('none');
-                      setViewMode('stacked');
-                    } else {
-                      setFocusedParticipant('none');
-                      setViewMode('pip');
-                    }
-                  }
+                  setViewMode('stacked');
+                  setFocusedParticipant('none');
                 }}
-                title={`Switch layout (Current: ${
-                  isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare'
-                    ? isScreenshareFullscreen
-                      ? 'Screen Share (Full Hero)'
-                      : 'Screen Share (Sidebar)'
-                    : viewMode === 'pip' || focusedParticipant !== 'none'
+                title="Exit full video and return to split view"
+                aria-label="Return to split view"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="8" rx="2" />
+                  <rect x="3" y="13" width="18" height="8" rx="2" />
+                </svg>
+                <span>Split View</span>
+              </button>
+            )}
+
+            {/* Fullscreen Button */}
+            <button
+              type="button"
+              className="call-icon-btn"
+              onClick={toggleFullscreen}
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="4 14 10 14 10 20" />
+                  <polyline points="20 10 14 10 14 4" />
+                  <line x1="14" y1="10" x2="21" y2="3" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              )}
+            </button>
+
+            {/* Minimize Button */}
+            <button
+              type="button"
+              className="call-icon-btn"
+              onClick={minimizeCall}
+              title="Minimize call to chat"
+              aria-label="Minimize call to floating capsule"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+
+
+        {/* Dedicated In-Call Connection Status Overlay Card (Phase 9 Final) */}
+        {isReconnecting && (
+          <div className="call-status-card warning" role="alert">
+            <div className="call-status-card-header">
+              <span className="call-status-card-spinner" />
+              <span className="call-status-card-title">Reconnecting…</span>
+              <span className="call-status-dots-anim">
+                <span>•</span><span>•</span><span>•</span>
+              </span>
+            </div>
+            <p className="call-status-card-subtitle">
+              {reconnectStatusMessage || 'Connection lost / Trying to reconnect…'}
+            </p>
+          </div>
+        )}
+
+        {/* Connection Restored Temporary Toast Notification */}
+        {showRestoredToast && (
+          <div className="call-status-toast success" role="status">
+            <span className="call-status-toast-dot green">●</span>
+            <span>Connection restored</span>
+          </div>
+        )}
+
+        {/* Microphone Unavailable Alert */}
+        {activeCall?.error && activeCall.error.toLowerCase().includes('mic') && (
+          <div className="call-status-toast error" role="alert">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>Microphone unavailable</span>
+          </div>
+        )}
+
+        {/* Remote Mute Notification Banner (Req 16) */}
+        {remoteMuteNotification && (
+          <div className="call-status-toast muted-toast" role="status">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="1" y1="1" x2="23" y2="23" />
+              <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+              <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+            </svg>
+            <span>{remoteMuteNotification}</span>
+          </div>
+        )}
+
+        {/* Screen Share Feedback Toast Notification */}
+        {screenShareNotice && (
+          <div className="call-status-toast" role="status">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+            <span>{screenShareNotice}</span>
+          </div>
+        )}
+
+        {/* Bottom Floating Control Bar (Auto-Hiding) */}
+        <div className={`call-video-controls-bar ${showControls ? 'visible' : 'hidden'}`}>
+          {/* View Layout Toggle Button: Exactly 2 options (Stacked & Full Screen) */}
+          <div className="call-control-item">
+            <button
+              type="button"
+              className={`call-btn view-ctrl ${viewMode === 'pip' || focusedParticipant !== 'none' || isScreenshareFullscreen ? 'active' : ''}`}
+              onClick={() => {
+                if (isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') {
+                  setIsScreenshareFullscreen(prev => !prev);
+                } else {
+                  if (viewMode === 'pip' || focusedParticipant !== 'none') {
+                    setFocusedParticipant('none');
+                    setViewMode('stacked');
+                  } else {
+                    setFocusedParticipant('none');
+                    setViewMode('pip');
+                  }
+                }
+              }}
+              title={`Switch layout (Current: ${isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare'
+                  ? isScreenshareFullscreen
+                    ? 'Screen Share (Full Hero)'
+                    : 'Screen Share (Sidebar)'
+                  : viewMode === 'pip' || focusedParticipant !== 'none'
                     ? 'Full Screen'
                     : 'Stacked'
                 })`}
-                aria-label="Switch layout"
-              >
-                {(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="13" height="18" rx="2" />
-                    <rect x="17" y="3" width="5" height="8" rx="1.5" />
-                    <rect x="17" y="13" width="5" height="8" rx="1.5" />
-                  </svg>
-                )}
-                {!(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && viewMode === 'stacked' && focusedParticipant === 'none' && (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="8" rx="2" />
-                    <rect x="3" y="13" width="18" height="8" rx="2" />
-                  </svg>
-                )}
-                {!(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && (viewMode === 'pip' || focusedParticipant !== 'none') && (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="20" height="18" rx="2" />
-                    <rect x="13" y="12" width="7" height="7" rx="1.5" fill="currentColor" fillOpacity="0.3" />
-                  </svg>
-                )}
-              </button>
-              <span className="call-btn-label">
-                {isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare'
-                  ? isScreenshareFullscreen
-                    ? 'Full Hero'
-                    : 'Sidebar'
-                  : viewMode === 'pip' || focusedParticipant !== 'none'
+              aria-label="Switch layout"
+            >
+              {(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="13" height="18" rx="2" />
+                  <rect x="17" y="3" width="5" height="8" rx="1.5" />
+                  <rect x="17" y="13" width="5" height="8" rx="1.5" />
+                </svg>
+              )}
+              {!(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && viewMode === 'stacked' && focusedParticipant === 'none' && (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="8" rx="2" />
+                  <rect x="3" y="13" width="18" height="8" rx="2" />
+                </svg>
+              )}
+              {!(isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare') && (viewMode === 'pip' || focusedParticipant !== 'none') && (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="20" height="18" rx="2" />
+                  <rect x="13" y="12" width="7" height="7" rx="1.5" fill="currentColor" fillOpacity="0.3" />
+                </svg>
+              )}
+            </button>
+            <span className="call-btn-label">
+              {isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare'
+                ? isScreenshareFullscreen
+                  ? 'Full Hero'
+                  : 'Sidebar'
+                : viewMode === 'pip' || focusedParticipant !== 'none'
                   ? 'Full Screen'
                   : 'Stacked'}
-              </span>
-            </div>
+            </span>
+          </div>
 
-            {/* Camera Toggle Button */}
+          {/* Camera Toggle Button */}
+          <div className="call-control-item">
+            <button
+              type="button"
+              className={`call-btn video-ctrl ${isCameraOff || isCameraUnavailable ? 'muted' : 'active'}`}
+              onClick={toggleCamera}
+              disabled={isCameraUnavailable}
+              title={isCameraOff ? 'Turn on camera' : 'Turn off camera'}
+              aria-label={isCameraOff ? 'Turn on camera' : 'Turn off camera'}
+            >
+              {isCameraOff || isCameraUnavailable ? (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                  <path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56" />
+                </svg>
+              ) : (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="23 7 16 12 23 17 23 7" />
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                </svg>
+              )}
+            </button>
+            <span className="call-btn-label">{isCameraOff ? 'Camera off' : 'Camera on'}</span>
+          </div>
+
+          {/* Flip / Switch Camera Button — always visible in video calls */}
+          {!isCameraOff && !isCameraUnavailable && (
             <div className="call-control-item">
               <button
                 type="button"
-                className={`call-btn video-ctrl ${isCameraOff || isCameraUnavailable ? 'muted' : 'active'}`}
-                onClick={toggleCamera}
-                disabled={isCameraUnavailable}
-                title={isCameraOff ? 'Turn on camera' : 'Turn off camera'}
-                aria-label={isCameraOff ? 'Turn on camera' : 'Turn off camera'}
+                className="call-btn switch-cam-ctrl"
+                onClick={() => flipCamera()}
+                title={currentFacingMode === 'user' ? 'Switch to rear camera' : 'Switch to front camera'}
+                aria-label={currentFacingMode === 'user' ? 'Switch to rear camera' : 'Switch to front camera'}
               >
-                {isCameraOff || isCameraUnavailable ? (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="1" y1="1" x2="23" y2="23" />
-                    <path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56" />
-                  </svg>
-                ) : (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="23 7 16 12 23 17 23 7" />
-                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                  </svg>
-                )}
-              </button>
-              <span className="call-btn-label">{isCameraOff ? 'Camera off' : 'Camera on'}</span>
-            </div>
-
-            {/* Flip / Switch Camera Button — always visible in video calls */}
-            {!isCameraOff && !isCameraUnavailable && (
-              <div className="call-control-item">
-                <button
-                  type="button"
-                  className="call-btn switch-cam-ctrl"
-                  onClick={() => flipCamera()}
-                  title={currentFacingMode === 'user' ? 'Switch to rear camera' : 'Switch to front camera'}
-                  aria-label={currentFacingMode === 'user' ? 'Switch to rear camera' : 'Switch to front camera'}
-                >
-                  {/* Camera flip icon */}
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 7h-3a2 2 0 0 1-2-2V2" />
-                    <path d="M9 2H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5" />
-                    <path d="M14 2v3a2 2 0 0 0 2 2h4" />
-                    <circle cx="10" cy="13" r="3" />
-                    <path d="M16 10l2 2-2 2" />
-                  </svg>
-                </button>
-                <span className="call-btn-label">{currentFacingMode === 'user' ? 'Rear' : 'Front'}</span>
-              </div>
-            )}
-
-            {/* Screen Share Button (Capability detected: only shown when supported) */}
-            {isScreenShareSupported && (
-              <div className="call-control-item">
-                <button
-                  type="button"
-                  id="screen-share-btn"
-                  className={`call-btn screen-share ${isScreenSharing ? 'active' : ''}`}
-                  onClick={async () => {
-                    try {
-                      if (isScreenSharing) {
-                        stopScreenSharing();
-                      } else {
-                        await startScreenSharing();
-                      }
-                    } catch (err: any) {
-                      setScreenShareNotice(err?.message || 'Failed to start screen sharing');
-                      setTimeout(() => setScreenShareNotice(null), 3500);
-                    }
-                  }}
-                  title={isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
-                  aria-label={isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
-                >
-                  {isScreenSharing ? (
-                    /* Stop-share icon: monitor with X */
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="3" width="20" height="14" rx="2" />
-                      <line x1="8" y1="21" x2="16" y2="21" />
-                      <line x1="12" y1="17" x2="12" y2="21" />
-                      <line x1="9" y1="8" x2="15" y2="14" />
-                      <line x1="15" y1="8" x2="9" y2="14" />
-                    </svg>
-                  ) : (
-                    /* Share icon: monitor with upward arrow */
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="3" width="20" height="14" rx="2" />
-                      <line x1="8" y1="21" x2="16" y2="21" />
-                      <line x1="12" y1="17" x2="12" y2="21" />
-                      <polyline points="8 9 12 5 16 9" />
-                      <line x1="12" y1="5" x2="12" y2="13" />
-                    </svg>
-                  )}
-                </button>
-                <span className="call-btn-label">{isScreenSharing ? 'Stop screen' : 'Screen'}</span>
-              </div>
-            )}
-
-            {/* Movie Mode Button (Desktop/Tablet only, hidden on mobile) */}
-            {!isMobile && (
-              <div className="call-control-item">
-                <button
-                  type="button"
-                  id="movie-mode-btn"
-                  className={`call-btn movie-ctrl ${viewMode === 'moviemode' ? 'active' : ''}`}
-                  onClick={() => {
-                    if (viewMode === 'moviemode') {
-                      setViewMode('stacked');
-                    } else {
-                      setViewMode('moviemode');
-                    }
-                  }}
-                  title={viewMode === 'moviemode' ? 'Exit Movie Mode' : 'Movie Mode (Watch Together in Call)'}
-                  aria-label={viewMode === 'moviemode' ? 'Exit Movie Mode' : 'Movie Mode'}
-                >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-                    <line x1="7" y1="2" x2="7" y2="22" />
-                    <line x1="17" y1="2" x2="17" y2="22" />
-                    <line x1="2" y1="12" x2="22" y2="12" />
-                    <line x1="2" y1="7" x2="7" y2="7" />
-                    <line x1="2" y1="17" x2="7" y2="17" />
-                    <line x1="17" y1="17" x2="22" y2="17" />
-                    <line x1="17" y1="7" x2="22" y2="7" />
-                  </svg>
-                </button>
-                <span className="call-btn-label">{viewMode === 'moviemode' ? 'Exit Movie' : 'Movie'}</span>
-              </div>
-            )}
-
-            {/* Microphone Mute Button */}
-            <div className="call-control-item">
-              <button
-                type="button"
-                className={`call-btn mute ${activeCall.isMuted ? 'active' : ''}`}
-                onClick={toggleMute}
-                title={activeCall.isMuted ? 'Unmute microphone' : 'Mute microphone'}
-                aria-label={activeCall.isMuted ? 'Unmute microphone' : 'Mute microphone'}
-              >
-                {activeCall.isMuted ? (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="1" y1="1" x2="23" y2="23" />
-                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
-                    <line x1="12" y1="19" x2="12" y2="23" />
-                    <line x1="8" y1="23" x2="16" y2="23" />
-                  </svg>
-                ) : (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                    <line x1="12" y1="19" x2="12" y2="23" />
-                    <line x1="8" y1="23" x2="16" y2="23" />
-                  </svg>
-                )}
-              </button>
-              <span className="call-btn-label">{activeCall.isMuted ? 'Unmute' : 'Mute'}</span>
-            </div>
-
-            {/* End Call Button */}
-            <div className="call-control-item">
-              <button
-                type="button"
-                className="call-btn hangup"
-                onClick={hangup}
-                title="End video call"
-                aria-label="End video call"
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91" />
-                  <line x1="23" y1="1" x2="1" y2="23" />
+                {/* Camera flip icon */}
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 7h-3a2 2 0 0 1-2-2V2" />
+                  <path d="M9 2H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5" />
+                  <path d="M14 2v3a2 2 0 0 0 2 2h4" />
+                  <circle cx="10" cy="13" r="3" />
+                  <path d="M16 10l2 2-2 2" />
                 </svg>
               </button>
-              <span className="call-btn-label">End</span>
+              <span className="call-btn-label">{currentFacingMode === 'user' ? 'Rear' : 'Front'}</span>
             </div>
+          )}
+
+          {/* Screen Share Button (Capability detected: only shown when supported) */}
+          {isScreenShareSupported && (
+            <div className="call-control-item">
+              <button
+                type="button"
+                id="screen-share-btn"
+                className={`call-btn screen-share ${isScreenSharing ? 'active' : ''}`}
+                onClick={async () => {
+                  try {
+                    if (isScreenSharing) {
+                      stopScreenSharing();
+                    } else {
+                      await startScreenSharing();
+                    }
+                  } catch (err: any) {
+                    setScreenShareNotice(err?.message || 'Failed to start screen sharing');
+                    setTimeout(() => setScreenShareNotice(null), 3500);
+                  }
+                }}
+                title={isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
+                aria-label={isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
+              >
+                {isScreenSharing ? (
+                  /* Stop-share icon: monitor with X */
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                    <line x1="9" y1="8" x2="15" y2="14" />
+                    <line x1="15" y1="8" x2="9" y2="14" />
+                  </svg>
+                ) : (
+                  /* Share icon: monitor with upward arrow */
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                    <polyline points="8 9 12 5 16 9" />
+                    <line x1="12" y1="5" x2="12" y2="13" />
+                  </svg>
+                )}
+              </button>
+              <span className="call-btn-label">{isScreenSharing ? 'Stop screen' : 'Screen'}</span>
+            </div>
+          )}
+
+          {/* Movie Mode Button (Desktop/Tablet only, hidden on mobile) */}
+          {!isMobile && (
+            <div className="call-control-item">
+              <button
+                type="button"
+                id="movie-mode-btn"
+                className={`call-btn movie-ctrl ${viewMode === 'moviemode' ? 'active' : ''}`}
+                onClick={() => {
+                  if (viewMode === 'moviemode') {
+                    setViewMode('stacked');
+                  } else {
+                    setViewMode('moviemode');
+                  }
+                }}
+                title={viewMode === 'moviemode' ? 'Exit Movie Mode' : 'Movie Mode (Watch Together in Call)'}
+                aria-label={viewMode === 'moviemode' ? 'Exit Movie Mode' : 'Movie Mode'}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                  <line x1="7" y1="2" x2="7" y2="22" />
+                  <line x1="17" y1="2" x2="17" y2="22" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <line x1="2" y1="7" x2="7" y2="7" />
+                  <line x1="2" y1="17" x2="7" y2="17" />
+                  <line x1="17" y1="17" x2="22" y2="17" />
+                  <line x1="17" y1="7" x2="22" y2="7" />
+                </svg>
+              </button>
+              <span className="call-btn-label">{viewMode === 'moviemode' ? 'Exit Movie' : 'Movie'}</span>
+            </div>
+          )}
+
+          {/* Microphone Mute Button */}
+          <div className="call-control-item">
+            <button
+              type="button"
+              className={`call-btn mute ${activeCall.isMuted ? 'active' : ''}`}
+              onClick={toggleMute}
+              title={activeCall.isMuted ? 'Unmute microphone' : 'Mute microphone'}
+              aria-label={activeCall.isMuted ? 'Unmute microphone' : 'Mute microphone'}
+            >
+              {activeCall.isMuted ? (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                  <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                  <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+              ) : (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+              )}
+            </button>
+            <span className="call-btn-label">{activeCall.isMuted ? 'Unmute' : 'Mute'}</span>
+          </div>
+
+          {/* End Call Button */}
+          <div className="call-control-item">
+            <button
+              type="button"
+              className="call-btn hangup"
+              onClick={hangup}
+              title="End video call"
+              aria-label="End video call"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91" />
+                <line x1="23" y1="1" x2="1" y2="23" />
+              </svg>
+            </button>
+            <span className="call-btn-label">End</span>
           </div>
         </div>
-      );
-    }
+      </div>
+    );
+  }
 
   // -------------------------------------------------------------
   // VOICE CALL LAYOUT (Preserved Phase 8 Voice Experience)
@@ -1750,7 +1666,7 @@ export default function ActiveCallPanel() {
       <div className="call-card">
         {/* Top Bar: Diagnostics & Minimize to Floating Capsule */}
         <div className="call-card-top-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-          
+
 
           <button
             type="button"
@@ -1768,7 +1684,7 @@ export default function ActiveCallPanel() {
           </button>
         </div>
 
-        
+
 
         {/* Reconnecting Status Notification Bar */}
         {isReconnecting && (
@@ -1783,9 +1699,9 @@ export default function ActiveCallPanel() {
           {isConnected && isRemoteSpeaking && <div className="call-pulse-ring speaking" />}
           <div className={`call-avatar ${isRemoteSpeaking ? 'avatar-speaking' : ''}`}>
             {activeCall.remoteUser.avatar ? (
-              <img 
-                src={resolveAvatarUrl(activeCall.remoteUser.avatar) || activeCall.remoteUser.avatar} 
-                alt={partnerName} 
+              <img
+                src={resolveAvatarUrl(activeCall.remoteUser.avatar) || activeCall.remoteUser.avatar}
+                alt={partnerName}
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
@@ -1858,8 +1774,8 @@ export default function ActiveCallPanel() {
               aria-pressed={voiceExperience === 'natural'}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
               </svg>
               <span>Natural</span>
             </button>
@@ -1895,7 +1811,7 @@ export default function ActiveCallPanel() {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
                 <circle cx="12" cy="12" r="3" />
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z" />
               </svg>
               <span>Spatial</span>
             </button>

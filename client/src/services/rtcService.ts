@@ -112,6 +112,7 @@ export class RTCService {
   private localVideoElements = new Set<HTMLVideoElement>();
   private remoteVideoElements = new Set<HTMLVideoElement>();
   private remoteVideoStream: MediaStream | null = null;
+  private remoteVideoTrack: MediaStreamTrack | null = null;
   private isCameraOff = false;
   private isCameraUnavailable = false;
 
@@ -119,6 +120,9 @@ export class RTCService {
   private screenStream: MediaStream | null = null;
   private screenVideoElements = new Set<HTMLVideoElement>();
   private preSharingVideoTrack: MediaStreamTrack | null = null;
+  private screenVideoSender: RTCRtpSender | null = null;
+  private remoteScreenTrack: MediaStreamTrack | null = null;
+  private remoteScreenStream: MediaStream | null = null;
   private displayAudioSender: RTCRtpSender | null = null;
   private isScreenSharing = false;
   private onScreenSharingEndedCallback: (() => void) | null = null;
@@ -127,7 +131,7 @@ export class RTCService {
   private currentCaptureHeight = 0;
   private currentCaptureFps = 0;
   private videoQualityMode: VideoQualityMode = 'auto';
-  private videoBitrateTargetMbps = 3.8; // 3.8 Mbps optimal smooth HD motion budget
+  private videoBitrateTargetMbps = 6.0; // 6.0 Mbps optimal smooth HD motion budget
   private peakMotionBitrateMbps = 0;
   private minStaticBitrateMbps = 0;
 
@@ -546,9 +550,10 @@ export class RTCService {
     el.autoplay = true;
     (el as any).playsInline = true;
     el.muted = true;
-    if (this.screenStream) {
-      if (el.srcObject !== this.screenStream) {
-        el.srcObject = this.screenStream;
+    const stream = this.screenStream || this.remoteScreenStream || (this.isScreenSharing ? null : this.remoteVideoStream);
+    if (stream) {
+      if (el.srcObject !== stream) {
+        el.srcObject = stream;
       }
       el.play().catch(() => {});
     }
@@ -572,6 +577,20 @@ export class RTCService {
    */
   getScreenStream(): MediaStream | null {
     return this.screenStream;
+  }
+
+  /**
+   * Get active remote screen share stream if remote partner is sharing with dedicated track.
+   */
+  getRemoteScreenStream(): MediaStream | null {
+    return this.remoteScreenStream;
+  }
+
+  /**
+   * Get active remote screen share track if remote partner is sharing.
+   */
+  getRemoteScreenTrack(): MediaStreamTrack | null {
+    return this.remoteScreenTrack;
   }
 
   /**
@@ -765,11 +784,12 @@ export class RTCService {
         el.play().catch(err => console.warn('[WIBBY WEBRTC] Recover local video play error:', err));
       } catch (e) {}
     });
-    if (this.isScreenSharing && this.screenStream) {
+    const activeScreenStream = this.screenStream || this.remoteScreenStream;
+    if (activeScreenStream) {
       this.screenVideoElements.forEach(el => {
         try {
-          if (el.srcObject !== this.screenStream) {
-            el.srcObject = this.screenStream;
+          if (el.srcObject !== activeScreenStream) {
+            el.srcObject = activeScreenStream;
           }
           el.muted = true;
           el.autoplay = true;
@@ -1417,40 +1437,85 @@ export class RTCService {
           this.attachRemoteAudio(audioOnlyStream);
         }
       } else if (event.track.kind === 'video') {
-        // HARD RULE: Always create a video-ONLY stream for the video elements.
-        // This guarantees the video element NEVER has an audio track that could
-        // bypass the single-output-path rule, even if muted is somehow cleared.
-        const videoOnlyStream = new MediaStream([event.track]);
-        this.remoteVideoStream = videoOnlyStream;
+        // Distinguish between primary remote camera video track and secondary remote screen share track
+        if (this.remoteVideoTrack && this.remoteVideoTrack.readyState === 'live' && this.remoteVideoTrack.id !== event.track.id) {
+          console.log('[WIBBY WEBRTC] Secondary remote screen video track received:', event.track.id);
+          this.remoteScreenTrack = event.track;
+          const screenVideoOnlyStream = new MediaStream([event.track]);
+          this.remoteScreenStream = screenVideoOnlyStream;
 
-        // When the first RTP packet arrives and track un-mutes, ensure play() is triggered (Req 25, 26)
-        event.track.onunmute = () => {
-          console.log('[WIBBY WEBRTC] Remote video track unmuted — triggering playback on all remote video elements');
-          this.remoteVideoElements.forEach(el => {
+          event.track.onunmute = () => {
+            console.log('[WIBBY WEBRTC] Remote screen video track unmuted — triggering playback on screen video elements');
+            this.screenVideoElements.forEach(el => {
+              el.muted = true;
+              el.autoplay = true;
+              (el as any).playsInline = true;
+              if (el.srcObject !== screenVideoOnlyStream) {
+                el.srcObject = screenVideoOnlyStream;
+              }
+              el.play().catch(err => console.warn('[WIBBY WEBRTC] Remote screen video play on unmute error:', err));
+            });
+          };
+
+          event.track.onended = () => {
+            console.log('[WIBBY WEBRTC] Remote screen video track ended');
+            this.remoteScreenTrack = null;
+            this.remoteScreenStream = null;
+            this.screenVideoElements.forEach(el => {
+              if (el.srcObject === screenVideoOnlyStream) {
+                el.srcObject = null;
+              }
+            });
+            // Restore camera stream to all registered video elements after React
+            // re-mounts the normal stacked layout.
+            setTimeout(() => { this.recoverVideoPlayback(); }, 150);
+            setTimeout(() => { this.recoverVideoPlayback(); }, 500);
+          };
+
+          this.screenVideoElements.forEach(el => {
             el.muted = true;
             el.autoplay = true;
             (el as any).playsInline = true;
-            if (el.srcObject !== videoOnlyStream) {
-              el.srcObject = videoOnlyStream;
+            if (el.srcObject !== screenVideoOnlyStream) {
+              el.srcObject = screenVideoOnlyStream;
             }
-            el.play().catch(err => console.warn('[WIBBY WEBRTC] Remote video play on unmute error:', err));
+            el.play().catch(err => console.warn('[WIBBY WEBRTC] Remote screen video play on attach error:', err));
           });
-        };
+        } else {
+          // Primary Camera Video Track
+          this.remoteVideoTrack = event.track;
+          const videoOnlyStream = new MediaStream([event.track]);
+          this.remoteVideoStream = videoOnlyStream;
 
-        this.remoteVideoElements.forEach(el => {
-          // Imperatively enforce muting before setting srcObject
-          el.muted = true;
-          el.autoplay = true;
-          (el as any).playsInline = true;
-          if (el.srcObject !== videoOnlyStream) el.srcObject = videoOnlyStream;
-          el.play().catch(err => console.warn('[WIBBY WEBRTC] Remote video play on attach error:', err));
-          this.startDisplayPacingMonitor(el);
-        });
-        if (this.onRemoteVideoActiveCallback) {
-          this.onRemoteVideoActiveCallback();
-        }
-        if (this.onRemoteVideoTrackCallback) {
-          this.onRemoteVideoTrackCallback(videoOnlyStream);
+          // When the first RTP packet arrives and track un-mutes, ensure play() is triggered (Req 25, 26)
+          event.track.onunmute = () => {
+            console.log('[WIBBY WEBRTC] Remote video track unmuted — triggering playback on all remote video elements');
+            this.remoteVideoElements.forEach(el => {
+              el.muted = true;
+              el.autoplay = true;
+              (el as any).playsInline = true;
+              if (el.srcObject !== videoOnlyStream) {
+                el.srcObject = videoOnlyStream;
+              }
+              el.play().catch(err => console.warn('[WIBBY WEBRTC] Remote video play on unmute error:', err));
+            });
+          };
+
+          this.remoteVideoElements.forEach(el => {
+            // Imperatively enforce muting before setting srcObject
+            el.muted = true;
+            el.autoplay = true;
+            (el as any).playsInline = true;
+            if (el.srcObject !== videoOnlyStream) el.srcObject = videoOnlyStream;
+            el.play().catch(err => console.warn('[WIBBY WEBRTC] Remote video play on attach error:', err));
+            this.startDisplayPacingMonitor(el);
+          });
+          if (this.onRemoteVideoActiveCallback) {
+            this.onRemoteVideoActiveCallback();
+          }
+          if (this.onRemoteVideoTrackCallback) {
+            this.onRemoteVideoTrackCallback(videoOnlyStream);
+          }
         }
       }
     };
@@ -1968,51 +2033,52 @@ export class RTCService {
 
     this.screenStream = screenStream;
 
-    // ── VIDEO: replaceTrack() — no renegotiation ──────────────────────────────
-    let videoSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'video' || (s as any).kind === 'video');
-    if (!videoSender) {
-      const videoTransceiver = this.peerConnection.getTransceivers().find(
-        t => t.sender && (t.sender.track?.kind === 'video' || t.receiver?.track?.kind === 'video' || (t as any).kind === 'video')
-      );
-      if (videoTransceiver) {
-        videoSender = videoTransceiver.sender;
-      }
-    }
-    if (!videoSender) {
-      console.warn('[WIBBY SCREEN] No video sender found on RTCPeerConnection');
-      screenStream.getTracks().forEach(t => { try { t.stop(); } catch {} });
-      this.screenStream = null;
-      return 'error';
-    }
-
-    // Park the current camera track so we can restore it later
-    this.preSharingVideoTrack = this.localStream?.getVideoTracks()[0] ?? null;
-
+    // ── VIDEO: addTrack() for screen sharing so camera video keeps streaming! ──
     try {
-      await videoSender.replaceTrack(screenVideoTrack);
-      console.log('[WIBBY SCREEN] Video sender replaceTrack succeeded with screen track');
-      console.log('[WIBBY SCREEN] Active screen sharing diagnostics:', this.getScreenShareDiagnostics());
+      this.screenVideoSender = this.peerConnection.addTrack(screenVideoTrack, screenStream);
+      console.log('[WIBBY SCREEN] Added dedicated screen video track to RTCPeerConnection');
 
       // Maximize bitrate for crisp, uncompressed 1080p screen share (Guardrail: maintain-resolution)
       try {
-        const params = videoSender.getParameters();
-        if (params && params.encodings && params.encodings[0]) {
-          params.encodings[0].maxBitrate = 5_000_000; // 5 Mbps for razor-sharp text
-          params.encodings[0].scaleResolutionDownBy = 1.0;
-          if ('degradationPreference' in params) {
-            (params as any).degradationPreference = 'maintain-resolution';
-          }
-          await videoSender.setParameters(params);
+        const params = this.screenVideoSender.getParameters();
+        if (!params.encodings || params.encodings.length === 0) {
+          params.encodings = [{}];
         }
+        params.encodings[0].maxBitrate = 5_000_000; // 5 Mbps for razor-sharp text
+        params.encodings[0].scaleResolutionDownBy = 1.0;
+        if ('degradationPreference' in params) {
+          (params as any).degradationPreference = 'maintain-resolution';
+        }
+        await this.screenVideoSender.setParameters(params);
       } catch (tuneErr) {
         console.warn('[WIBBY SCREEN] Could not tune screen video sender params:', tuneErr);
       }
-    } catch (err) {
-      console.error('[WIBBY SCREEN] replaceTrack failed for screen video:', err);
-      screenStream.getTracks().forEach(t => { try { t.stop(); } catch {} });
-      this.screenStream = null;
-      this.preSharingVideoTrack = null;
-      return 'error';
+    } catch (trackErr) {
+      console.warn('[WIBBY SCREEN] addTrack for screen video failed, attempting fallback replaceTrack:', trackErr);
+      let videoSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'video' || (s as any).kind === 'video');
+      if (!videoSender) {
+        const videoTransceiver = this.peerConnection.getTransceivers().find(
+          t => t.sender && (t.sender.track?.kind === 'video' || t.receiver?.track?.kind === 'video' || (t as any).kind === 'video')
+        );
+        if (videoTransceiver) {
+          videoSender = videoTransceiver.sender;
+        }
+      }
+      if (videoSender) {
+        this.preSharingVideoTrack = this.localStream?.getVideoTracks()[0] ?? null;
+        try {
+          await videoSender.replaceTrack(screenVideoTrack);
+          console.log('[WIBBY SCREEN] Fallback replaceTrack succeeded');
+        } catch (repErr) {
+          screenStream.getTracks().forEach(t => { try { t.stop(); } catch {} });
+          this.screenStream = null;
+          return 'error';
+        }
+      } else {
+        screenStream.getTracks().forEach(t => { try { t.stop(); } catch {} });
+        this.screenStream = null;
+        return 'error';
+      }
     }
 
     // Dedicated screen video elements show the high-definition screen stream
@@ -2022,25 +2088,28 @@ export class RTCService {
       el.play().catch(() => {});
     });
 
-    // ── DISPLAY AUDIO: addTrack() + renegotiation (only if browser provided audio) ──
+    // ── DISPLAY AUDIO: addTrack() (only if browser provided audio) ──
     if (displayAudioTrack && displayAudioTrack.readyState === 'live') {
       try {
         this.displayAudioSender = this.peerConnection.addTrack(displayAudioTrack, screenStream);
-        console.log('[WIBBY SCREEN] Display audio track added to RTCPeerConnection — triggering renegotiation');
-
-        // Immediately create and emit renegotiation offer via existing SDP pipeline.
-        // We do NOT rely on onnegotiationneeded event — we drive it ourselves for
-        // deterministic, glare-safe behaviour.
-        const offer = await this.createOffer();
-        onNegotiationNeeded(offer);
-        console.log('[WIBBY SCREEN] Renegotiation offer emitted for display audio sender');
+        console.log('[WIBBY SCREEN] Display audio track added to RTCPeerConnection');
       } catch (audioErr) {
-        console.warn('[WIBBY SCREEN] Failed to add display audio sender (non-fatal — screen video continues):', audioErr);
+        console.warn('[WIBBY SCREEN] Failed to add display audio sender (non-fatal):', audioErr);
         this.displayAudioSender = null;
-        // Screen video is already running; we continue without display audio
       }
     } else {
       console.log('[WIBBY SCREEN] No display audio track returned by browser — screen video only, mic continues');
+    }
+
+    // Trigger renegotiation if dedicated screenVideoSender or displayAudioSender was added
+    if (this.screenVideoSender || this.displayAudioSender) {
+      try {
+        const offer = await this.createOffer();
+        onNegotiationNeeded(offer);
+        console.log('[WIBBY SCREEN] Renegotiation offer emitted for screen sharing');
+      } catch (offerErr) {
+        console.warn('[WIBBY SCREEN] Error emitting renegotiation offer for screen sharing:', offerErr);
+      }
     }
 
     // ── Track ended listener (OS Stop Sharing / tab close) ───────────────────
@@ -2062,9 +2131,8 @@ export class RTCService {
    * Phase 10: Stop Screen Sharing.
    *
    * 1. Stops all display media tracks.
-   * 2. Restores the parked camera track on the video sender (replaceTrack).
-   * 3. Removes the display audio sender if one was added, and triggers renegotiation
-   *    via the onScreenSharingEndedCallback → CallContext emits call:offer.
+   * 2. Removes dedicated screen video sender and display audio sender, then renegotiates.
+   * 3. Restores camera track if fallback replaceTrack was used.
    * 4. The microphone sender is NEVER touched.
    *
    * Idempotent — safe to call multiple times.
@@ -2090,38 +2158,52 @@ export class RTCService {
       } catch {}
     });
 
-    // ── VIDEO: restore camera track ───────────────────────────────────────────
-    let videoSender = this.peerConnection?.getSenders().find(s =>
-      // The sender may now hold the screen track or a null track — find by video kind
-      s.track === null || s.track?.kind === 'video' || (s as any).kind === 'video'
-    );
-    if (!videoSender && this.peerConnection) {
-      const videoTransceiver = this.peerConnection.getTransceivers().find(
-        t => t.sender && (t.sender.track?.kind === 'video' || t.receiver?.track?.kind === 'video' || (t as any).kind === 'video' || t.mid !== null)
-      );
-      if (videoTransceiver) {
-        videoSender = videoTransceiver.sender;
-      }
-    }
-    if (videoSender) {
-      const cameraTrack =
-        (this.preSharingVideoTrack?.readyState === 'live' ? this.preSharingVideoTrack : null) ??
-        (this.localStream?.getVideoTracks()[0] ?? null);
+    // Schedule a deferred video recovery so that after React re-mounts the
+    // normal stacked-layout elements, all camera/remote streams are re-attached.
+    setTimeout(() => {
+      this.recoverVideoPlayback();
+    }, 150);
+    setTimeout(() => {
+      this.recoverVideoPlayback();
+    }, 500);
 
+    let needsRenegotiation = false;
+
+    // ── VIDEO: remove screen video sender ─────────────────────────────────────
+    if (this.screenVideoSender && this.peerConnection) {
       try {
-        if (cameraTrack && cameraTrack.readyState === 'live') {
-          await videoSender.replaceTrack(cameraTrack);
-          console.log('[WIBBY SCREEN] Camera track restored on video sender');
-        } else {
-          // Camera was off or track ended — blank the sender
-          await videoSender.replaceTrack(null);
-          console.log('[WIBBY SCREEN] Camera was unavailable — video sender blanked');
-        }
+        this.peerConnection.removeTrack(this.screenVideoSender);
+        console.log('[WIBBY SCREEN] Screen video sender removed from RTCPeerConnection');
+        needsRenegotiation = true;
       } catch (err) {
-        console.warn('[WIBBY SCREEN] replaceTrack back to camera failed:', err);
+        console.warn('[WIBBY SCREEN] removeTrack for screen video failed:', err);
       }
+      this.screenVideoSender = null;
     }
-    this.preSharingVideoTrack = null;
+
+    // Fallback restore if replaceTrack was used
+    if (this.preSharingVideoTrack) {
+      let videoSender = this.peerConnection?.getSenders().find(s =>
+        s.track === null || s.track?.kind === 'video' || (s as any).kind === 'video'
+      );
+      if (!videoSender && this.peerConnection) {
+        const videoTransceiver = this.peerConnection.getTransceivers().find(
+          t => t.sender && (t.sender.track?.kind === 'video' || t.receiver?.track?.kind === 'video' || (t as any).kind === 'video' || t.mid !== null)
+        );
+        if (videoTransceiver) {
+          videoSender = videoTransceiver.sender;
+        }
+      }
+      if (videoSender) {
+        try {
+          await videoSender.replaceTrack(this.preSharingVideoTrack);
+          console.log('[WIBBY SCREEN] Restored camera track from fallback replaceTrack');
+        } catch (err) {
+          console.warn('[WIBBY SCREEN] replaceTrack back to camera failed:', err);
+        }
+      }
+      this.preSharingVideoTrack = null;
+    }
 
     // Restore local preview elements to camera stream
     if (this.localStream) {
@@ -2135,20 +2217,23 @@ export class RTCService {
     if (this.displayAudioSender && this.peerConnection) {
       try {
         this.peerConnection.removeTrack(this.displayAudioSender);
-        console.log('[WIBBY SCREEN] Display audio sender removed — triggering renegotiation');
-
-        // Create re-offer to remove the audio transceiver from SDP.
-        // onScreenSharingEndedCallback will be called by the caller (or by screenVideoTrack.onended),
-        // which also handles emitting the offer. We emit it here directly.
-        const offer = await this.createOffer();
-        if (this.onScreenSharingEndedCallback) {
-          // Temporarily store offer so CallContext can emit it
-          (this as any)._pendingStopOffer = offer;
-        }
+        console.log('[WIBBY SCREEN] Display audio sender removed');
+        needsRenegotiation = true;
       } catch (err) {
         console.warn('[WIBBY SCREEN] removeTrack for display audio failed:', err);
       }
       this.displayAudioSender = null;
+    }
+
+    if (needsRenegotiation && this.peerConnection) {
+      try {
+        const offer = await this.createOffer();
+        if (this.onScreenSharingEndedCallback) {
+          (this as any)._pendingStopOffer = offer;
+        }
+      } catch (err) {
+        console.warn('[WIBBY SCREEN] createOffer for stopScreenSharing failed:', err);
+      }
     }
 
     // Restore standard video sender parameters (maintain-framerate) for camera
@@ -2182,7 +2267,7 @@ export class RTCService {
       if (this.isScreenSharing) {
         // SCREEN SHARE: Absolute highest clarity & sharp resolution for slides/documents/code
         params.degradationPreference = 'maintain-resolution';
-        params.encodings[0].maxBitrate = 5_000_000; // 5 Mbps for pristine 1080p
+        params.encodings[0].maxBitrate = 8_000_000; // 8 Mbps for pristine 1080p+ text
         params.encodings[0].maxFramerate = 30;
         params.encodings[0].scaleResolutionDownBy = 1.0;
         if ('minBitrate' in params.encodings[0]) {
@@ -2198,7 +2283,7 @@ export class RTCService {
         // If camera capture is 1080p (or standard), scaleResolutionDownBy is 1.0 to transmit 1080p.
         const is4KCapture = this.currentCaptureWidth >= 3840;
         const baseScale = is4KCapture ? 2.0 : 1.0;
-        const targetBps = Math.min(Math.max(Math.round(this.videoBitrateTargetMbps * 1_000_000), 2_000_000), 4_000_000);
+        const targetBps = Math.min(Math.max(Math.round(this.videoBitrateTargetMbps * 1_000_000), 2_000_000), 6_000_000);
 
         if (currentMode === 'data-saver') {
           params.degradationPreference = 'balanced';
@@ -3326,11 +3411,17 @@ export class RTCService {
       this.screenVideoElements.clear();
       this.preSharingVideoTrack = null;
       this.displayAudioSender = null;
+      this.screenVideoSender = null;
+      this.remoteScreenTrack = null;
+      this.remoteScreenStream = null;
     } else {
       this.screenVideoElements.forEach(el => {
         try { el.srcObject = null; } catch {}
       });
       this.screenVideoElements.clear();
+      this.screenVideoSender = null;
+      this.remoteScreenTrack = null;
+      this.remoteScreenStream = null;
     }
 
     // 1. Stop all local tracks (mic + camera)
@@ -3364,6 +3455,7 @@ export class RTCService {
       });
       this.remoteVideoStream = null;
     }
+    this.remoteVideoTrack = null;
 
     // 3. Reset video elements and display pacing monitor
     this.stopDisplayPacingMonitor();

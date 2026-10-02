@@ -39,13 +39,13 @@ function openRingtoneDB(): Promise<IDBDatabase> {
   });
 }
 
-async function getStoredCustomRingtone(): Promise<{ blob: Blob; name: string } | null> {
+async function getStoredCustomRingtone(userId: string): Promise<{ blob: Blob; name: string } | null> {
   try {
     const db = await openRingtoneDB();
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
-      const req = store.get('custom_ringtone');
+      const req = store.get(`custom_ringtone_${userId}`);
       req.onsuccess = () => resolve(req.result || null);
       req.onerror = () => resolve(null);
     });
@@ -54,24 +54,24 @@ async function getStoredCustomRingtone(): Promise<{ blob: Blob; name: string } |
   }
 }
 
-async function saveStoredCustomRingtone(blob: Blob, name: string): Promise<void> {
+async function saveStoredCustomRingtone(blob: Blob, name: string, userId: string): Promise<void> {
   const db = await openRingtoneDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
-    const req = store.put({ blob, name }, 'custom_ringtone');
+    const req = store.put({ blob, name }, `custom_ringtone_${userId}`);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
 }
 
-async function deleteStoredCustomRingtone(): Promise<void> {
+async function deleteStoredCustomRingtone(userId: string): Promise<void> {
   try {
     const db = await openRingtoneDB();
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      const req = store.delete('custom_ringtone');
+      const req = store.delete(`custom_ringtone_${userId}`);
       req.onsuccess = () => resolve();
       req.onerror = () => resolve();
     });
@@ -93,17 +93,26 @@ class RingtoneService {
   private userGestureAttached = false;
   private autoplayBlocked = false;
 
+  private currentUserId: string | null = null;
+
   constructor() {
     this.initAudioElement();
-    this.loadCustomRingtone();
     if (typeof window !== 'undefined') {
       window.addEventListener('pagehide', () => this.stop());
       window.addEventListener('beforeunload', () => this.stop());
     }
   }
 
+  async setUserId(userId: string) {
+    if (this.currentUserId !== userId) {
+      this.currentUserId = userId;
+      await this.loadCustomRingtone();
+    }
+  }
+
   private async loadCustomRingtone() {
-    const stored = await getStoredCustomRingtone();
+    if (!this.currentUserId) return;
+    const stored = await getStoredCustomRingtone(this.currentUserId);
     if (stored && stored.blob) {
       if (this.customBlobUrl) {
         URL.revokeObjectURL(this.customBlobUrl);
@@ -125,6 +134,8 @@ class RingtoneService {
   }
 
   async saveCustomRingtone(file: File): Promise<{ success: boolean; name: string }> {
+    if (!this.currentUserId) throw new Error('User not identified');
+
     // 1. Size limit: 8MB
     const MAX_SIZE = 8 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
@@ -176,7 +187,7 @@ class RingtoneService {
     }
 
     // 3. Persist to IndexedDB
-    await saveStoredCustomRingtone(file, file.name);
+    await saveStoredCustomRingtone(file, file.name, this.currentUserId);
 
     if (this.customBlobUrl) {
       URL.revokeObjectURL(this.customBlobUrl);
@@ -193,8 +204,9 @@ class RingtoneService {
   }
 
   async resetToDefault(): Promise<void> {
+    if (!this.currentUserId) return;
     this.stop();
-    await deleteStoredCustomRingtone();
+    await deleteStoredCustomRingtone(this.currentUserId);
     if (this.customBlobUrl) {
       URL.revokeObjectURL(this.customBlobUrl);
       this.customBlobUrl = null;

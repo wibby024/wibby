@@ -8,6 +8,7 @@ interface TogetherPlayerProps {
   conversationId: string;
   partnerName: string;
   onClose: () => void;
+  inline?: boolean;
 }
 
 function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' | 'direct' | 'custom' } {
@@ -34,7 +35,7 @@ function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' | 'dire
   return { url: mediaUrl, type: mediaType };
 }
 
-export default function TogetherPlayer({ conversationId, partnerName, onClose }: TogetherPlayerProps) {
+export default function TogetherPlayer({ conversationId, partnerName, onClose, inline }: TogetherPlayerProps) {
   const { socket } = useSocket();
   const { user } = useAuth();
 
@@ -551,9 +552,11 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose }:
   return (
     <div
       ref={containerRef}
-      className={`together-dock ${isMinimized ? 'minimized' : 'standard'} ${isDragging ? 'dragging' : ''} ${snappedSide}`}
+      className={inline ? 'together-inline-container' : `together-dock ${isMinimized ? 'minimized' : 'standard'} ${isDragging ? 'dragging' : ''} ${snappedSide}`}
       style={
-        isMinimized && position
+        inline
+          ? { width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }
+          : isMinimized && position
           ? { left: `${position.x}px`, top: `${position.y}px` }
           : !isMinimized && (customSize.height || customSize.width)
           ? {
@@ -568,74 +571,76 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose }:
       onPointerCancel={isMinimized ? handlePointerUp : undefined}
     >
       {/* Header Bar */}
-      <div className={`together-dock-header ${isMinimized ? 'minimized-header' : ''}`}>
-        <div className="together-dock-title-wrap">
-          {isMinimized && (
-            <span className="together-drag-grip" title="Drag to move or dock to left/right">
-              ⠿
+      {!inline && (
+        <div className={`together-dock-header ${isMinimized ? 'minimized-header' : ''}`}>
+          <div className="together-dock-title-wrap">
+            {isMinimized && (
+              <span className="together-drag-grip" title="Drag to move or dock to left/right">
+                ⠿
+              </span>
+            )}
+            <span className="together-badge">🍿 {isMinimized ? 'Together' : 'Watch Together'}</span>
+            <span className="together-sync-status">
+              {isMinimized ? (session ? (isPlaying ? '▶ Playing' : '⏸ Paused') : 'Link mode') : syncStatus}
             </span>
-          )}
-          <span className="together-badge">🍿 {isMinimized ? 'Together' : 'Watch Together'}</span>
-          <span className="together-sync-status">
-            {isMinimized ? (session ? (isPlaying ? '▶ Playing' : '⏸ Paused') : 'Link mode') : syncStatus}
-          </span>
-        </div>
+          </div>
 
-        <div className="together-dock-controls">
-          {!isMinimized && session && (
+          <div className="together-dock-controls">
+            {!isMinimized && session && (
+              <button
+                type="button"
+                className="together-ctrl-btn"
+                onClick={() => setShowChangeMedia(prev => !prev)}
+                title={showChangeMedia ? 'Cancel change' : 'Change Video'}
+                aria-label="Change video"
+              >
+                🔄
+              </button>
+            )}
+
+            {!isMinimized && (
+              <button
+                type="button"
+                className="together-ctrl-btn side-swap-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleSide();
+                }}
+                title={snappedSide === 'right' ? 'Dock to Left Side' : 'Dock to Right Side'}
+                aria-label="Dock to opposite side"
+              >
+                {snappedSide === 'right' ? '⇤' : '⇥'}
+              </button>
+            )}
+
             <button
               type="button"
               className="together-ctrl-btn"
-              onClick={() => setShowChangeMedia(prev => !prev)}
-              title={showChangeMedia ? 'Cancel change' : 'Change Video'}
-              aria-label="Change video"
-            >
-              🔄
-            </button>
-          )}
-
-          {isMinimized && (
-            <button
-              type="button"
-              className="together-ctrl-btn side-swap-btn"
               onClick={(e) => {
                 e.stopPropagation();
-                handleToggleSide();
+                handleToggleMinimize();
               }}
-              title={snappedSide === 'right' ? 'Dock to Left Side' : 'Dock to Right Side'}
-              aria-label="Dock to opposite side"
+              title={isMinimized ? 'Expand Video Player' : 'Minimize to side (Draggable)'}
+              aria-label={isMinimized ? 'Expand player' : 'Minimize player'}
             >
-              {snappedSide === 'right' ? '⇤' : '⇥'}
+              {isMinimized ? '🗖' : '🗕'}
             </button>
-          )}
 
-          <button
-            type="button"
-            className="together-ctrl-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleToggleMinimize();
-            }}
-            title={isMinimized ? 'Expand Video Player' : 'Minimize to side (Draggable)'}
-            aria-label={isMinimized ? 'Expand player' : 'Minimize player'}
-          >
-            {isMinimized ? '🗖' : '🗕'}
-          </button>
-
-          <button
-            type="button"
-            className="together-ctrl-btn close-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleEndSession();
-            }}
-            title="Close Watch Together"
-            aria-label="Close session"
-          >
-            ✕
-          </button>
+            <button
+              type="button"
+              className="together-ctrl-btn close-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEndSession();
+              }}
+              title="Close Watch Together"
+              aria-label="Close session"
+            >
+              ✕
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Body */}
       <div className={`together-dock-body ${isMinimized ? 'minimized-body' : ''}`}>

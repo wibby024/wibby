@@ -21,8 +21,8 @@
   position: relative;
   width: calc(100% - 1.5rem);
   max-width: 780px;
-  min-height: 220px;
-  margin: 0.5rem auto 0.35rem auto;
+  min-height: 160px;
+  margin: 0.35rem auto 0.25rem auto;
   border-radius: var(--radius-xl);
   flex-shrink: 0;
   display: flex;
@@ -265,7 +265,7 @@
   border: none;
   background: #000000;
   display: block;
-  object-fit: contain;
+  object-fit: cover;
   direction: ltr;
   transform: none;
 }
@@ -436,11 +436,11 @@
 @media (max-width: 768px) {
   .together-dock.standard {
     width: calc(100% - 1rem);
-    margin: 0.35rem auto 0.25rem auto;
+    margin: 0.25rem auto 0.2rem auto;
     border-radius: var(--radius-lg);
     flex-shrink: 1;
     min-height: 0;
-    max-height: 36vh;
+    max-height: 28vh;
   }
 
   .together-player-frame-wrap.full-frame {

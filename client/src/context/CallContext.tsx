@@ -229,6 +229,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noAnswerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isStartingCallRef = useRef(false);
   const inviteCountRef = useRef<Record<string, number>>({});
   const callRecoverableReceivedRef = useRef(false);
@@ -263,6 +264,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
+    }
+  }, []);
+
+  const clearNoAnswerTimeout = useCallback(() => {
+    if (noAnswerTimeoutRef.current) {
+      clearTimeout(noAnswerTimeoutRef.current);
+      noAnswerTimeoutRef.current = null;
     }
   }, []);
 
@@ -380,6 +388,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const resetCallState = useCallback((delayMs: number = 0) => {
     clearTimer();
+    clearNoAnswerTimeout();
     ringtoneService.stop();
     // Phase 10: stop screen sharing cleanly before full cleanup
     if (rtcService.isScreenSharingActive()) {
@@ -417,7 +426,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       setActiveCall(null);
       setCallState('IDLE');
     }
-  }, [clearTimer]);
+  }, [clearTimer, clearNoAnswerTimeout]);
 
   // Audio output device & camera enumeration when connected
   useEffect(() => {
@@ -619,6 +628,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       const currentCall = activeCallRef.current;
       if (!currentCall || currentCall.callId !== data.callId) return;
 
+      clearNoAnswerTimeout();
       clearError();
       setCallState('CONNECTING');
 
@@ -973,6 +983,23 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         callType: type
       });
       console.log(`[WIBBY CALL] Outgoing ${type} call initiated: ${callId}`);
+
+      // 5. No-answer auto-cancel: if callee doesn't respond in 45s, cancel the call
+      clearNoAnswerTimeout();
+      noAnswerTimeoutRef.current = setTimeout(() => {
+        if (callStateRef.current === 'OUTGOING_CALLING' && activeCallRef.current?.callId === callId) {
+          console.log('[WIBBY CALL] No answer after 45s — auto-cancelling call');
+          if (socket) {
+            socket.emit('call:hangup', {
+              callId,
+              sessionId: sessionIdRef.current,
+              reason: 'no_answer'
+            });
+          }
+          showTransientError('No answer', 3000);
+          resetCallState(1000);
+        }
+      }, 45000);
     } catch (err: any) {
       console.error('[WIBBY CALL] Error starting call:', err);
       const msg = formatMicrophoneError(err);

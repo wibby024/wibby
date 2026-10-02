@@ -9,6 +9,7 @@ import ChatHeader from './components/ChatHeader'
 import MessageArea from './components/MessageArea'
 import PairingScreen from './components/PairingScreen'
 import { notificationService } from './services/notificationService'
+import { ringtoneService } from './services/ringtoneService'
 import { resolvePartnerName, resolvePartnerUsername } from './utils/partnerName'
 import type { ChatThemePreset } from './types/chat'
 import './App.css'
@@ -71,7 +72,7 @@ function WibbyAppWrapper() {
       return null;
     }
   });
-  
+
   // Modals and Drawer state
   const [showInfoDrawer, setShowInfoDrawer] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -130,10 +131,11 @@ function WibbyAppWrapper() {
     localStorage.setItem('wibby-chat-theme', chatThemePreset);
   }, [chatThemePreset]);
 
-  // Initialize notification service
+  // Initialize notification and ringtone service
   useEffect(() => {
     if (user) {
       notificationService.init();
+      ringtoneService.setUserId(user.uid);
     }
   }, [user]);
 
@@ -200,7 +202,7 @@ function WibbyAppWrapper() {
             if (user?.uid) {
               try {
                 localStorage.setItem(`wibby-partner-${user.uid}`, JSON.stringify(merged));
-              } catch {}
+              } catch { }
             }
             return merged;
           });
@@ -245,7 +247,7 @@ function WibbyAppWrapper() {
 
   useEffect(() => {
     if (!socket) return;
-    
+
     const handlePresence = (data: { uid: string, online: boolean, lastSeen?: string }) => {
       setPartner((prev: any) => {
         if (!prev) return prev;
@@ -259,7 +261,7 @@ function WibbyAppWrapper() {
           if (user?.uid) {
             try {
               localStorage.setItem(`wibby-partner-${user.uid}`, JSON.stringify(updated));
-            } catch {}
+            } catch { }
           }
           return updated;
         }
@@ -332,7 +334,7 @@ function WibbyAppWrapper() {
           if (user?.uid) {
             try {
               localStorage.setItem(`wibby-partner-${user.uid}`, JSON.stringify(merged));
-            } catch {}
+            } catch { }
           }
           return merged;
         });
@@ -515,9 +517,9 @@ function WibbyAppWrapper() {
       <main className={`chat-panel chat-theme-${chatThemePreset}`}>
         {isPaired && conversationId ? (
           <>
-            <ChatHeader 
-              onMenuClick={() => setSidebarOpen(true)} 
-              partner={partner} 
+            <ChatHeader
+              onMenuClick={() => setSidebarOpen(true)}
+              partner={partner}
               conversationId={conversationId}
               onOpenSearch={() => setShowSearchModal(true)}
               onOpenInfoDrawer={() => setShowInfoDrawer(true)}
@@ -527,17 +529,17 @@ function WibbyAppWrapper() {
             />
             {showTogether && (
               <Suspense fallback={null}>
-                <TogetherPlayer 
-                  conversationId={conversationId} 
+                <TogetherPlayer
+                  conversationId={conversationId}
                   partnerName={partnerName}
-                  onClose={() => setShowTogether(false)} 
+                  onClose={() => setShowTogether(false)}
                 />
               </Suspense>
             )}
-            <MessageArea 
+            <MessageArea
               key={`${conversationId}_${chatClearCount}`}
-              conversationId={conversationId} 
-              partner={partner} 
+              conversationId={conversationId}
+              partner={partner}
               onOpenGame={() => setShowGameModal(true)}
               jumpTarget={jumpTarget}
             />
