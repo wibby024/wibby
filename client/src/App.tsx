@@ -8,7 +8,6 @@ import Sidebar from './components/Sidebar'
 import ChatHeader from './components/ChatHeader'
 import MessageArea from './components/MessageArea'
 import PairingScreen from './components/PairingScreen'
-import StoriesBar from './components/stories/StoriesBar'
 import { notificationService } from './services/notificationService'
 import { resolvePartnerName, resolvePartnerUsername } from './utils/partnerName'
 import type { ChatThemePreset } from './types/chat'
@@ -79,7 +78,14 @@ function WibbyAppWrapper() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showTogether, setShowTogether] = useState(false);
   const [showGameModal, setShowGameModal] = useState(false);
-  const [showSessionConflict, setShowSessionConflict] = useState(false)
+  const [showSessionConflict, setShowSessionConflict] = useState(false);
+  const [jumpTarget, setJumpTarget] = useState<{ id: string; timestamp: number } | null>(null);
+
+  const handleJumpToMessage = useCallback((msgId: string) => {
+    setShowInfoDrawer(false);
+    setShowSearchModal(false);
+    setJumpTarget({ id: msgId, timestamp: Date.now() });
+  }, []);
   const [chatThemePreset, setChatThemePreset] = useState<ChatThemePreset>(() => {
     const saved = localStorage.getItem('wibby-chat-theme') as ChatThemePreset;
     return saved || 'classic';
@@ -464,25 +470,19 @@ function WibbyAppWrapper() {
 
   const [chatClearCount, setChatClearCount] = useState(0);
 
-  const handleClearChat = async () => {
+  const handleClearChat = async (clearMediaAndStarred: boolean = false) => {
     if (!conversationId || !user) return;
     try {
       const token = await user.getIdToken();
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      const res = await fetch(`${apiUrl}/api/conversations/${conversationId}/messages/clear`, {
+      await fetch(`${apiUrl}/api/conversations/${conversationId}/messages/clear`, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({ clearMediaAndStarred })
       });
-      if (!res.ok) {
-        await fetch(`${apiUrl}/api/conversations/${conversationId}/clear`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-      }
       setChatClearCount(prev => prev + 1);
     } catch (err) {
       console.error('Clear chat error:', err);
@@ -525,10 +525,6 @@ function WibbyAppWrapper() {
               onOpenGame={() => setShowGameModal(true)}
               onClearChat={handleClearChat}
             />
-            <StoriesBar 
-              conversationId={conversationId} 
-              partnerName={partnerName} 
-            />
             {showTogether && (
               <Suspense fallback={null}>
                 <TogetherPlayer 
@@ -543,6 +539,7 @@ function WibbyAppWrapper() {
               conversationId={conversationId} 
               partner={partner} 
               onOpenGame={() => setShowGameModal(true)}
+              jumpTarget={jumpTarget}
             />
           </>
         ) : (
@@ -574,11 +571,7 @@ function WibbyAppWrapper() {
               setShowInfoDrawer(false);
               setShowSearchModal(true);
             }}
-            onJumpToMessage={(msgId) => {
-              setShowInfoDrawer(false);
-              const el = document.querySelector(`[data-message-id="${msgId}"]`) as HTMLDivElement | null;
-              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }}
+            onJumpToMessage={handleJumpToMessage}
             onUnpair={handleUnpairAction}
             currentThemePreset={chatThemePreset}
             onSelectThemePreset={handleSelectThemePreset}
@@ -593,11 +586,7 @@ function WibbyAppWrapper() {
             isOpen={showSearchModal}
             conversationId={conversationId}
             onClose={() => setShowSearchModal(false)}
-            onSelectMessage={(msgId) => {
-              setShowSearchModal(false);
-              const el = document.querySelector(`[data-message-id="${msgId}"]`) as HTMLDivElement | null;
-              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }}
+            onSelectMessage={handleJumpToMessage}
           />
         </Suspense>
       )}

@@ -331,7 +331,18 @@ router.get('/', async (req: Request, res: Response) => {
 
     const userClearedAt = conversation?.clearedAt?.[user.uid];
     if (userClearedAt) {
-      query.createdAt = { $gt: new Date(userClearedAt) };
+      const activeOrFilter = query.$or;
+      query.$and = [
+        activeOrFilter ? { $or: activeOrFilter } : {},
+        {
+          $or: [
+            { createdAt: { $gt: new Date(userClearedAt) } },
+            { type: { $in: ['image', 'video', 'file', 'audio'] } },
+            { starredBy: user.uid }
+          ]
+        }
+      ];
+      delete query.$or;
     }
 
     if (before && ObjectId.isValid(before)) {
@@ -353,20 +364,71 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// Clear chat for current user
+// Clear chat for conversation (Issue 6: YES / NO / CANCEL server-authoritative)
 router.post('/clear', async (req: Request, res: Response) => {
   try {
     const conversationId = req.params.conversationId as string;
     const user = (req as any).user;
+    const { clearMediaAndStarred } = req.body || {};
     const db = getDb();
     const now = new Date();
+    const convObjId = new ObjectId(conversationId);
 
-    await db.collection('conversations').updateOne(
-      { _id: new ObjectId(conversationId) },
-      { $set: { [`clearedAt.${user.uid}`]: now } }
-    );
+    if (clearMediaAndStarred) {
+      // YES: Clear all conversation messages, media in GridFS, and starred messages from DB
+      const mediaMsgs = await db.collection('messages').find({
+        conversationId: convObjId,
+        mediaKey: { $exists: true, $ne: null }
+      }).toArray();
 
-    res.json({ success: true, clearedAt: now.toISOString() });
+      const storage = getStorageProvider();
+      for (const m of mediaMsgs) {
+        if (m.mediaKey) {
+          storage.delete(m.mediaKey).catch(err => console.warn('GridFS delete error on clear chat:', err));
+        }
+      }
+
+      await db.collection('messages').deleteMany({ conversationId: convObjId });
+
+      await db.collection('conversations').updateOne(
+        { _id: convObjId },
+        { 
+          $set: { 
+            [`clearedAt.${user.uid}`]: now,
+            lastMessage: null,
+            updatedAt: now
+          } 
+        }
+      );
+    } else {
+      // NO: Clear unstarred text messages, preserve media and starred messages
+      await db.collection('messages').deleteMany({
+        conversationId: convObjId,
+        type: { $nin: ['image', 'video', 'file', 'audio'] },
+        $or: [
+          { starredBy: { $exists: false } },
+          { starredBy: { $size: 0 } },
+          { starredBy: { $nin: [user.uid] } }
+        ]
+      });
+
+      await db.collection('conversations').updateOne(
+        { _id: convObjId },
+        { $set: { [`clearedAt.${user.uid}`]: now, updatedAt: now } }
+      );
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`conversation:${conversationId}`).emit('conversation:cleared', {
+        conversationId,
+        clearedBy: user.uid,
+        clearMediaAndStarred: !!clearMediaAndStarred,
+        clearedAt: now.toISOString()
+      });
+    }
+
+    res.json({ success: true, clearMediaAndStarred: !!clearMediaAndStarred, clearedAt: now.toISOString() });
   } catch (error) {
     console.error('Clear chat error:', error);
     res.status(500).json({ error: 'Failed to clear chat' });

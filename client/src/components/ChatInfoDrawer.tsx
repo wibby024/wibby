@@ -56,7 +56,9 @@ const THEME_PRESETS: Array<{ id: ChatThemePreset; name: string; gradient: string
   { id: 'midnight', name: 'Midnight Slate', gradient: 'linear-gradient(135deg, #6366F1, #1E1B4B)' },
   { id: 'cyberpunk', name: 'Neon Cyberpunk', gradient: 'linear-gradient(135deg, #00F0FF, #FF007A)' },
   { id: 'sage', name: 'Calm Sage', gradient: 'linear-gradient(135deg, #10B981, #047857)' },
-  { id: 'monochrome', name: 'Monochrome Slate', gradient: 'linear-gradient(135deg, #64748B, #1E293B)' }
+  { id: 'monochrome', name: 'Monochrome Slate', gradient: 'linear-gradient(135deg, #64748B, #1E293B)' },
+  { id: 'wibby-whatsapp', name: 'WhatsApp Style', gradient: 'linear-gradient(135deg, #25D366, #128C7E)' },
+  { id: 'wibby-instagram', name: 'Instagram Style', gradient: 'linear-gradient(135deg, #833AB4, #FD1D1D, #FCB045)' }
 ];
 
 export default function ChatInfoDrawer({
@@ -430,7 +432,16 @@ export default function ChatInfoDrawer({
                   });
 
                   return (
-                    <div key={call.id || call.callId} className="call-history-card">
+                    <div 
+                      key={call.id || call.callId} 
+                      className="call-history-card"
+                      onClick={() => {
+                        onClose();
+                        if (isVoice) onStartVoiceCall();
+                        else onStartVideoCall();
+                      }}
+                      title={`Call back with ${isVoice ? 'voice' : 'video'}`}
+                    >
                       <div className="call-history-icon-col">
                         <span className={`call-history-type-icon ${call.status}`}>
                           {isVoice ? '📞' : '🎥'}
@@ -456,7 +467,12 @@ export default function ChatInfoDrawer({
                       <button
                         type="button"
                         className="call-history-callback-btn"
-                        onClick={isVoice ? onStartVoiceCall : onStartVideoCall}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onClose();
+                          if (isVoice) onStartVoiceCall();
+                          else onStartVideoCall();
+                        }}
                         title={`Call back with ${isVoice ? 'voice' : 'video'}`}
                         aria-label={`Call back with ${isVoice ? 'voice' : 'video'}`}
                       >
@@ -569,23 +585,29 @@ export default function ChatInfoDrawer({
               {/* Call History Quick Log */}
               <div className="chat-setting-group">
                 <label className="chat-setting-label">📞 Recent Call History</label>
-                <div className="call-history-mini-list">
-                  <div className="call-history-mini-item">
-                    <span className="call-mini-icon incoming">↙️</span>
-                    <div className="call-mini-meta">
-                      <span className="call-mini-title">Video Call</span>
-                      <span className="call-mini-sub">Yesterday • 14m 32s</span>
+                <div className="call-history-mini-list" onClick={() => setActiveTab('calls')} style={{ cursor: 'pointer' }} title="View all calls">
+                  {callHistory.length > 0 ? (
+                    callHistory.slice(0, 2).map(call => (
+                      <div key={call.id || call.callId} className="call-history-mini-item">
+                        <span className={`call-mini-icon ${call.status === 'completed' ? 'incoming' : 'outgoing'}`}>
+                          {call.callType === 'video' ? '🎥' : '📞'}
+                        </span>
+                        <div className="call-mini-meta">
+                          <span className="call-mini-title">{call.callType === 'video' ? 'Video Call' : 'Voice Call'}</span>
+                          <span className="call-mini-sub">{formatLastSeen(call.startedAt)}</span>
+                        </div>
+                        <span className={`call-mini-badge ${call.status}`}>{call.status}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="call-history-mini-item">
+                      <span className="call-mini-icon">📞</span>
+                      <div className="call-mini-meta">
+                        <span className="call-mini-title">No recent calls</span>
+                        <span className="call-mini-sub">Tap to view calls</span>
+                      </div>
                     </div>
-                    <span className="call-mini-badge connected">Ended</span>
-                  </div>
-                  <div className="call-history-mini-item">
-                    <span className="call-mini-icon outgoing">↗️</span>
-                    <div className="call-mini-meta">
-                      <span className="call-mini-title">Voice Call</span>
-                      <span className="call-mini-sub">3 days ago • 8m 15s</span>
-                    </div>
-                    <span className="call-mini-badge connected">Ended</span>
-                  </div>
+                  )}
                 </div>
               </div>
 

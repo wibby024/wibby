@@ -50,6 +50,81 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose }:
   const [isDragging, setIsDragging] = useState(false);
   const [snappedSide, setSnappedSide] = useState<'left' | 'right'>('right');
 
+  // User Resizable Viewing Window (Issue 4)
+  const [customSize, setCustomSize] = useState<{ width?: number; height?: number }>(() => {
+    try {
+      const saved = localStorage.getItem('wibby_together_size');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {};
+  });
+
+  const isResizingRef = useRef(false);
+  const resizeStartRef = useRef<{ startX: number; startY: number; startW: number; startH: number }>({
+    startX: 0,
+    startY: 0,
+    startW: 0,
+    startH: 0
+  });
+
+  const handleResizeStart = (e: React.PointerEvent, direction: 'bottom' | 'corner') => {
+    if (isMinimized || !containerRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    isResizingRef.current = true;
+    const rect = containerRef.current.getBoundingClientRect();
+    resizeStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: rect.width,
+      startH: rect.height
+    };
+
+    const targetEl = e.currentTarget;
+    targetEl.setPointerCapture(e.pointerId);
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      if (!isResizingRef.current || !containerRef.current) return;
+      const dy = moveEvent.clientY - resizeStartRef.current.startY;
+      const dx = moveEvent.clientX - resizeStartRef.current.startX;
+
+      const newH = Math.max(220, Math.min(window.innerHeight * 0.75, resizeStartRef.current.startH + dy));
+      containerRef.current.style.height = `${newH}px`;
+
+      if (direction === 'corner') {
+        const newW = Math.max(340, Math.min(Math.min(1080, window.innerWidth - 24), resizeStartRef.current.startW + dx));
+        containerRef.current.style.maxWidth = `${newW}px`;
+      }
+    };
+
+    const onPointerUp = (upEvent: PointerEvent) => {
+      if (!isResizingRef.current) return;
+      isResizingRef.current = false;
+      try {
+        targetEl.releasePointerCapture(upEvent.pointerId);
+      } catch {}
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const updated = {
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        };
+        setCustomSize(updated);
+        try {
+          localStorage.setItem('wibby_together_size', JSON.stringify(updated));
+        } catch {}
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  };
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -477,7 +552,16 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose }:
     <div
       ref={containerRef}
       className={`together-dock ${isMinimized ? 'minimized' : 'standard'} ${isDragging ? 'dragging' : ''} ${snappedSide}`}
-      style={isMinimized && position ? { left: `${position.x}px`, top: `${position.y}px` } : undefined}
+      style={
+        isMinimized && position
+          ? { left: `${position.x}px`, top: `${position.y}px` }
+          : !isMinimized && (customSize.height || customSize.width)
+          ? {
+              height: customSize.height ? `${customSize.height}px` : undefined,
+              maxWidth: customSize.width ? `${customSize.width}px` : undefined
+            }
+          : undefined
+      }
       onPointerDown={isMinimized ? handlePointerDown : undefined}
       onPointerMove={isMinimized ? handlePointerMove : undefined}
       onPointerUp={isMinimized ? handlePointerUp : undefined}
@@ -720,6 +804,30 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose }:
           )
         )}
       </div>
+
+      {/* User-Resizable Handle Bar (Issue 4) */}
+      {!isMinimized && (
+        <div className="together-resize-bar">
+          <div
+            className="together-resize-edge"
+            onPointerDown={(e) => handleResizeStart(e, 'bottom')}
+            title="Drag to resize height"
+            aria-label="Resize height"
+          >
+            <div className="together-resize-pill" />
+          </div>
+          <div
+            className="together-resize-corner"
+            onPointerDown={(e) => handleResizeStart(e, 'corner')}
+            title="Drag corner to resize width and height"
+            aria-label="Resize player"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M11 1L1 11M11 5L5 11M11 9L9 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

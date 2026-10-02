@@ -25,7 +25,7 @@ interface ChatHeaderProps {
   onOpenInfoDrawer?: () => void;
   onOpenTogether?: () => void;
   onOpenGame?: () => void;
-  onClearChat?: () => void;
+  onClearChat?: (clearMediaAndStarred: boolean) => void;
 }
 
 export default function ChatHeader({ 
@@ -382,27 +382,37 @@ export default function ChatHeader({
                 <line x1="14" y1="11" x2="14" y2="17" />
               </svg>
             </div>
-            <h3 id="clear-chat-title" className="clear-confirm-title">Clear chat history?</h3>
+            <h3 id="clear-chat-title" className="clear-confirm-title">Clear chat?</h3>
             <p className="clear-confirm-desc">
-              This will remove all messages from your chat view. Your partner's chat history and all other shared data will remain untouched.
+              Also clear media and starred messages?
             </p>
-            <div className="clear-confirm-actions">
+            <div className="clear-confirm-actions" style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
               <button
                 type="button"
-                className="clear-confirm-btn cancel"
-                onClick={() => setShowClearConfirm(false)}
+                className="clear-confirm-btn confirm danger"
+                onClick={() => {
+                  setShowClearConfirm(false);
+                  onClearChat?.(true);
+                }}
               >
-                Cancel
+                YES
               </button>
               <button
                 type="button"
                 className="clear-confirm-btn confirm"
                 onClick={() => {
                   setShowClearConfirm(false);
-                  onClearChat?.();
+                  onClearChat?.(false);
                 }}
               >
-                Clear chat
+                NO
+              </button>
+              <button
+                type="button"
+                className="clear-confirm-btn cancel"
+                onClick={() => setShowClearConfirm(false)}
+              >
+                CANCEL
               </button>
             </div>
           </div>

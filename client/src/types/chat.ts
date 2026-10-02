@@ -93,18 +93,6 @@ export interface Message {
   e2ee?: { ciphertext: string; iv: string; version: number } | null;
 }
 
-export interface MusicNoteTrack {
-  id: string;
-  title: string;
-  artist: string;
-  genre?: string;
-  artworkUrl?: string;
-  audioUrl?: string;
-  duration?: number;
-  clipStart?: number;
-  clipDuration?: number;
-}
-
 export interface Story {
   _id: string;
   conversationId: string;
@@ -117,7 +105,6 @@ export interface Story {
   backgroundColor?: string;
   textStyle?: { font?: string; color?: string };
   duration?: number;
-  musicNote?: MusicNoteTrack | null;
   viewers: Array<{ uid: string; viewedAt: string }>;
   reactions: Array<{ uid: string; emoji: string; createdAt: string }>;
   createdAt: string;
@@ -167,7 +154,9 @@ export type ChatThemePreset =
   | 'sunset-glow' 
   | 'emerald-forest' 
   | 'rose-quartz' 
-  | 'slate-minimal';
+  | 'slate-minimal'
+  | 'wibby-whatsapp'
+  | 'wibby-instagram';
 
 export type GameType =
   | 'tictactoe'
@@ -179,7 +168,8 @@ export type GameType =
   | 'gomoku'
   | 'checkers'
   | 'battleship'
-  | 'reversi';
+  | 'reversi'
+  | 'coopwordle';
 
 export interface GameState {
   gameId: string;

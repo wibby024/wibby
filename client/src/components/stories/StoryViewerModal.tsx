@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Story } from '../../types/chat';
 import { formatLastSeen } from '../../utils/time';
-import { musicNoteService } from '../../services/musicNoteService';
-import { musicCatalogService, LEGAL_MUSIC_CATALOG } from '../../services/musicCatalog';
-import { IconTrash, IconClose, IconPlay, IconPause } from '../common/Icons';
+import { IconTrash, IconClose } from '../common/Icons';
 import './StoryViewerModal.css';
 
 interface StoryViewerModalProps {
@@ -38,69 +36,17 @@ export default function StoryViewerModal({
   const [progress, setProgress] = useState(0);
   const [replyText, setReplyText] = useState('');
   const [reactAnimation, setReactAnimation] = useState<string | null>(null);
-  const [catalogState, setCatalogState] = useState(musicCatalogService.getState());
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    return musicCatalogService.subscribe(state => {
-      setCatalogState(state);
-    });
-  }, []);
 
   useEffect(() => {
     if (isOpen) {
       setCurrentIndex(Math.min(startIndex, Math.max(0, stories.length - 1)));
       setProgress(0);
-    } else {
-      musicNoteService.stop();
-      musicCatalogService.stop();
     }
   }, [isOpen, startIndex, stories.length]);
 
   const currentStory = stories[currentIndex];
-
-  // Auto-play music note song if story contains a music note
-  useEffect(() => {
-    if (!isOpen || !currentStory) {
-      musicNoteService.stop();
-      musicCatalogService.stop();
-      return;
-    }
-
-    if (currentStory.musicNote) {
-      musicNoteService.stop();
-      const mn = currentStory.musicNote;
-      const matchedTrack = LEGAL_MUSIC_CATALOG.find(t => t.id === mn.id) || {
-        id: mn.id,
-        title: mn.title,
-        artist: mn.artist,
-        genre: mn.genre || 'Pop',
-        duration: mn.duration || 60,
-        artworkGradient: mn.artworkUrl || 'linear-gradient(135deg, #7C3AED, #5B21B6)',
-        coverEmoji: '🎵',
-        bpm: 100,
-        key: 'C Major',
-        chords: [[130.81, 164.81, 196.00], [174.61, 220.00, 261.63]],
-        melody: [261.63, 329.63, 392.00, 523.25]
-      };
-      musicCatalogService.playClip(matchedTrack, mn.clipStart || 0, mn.clipDuration || 30);
-    } else {
-      const storyText = currentStory.text || currentStory.caption || '';
-      if (storyText.includes('🎵')) {
-        musicCatalogService.stop();
-        musicNoteService.playSong(storyText);
-      } else {
-        musicNoteService.stop();
-        musicCatalogService.stop();
-      }
-    }
-
-    return () => {
-      musicNoteService.stop();
-      musicCatalogService.stop();
-    };
-  }, [isOpen, currentStory]);
 
   // Mark viewed when viewing
   useEffect(() => {
@@ -177,75 +123,7 @@ export default function StoryViewerModal({
     setTimeout(() => setReactAnimation(null), 1200);
   };
 
-  const renderMusicBadge = () => {
-    const musicNote = currentStory?.musicNote;
-    const storyText = currentStory?.text || currentStory?.caption || '';
-    if (!musicNote && !storyText.includes('🎵')) return null;
 
-    const title = musicNote ? musicNote.title : storyText.replace('🎵', '').trim();
-    const artist = musicNote ? musicNote.artist : 'Royalty-Free Audio';
-    const isPlaying = musicNote ? catalogState.isPlaying : musicNoteService.isPlaying();
-
-    const handleTogglePlay = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (musicNote) {
-        if (catalogState.isPlaying) {
-          musicCatalogService.stop();
-        } else {
-          const matchedTrack = LEGAL_MUSIC_CATALOG.find(t => t.id === musicNote.id) || {
-            id: musicNote.id,
-            title: musicNote.title,
-            artist: musicNote.artist,
-            genre: musicNote.genre || 'Pop',
-            duration: musicNote.duration || 60,
-            artworkGradient: musicNote.artworkUrl || 'linear-gradient(135deg, #7C3AED, #5B21B6)',
-            coverEmoji: '🎵',
-            bpm: 100,
-            key: 'C Major',
-            chords: [[130.81, 164.81, 196.00], [174.61, 220.00, 261.63]],
-            melody: [261.63, 329.63, 392.00, 523.25]
-          };
-          musicCatalogService.playClip(matchedTrack, musicNote.clipStart || 0, musicNote.clipDuration || 30);
-        }
-      } else {
-        if (musicNoteService.isPlaying()) {
-          musicNoteService.stop();
-        } else {
-          musicNoteService.playSong(storyText);
-        }
-      }
-    };
-
-    return (
-      <div className="story-music-note-badge" onClick={e => e.stopPropagation()}>
-        <div className={`spinning-vinyl-disc ${!isPlaying ? 'is-paused' : ''}`}>
-          <span className="vinyl-center">🎵</span>
-        </div>
-        <div className="music-badge-info">
-          <span className="music-badge-title">{title}</span>
-          <span className="music-badge-sub">
-            {artist} {musicNote?.clipDuration ? `• Clip: ${musicNote.clipDuration}s` : '• Audio Preview'}
-          </span>
-          {musicNote && (
-            <div className="music-badge-progress-wrap">
-              <div
-                className="music-badge-progress-bar"
-                style={{ width: `${catalogState.progress * 100}%` }}
-              />
-            </div>
-          )}
-        </div>
-        <button
-          type="button"
-          className="music-badge-play-btn"
-          onClick={handleTogglePlay}
-          aria-label={isPlaying ? 'Pause music' : 'Play music'}
-        >
-          {isPlaying ? <IconPause size={14} color="#fff" /> : <IconPlay size={14} color="#fff" />}
-        </button>
-      </div>
-    );
-  };
 
   return (
     <div
@@ -317,14 +195,12 @@ export default function StoryViewerModal({
               className="story-text-stage"
               style={{ background: currentStory.backgroundColor || '#7C3AED' }}
             >
-              {renderMusicBadge()}
               <p className="story-text-body">{currentStory.text}</p>
             </div>
           )}
 
           {currentStory.type === 'image' && currentStory.mediaUrl && (
             <div className="story-media-stage">
-              {renderMusicBadge()}
               <img src={currentStory.mediaUrl} alt="Story" className="story-image-full" />
               {currentStory.caption && (
                 <div className="story-caption-bar">
@@ -336,7 +212,6 @@ export default function StoryViewerModal({
 
           {currentStory.type === 'video' && currentStory.mediaUrl && (
             <div className="story-media-stage">
-              {renderMusicBadge()}
               <video
                 src={currentStory.mediaUrl}
                 className="story-video-full"

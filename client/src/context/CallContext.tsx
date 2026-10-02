@@ -48,6 +48,7 @@ export interface RecoverableCallInfo {
   callId: string;
   conversationId: string;
   callType: 'voice' | 'video';
+  callerId?: string;
   partnerName: string;
   partnerAvatar?: string | null;
   reconnectUntil: number;
@@ -529,6 +530,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       callId: string;
       conversationId: string;
       callType: 'voice' | 'video';
+      callerId?: string;
       partner: { id: string; name: string; avatar?: string | null };
       reconnectUntil: number;
     }) => {
@@ -536,26 +538,22 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       callRecoverableReceivedRef.current = true;
       const storedCallId = sessionStorage.getItem('wibby_active_call_id');
 
+      const info: RecoverableCallInfo = {
+        callId: data.callId,
+        conversationId: data.conversationId,
+        callType: data.callType,
+        callerId: data.callerId,
+        partnerName: resolvePartnerName(data.partner),
+        partnerAvatar: data.partner?.avatar,
+        reconnectUntil: data.reconnectUntil
+      };
+
       // If user had this exact call in current tab before refresh/drop, auto-resume
       if (storedCallId === data.callId && callStateRef.current === 'IDLE') {
         console.log('[WIBBY CALL] Auto-resuming recent call from tab refresh:', data.callId);
-        resumeCallWithInfo({
-          callId: data.callId,
-          conversationId: data.conversationId,
-          callType: data.callType,
-          partnerName: resolvePartnerName(data.partner),
-          partnerAvatar: data.partner?.avatar,
-          reconnectUntil: data.reconnectUntil
-        });
+        resumeCallWithInfo(info);
       } else {
-        setRecoverableCall({
-          callId: data.callId,
-          conversationId: data.conversationId,
-          callType: data.callType,
-          partnerName: resolvePartnerName(data.partner),
-          partnerAvatar: data.partner?.avatar,
-          reconnectUntil: data.reconnectUntil
-        });
+        setRecoverableCall(info);
       }
     };
 
@@ -701,6 +699,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     // 7. Call Ended / Cancelled / Declined
     const handleCallEnded = (data: { callId: string; reason?: string; status?: string }) => {
       console.log('[WIBBY CALL] Received call:ended:', data);
+      setRecoverableCall(prev => (prev?.callId === data.callId ? null : prev));
+      sessionStorage.removeItem('wibby_active_call_id');
       const currentCall = activeCallRef.current;
       if (currentCall && currentCall.callId !== data.callId) return;
 
@@ -1259,12 +1259,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         freshSessionId
       );
 
+      const currentUid = auth.currentUser?.uid;
+      const isCaller = info.callerId && currentUid ? info.callerId === currentUid : true;
       const recoveredCall: ActiveCall = {
         callId: info.callId,
         sessionId: freshSessionId,
         conversationId: info.conversationId,
         callType: info.callType,
-        isCaller: true, // Will initiate fresh offer when peer-reconnected fires
+        isCaller, // Only authoritative caller initiates offer on reconnect
         remoteUser: {
           id: '',
           name: info.partnerName,
@@ -1288,7 +1290,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         callId: info.callId,
         sessionId: freshSessionId
       });
-      console.log(`[WIBBY CALL] Reconnecting to call ${info.callId} with new session ${freshSessionId}`);
+      console.log(`[WIBBY CALL] Reconnecting to call ${info.callId} with new session ${freshSessionId} (isCaller=${isCaller})`);
     } catch (err: any) {
       console.error('[WIBBY CALL] Error resuming call:', err);
       const msg = formatMicrophoneError(err);
@@ -1307,7 +1309,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     if (recoverableCall?.callId && socket) {
       socket.emit('call:dismiss-recoverable', { callId: recoverableCall.callId });
     }
+    sessionStorage.removeItem('wibby_active_call_id');
     setRecoverableCall(null);
+    clearTimer();
+    rtcService.cleanup();
+    setActiveCall(null);
+    setCallState('IDLE');
   };
 
   return (

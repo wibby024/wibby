@@ -177,8 +177,11 @@ export function formatSdpWithOpusFec(sdp: string): string {
       if (!updated.includes('useinbandfec=')) {
         updated += ';useinbandfec=1';
       }
+      if (!updated.includes('maxaveragebitrate=')) {
+        updated += ';maxaveragebitrate=128000';
+      }
       if (!updated.includes('stereo=')) {
-        updated += ';stereo=0;sprop-stereo=0';
+        updated += ';stereo=1;sprop-stereo=1';
       }
       return `a=fmtp:${pt} ${updated}`;
     });
@@ -186,7 +189,7 @@ export function formatSdpWithOpusFec(sdp: string): string {
 
   return sdp.replace(
     new RegExp(`(a=rtpmap:${pt}\\s+opus\/48000[^\r\n]*)`, 'i'),
-    `$1\r\na=fmtp:${pt} useinbandfec=1;stereo=0;sprop-stereo=0`
+    `$1\r\na=fmtp:${pt} useinbandfec=1;maxaveragebitrate=128000;stereo=1;sprop-stereo=1`
   );
 }
 

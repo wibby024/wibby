@@ -625,9 +625,58 @@ export function registerGameHandlers(
             game.winnerId = partUid;
             game.scores[partUid] = (game.scores[partUid] || 0) + 1;
           } else {
-            game.status = 'draw';
             game.winnerId = null;
           }
+        }
+      }
+
+      if (game.gameType === 'coopwordle') {
+        const guess = String(data.move?.guess || '').trim().toUpperCase();
+        if (guess.length !== 5) return;
+
+        const target = game.stateData.targetWord;
+        const result: Array<'correct' | 'present' | 'absent'> = Array(5).fill('absent');
+        const targetLetters = target.split('');
+        const guessLetters = guess.split('');
+
+        // 1st pass: green
+        for (let i = 0; i < 5; i++) {
+          if (guessLetters[i] === targetLetters[i]) {
+            result[i] = 'correct';
+            targetLetters[i] = '#';
+          }
+        }
+
+        // 2nd pass: yellow
+        for (let i = 0; i < 5; i++) {
+          if (result[i] !== 'correct') {
+            const foundIdx = targetLetters.indexOf(guessLetters[i]);
+            if (foundIdx !== -1) {
+              result[i] = 'present';
+              targetLetters[foundIdx] = '#';
+            }
+          }
+        }
+
+        game.stateData.guesses.push({
+          word: guess,
+          result,
+          byUid: uid
+        });
+
+        // Alternating turn
+        game.currentTurn = partnerUid;
+
+        if (guess === target) {
+          game.status = 'won';
+          game.winnerId = 'team'; // Team Victory!
+          game.stateData.revealedWord = target;
+          game.scores[game.playerOrder[0]] = (game.scores[game.playerOrder[0]] || 0) + 1;
+          game.scores[game.playerOrder[1]] = (game.scores[game.playerOrder[1]] || 0) + 1;
+        } else if (game.stateData.guesses.length >= game.stateData.maxGuesses) {
+          game.status = 'draw';
+          game.winnerId = null;
+          game.stateData.revealedWord = target;
         }
       }
 

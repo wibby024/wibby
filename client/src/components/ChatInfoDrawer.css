@@ -683,6 +683,7 @@
   background: var(--wibby-chat-bg);
   border: 1px solid var(--wibby-border);
   border-radius: var(--radius-lg);
+  cursor: pointer;
   transition: var(--transition-fast);
 }
 

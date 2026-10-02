@@ -11,6 +11,7 @@ import Gomoku from './Gomoku';
 import Checkers from './Checkers';
 import Battleship from './Battleship';
 import Reversi from './Reversi';
+import CoopWordle from './CoopWordle';
 import './MiniGameModal.css';
 
 interface MiniGameModalProps {
@@ -144,6 +145,8 @@ export default function MiniGameModal({
         return 'Battleship';
       case 'reversi':
         return 'Reversi (Othello)';
+      case 'coopwordle':
+        return 'Team Wordle (Co-op)';
       default:
         return 'Mini Games';
     }
@@ -273,6 +276,24 @@ export default function MiniGameModal({
               <div className="game-option-info">
                 <div className="game-option-name">Reversi (Othello)</div>
                 <div className="game-option-desc">Flank and flip disks to dominate</div>
+              </div>
+            </button>
+
+            <button
+              className="game-option-btn"
+              onClick={() => handleStartGame('coopwordle')}
+              type="button"
+              style={{ border: '1.5px solid rgba(34, 197, 94, 0.4)' }}
+            >
+              <div className="game-option-icon">🤝</div>
+              <div className="game-option-info">
+                <div className="game-option-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  Team Wordle
+                  <span style={{ fontSize: 10, background: '#22c55e', color: '#fff', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                    CO-OP
+                  </span>
+                </div>
+                <div className="game-option-desc">Work together to solve the 5-letter word</div>
               </div>
             </button>
           </div>
@@ -509,6 +530,19 @@ export default function MiniGameModal({
       );
     }
 
+    if (gameState.gameType === 'coopwordle') {
+      return (
+        <CoopWordle
+          gameData={gameState.stateData}
+          isMyTurn={isMyTurn}
+          onMove={move => handleMove(move)}
+          gameStatus={gameState.status as any}
+          winnerId={gameState.winnerId || null}
+          partnerName={partnerName}
+        />
+      );
+    }
+
     return null;
   };
 
@@ -547,7 +581,9 @@ export default function MiniGameModal({
               </div>
             </div>
 
-            <span className="scoreboard-vs">VS</span>
+            <span className="scoreboard-vs" style={gameState.gameType === 'coopwordle' ? { color: '#22c55e', fontWeight: 700 } : undefined}>
+              {gameState.gameType === 'coopwordle' ? '🤝 TEAM' : 'VS'}
+            </span>
 
             <div className={`player-score-card ${!isMyTurn && gameState.status === 'in_progress' ? 'active-turn' : ''}`}>
               <div className="player-score-avatar" style={{ background: '#10B981' }}>

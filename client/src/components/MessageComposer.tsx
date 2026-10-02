@@ -477,6 +477,16 @@ export default function MessageComposer({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
+              onBlur={() => {
+                if (isTypingRef.current) {
+                  isTypingRef.current = false;
+                  onTyping?.(false);
+                }
+                if (typingTimerRef.current) {
+                  clearTimeout(typingTimerRef.current);
+                  typingTimerRef.current = null;
+                }
+              }}
               onCompositionStart={() => {
                 isComposingRef.current = true;
               }}

@@ -10,7 +10,8 @@ export type GameType =
   | 'gomoku'
   | 'checkers'
   | 'battleship'
-  | 'reversi';
+  | 'reversi'
+  | 'coopwordle';
 
 // Word Imposter dictionary
 export const WORD_CATEGORIES: { [cat: string]: string[] } = {
@@ -251,6 +252,27 @@ export function initGameData(gameType: GameType, p1: string, p2: string): any {
       return {
         board,
         counts: { B: 2, W: 2 }
+      };
+    }
+
+    case 'coopwordle': {
+      const words = [
+        'HEART', 'SMILE', 'CLOUD', 'OCEAN', 'DREAM', 'FLAME', 'LIGHT', 'PEACE',
+        'SWEET', 'STARS', 'MUSIC', 'MAGIC', 'HAPPY', 'SHINE', 'BEACH', 'BRAVE',
+        'HONEY', 'BLOOM', 'SPARK', 'EARTH', 'ANGEL', 'RIVER', 'CHARM', 'GRACE',
+        'LUCKY', 'SUNNY', 'FRESH', 'TRUST', 'VIBES', 'NOBLE', 'UNITY', 'PEACH'
+      ];
+      const targetWord = words[Math.floor(Math.random() * words.length)];
+      return {
+        targetWord,
+        guesses: [] as Array<{
+          word: string;
+          result: Array<'correct' | 'present' | 'absent'>;
+          byUid: string;
+        }>,
+        maxGuesses: 6,
+        isCoop: true,
+        revealedWord: null as string | null
       };
     }
 

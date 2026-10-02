@@ -811,6 +811,11 @@ export function registerCallHandlers(
           const partnerId = (callDoc as any).callerId === uid ? (callDoc as any).calleeId : (callDoc as any).callerId;
           if (partnerId) {
             userActiveCall.delete(partnerId);
+            io.to(`user:${partnerId}`).emit('call:ended', {
+              callId: data.callId,
+              reason: 'dismissed',
+              duration: (callDoc as any).duration || 0
+            });
           }
         }
       }

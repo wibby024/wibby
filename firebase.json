@@ -39,7 +39,7 @@
           },
           {
             "key": "Cache-Control",
-            "value": "max-age=3600"
+            "value": "no-cache, no-store, must-revalidate"
           }
         ]
       },
@@ -52,7 +52,7 @@
           },
           {
             "key": "Cache-Control",
-            "value": "max-age=3600"
+            "value": "no-cache, no-store, must-revalidate"
           }
         ]
       },
@@ -60,8 +60,25 @@
         "source": "/favicon.svg",
         "headers": [
           {
+            "key": "Content-Type",
+            "value": "image/svg+xml"
+          },
+          {
             "key": "Cache-Control",
-            "value": "max-age=3600"
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/manifest.json",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/manifest+json"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
           }
         ]
       },

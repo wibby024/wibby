@@ -21,10 +21,10 @@
   position: relative;
   width: calc(100% - 1.5rem);
   max-width: 780px;
+  min-height: 220px;
   margin: 0.5rem auto 0.35rem auto;
   border-radius: var(--radius-xl);
   flex-shrink: 0;
-  max-height: 48vh;
   display: flex;
   flex-direction: column;
   animation: dockSlideDown 0.25s var(--ease-out);
@@ -164,10 +164,15 @@
 /* Body */
 .together-dock-body {
   padding: 0.75rem;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .together-dock-body.minimized-body {
   padding: 0.45rem;
+  display: block;
 }
 
 .together-url-form {
@@ -216,6 +221,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  flex: 1;
+  min-height: 0;
 }
 
 .change-media-form {
@@ -223,11 +230,10 @@
 }
 
 /* ============================================
-   EXACT 16:9 Video Ratio Protection
+   EXACT 16:9 Video Ratio & Frame Protection (Issue 5)
    ============================================ */
 .together-player-frame-wrap {
   width: 100%;
-  aspect-ratio: 16 / 9;
   background: #000000;
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -241,16 +247,14 @@
 }
 
 .together-player-frame-wrap.full-frame {
-  max-height: min(280px, 32vh);
-}
-
-@media (max-width: 768px) {
-  .together-player-frame-wrap.full-frame {
-    max-height: min(190px, 26vh);
-  }
+  flex: 1;
+  width: 100%;
+  min-height: 200px;
+  aspect-ratio: 16 / 9;
 }
 
 .together-player-frame-wrap.mini-frame {
+  aspect-ratio: 16 / 9;
   max-height: 164px;
 }
 
@@ -258,13 +262,74 @@
 .together-video-player {
   width: 100%;
   height: 100%;
-  aspect-ratio: 16 / 9;
   border: none;
   background: #000000;
   display: block;
   object-fit: contain;
   direction: ltr;
   transform: none;
+}
+
+/* ============================================
+   Resize Bar & Drag Handles (Issue 4)
+   ============================================ */
+.together-resize-bar {
+  position: relative;
+  width: 100%;
+  height: 16px;
+  background: var(--wibby-chat-bg);
+  border-top: 1px solid var(--wibby-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  touch-action: none;
+  cursor: ns-resize;
+  flex-shrink: 0;
+}
+
+.together-resize-edge {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+}
+
+.together-resize-pill {
+  width: 42px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--wibby-text-muted);
+  opacity: 0.45;
+  transition: opacity 0.2s, background-color 0.2s;
+}
+
+.together-resize-edge:hover .together-resize-pill,
+.together-resize-bar:hover .together-resize-pill {
+  opacity: 0.95;
+  background: var(--wibby-primary);
+}
+
+.together-resize-corner {
+  position: absolute;
+  right: 4px;
+  bottom: 1px;
+  width: 16px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: nwse-resize;
+  color: var(--wibby-text-muted);
+  opacity: 0.55;
+  transition: opacity 0.2s, color 0.2s;
+}
+
+.together-resize-corner:hover {
+  opacity: 1;
+  color: var(--wibby-primary);
 }
 
 /* Sync Action Bar */

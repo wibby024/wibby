@@ -233,53 +233,51 @@ export function initializeSocket(httpServer: HttpServer) {
       }
     });
 
-    // Handle delivery acknowledgements
+    // Handle delivery acknowledgements (Optimized: Immediate realtime broadcast + single atomic DB update)
     socket.on('message:delivery-ack', async (data: { messageId: string, conversationId: string }) => {
       try {
+        if (!data?.messageId || !data?.conversationId) return;
+        if (!ObjectId.isValid(data.messageId) || !ObjectId.isValid(data.conversationId)) return;
+        
         const db = getDb();
         const msgId = new ObjectId(data.messageId);
-        
-        // Ensure user is in conversation
-        const conversation = await db.collection('conversations').findOne({ _id: new ObjectId(data.conversationId) });
-        if (!conversation || !conversation.members.includes(uid)) return;
 
-        // Fetch message
-        const message = await db.collection('messages').findOne({ _id: msgId, conversationId: new ObjectId(data.conversationId) });
-        if (!message || message.senderId === uid) return; // Cannot ack own message
+        // Immediate realtime socket broadcast to conversation room
+        io.to(`conversation:${data.conversationId}`).emit('message:status-update', {
+          messageId: data.messageId,
+          status: 'delivered'
+        });
 
-        if (message.status === 'sent') {
-          await db.collection('messages').updateOne({ _id: msgId }, { $set: { status: 'delivered', deliveredAt: new Date() } });
-          io.to(`conversation:${data.conversationId}`).emit('message:status-update', {
-            messageId: data.messageId,
-            status: 'delivered'
-          });
-        }
+        // Atomic DB update (only for partner messages that are in 'sent' state)
+        db.collection('messages').updateOne(
+          { _id: msgId, conversationId: new ObjectId(data.conversationId), senderId: { $ne: uid }, status: 'sent' },
+          { $set: { status: 'delivered', deliveredAt: new Date() } }
+        ).catch(err => console.error('Error persisting delivery-ack:', err));
       } catch (err) {
         console.error('Error processing delivery-ack:', err);
       }
     });
 
-    // Handle read acknowledgements
+    // Handle read acknowledgements (Optimized: Immediate realtime broadcast + single atomic DB update)
     socket.on('message:read-ack', async (data: { messageId: string, conversationId: string }) => {
       try {
+        if (!data?.messageId || !data?.conversationId) return;
+        if (!ObjectId.isValid(data.messageId) || !ObjectId.isValid(data.conversationId)) return;
+
         const db = getDb();
         const msgId = new ObjectId(data.messageId);
-        
-        // Ensure user is in conversation
-        const conversation = await db.collection('conversations').findOne({ _id: new ObjectId(data.conversationId) });
-        if (!conversation || !conversation.members.includes(uid)) return;
 
-        // Fetch message
-        const message = await db.collection('messages').findOne({ _id: msgId, conversationId: new ObjectId(data.conversationId) });
-        if (!message || message.senderId === uid) return; // Cannot ack own message
+        // Immediate realtime socket broadcast to conversation room
+        io.to(`conversation:${data.conversationId}`).emit('message:status-update', {
+          messageId: data.messageId,
+          status: 'seen'
+        });
 
-        if (message.status !== 'seen') {
-          await db.collection('messages').updateOne({ _id: msgId }, { $set: { status: 'seen', seenAt: new Date() } });
-          io.to(`conversation:${data.conversationId}`).emit('message:status-update', {
-            messageId: data.messageId,
-            status: 'seen'
-          });
-        }
+        // Atomic DB update (only for partner messages not yet seen)
+        db.collection('messages').updateOne(
+          { _id: msgId, conversationId: new ObjectId(data.conversationId), senderId: { $ne: uid }, status: { $ne: 'seen' } },
+          { $set: { status: 'seen', seenAt: new Date() } }
+        ).catch(err => console.error('Error persisting read-ack:', err));
       } catch (err) {
         console.error('Error processing read-ack:', err);
       }

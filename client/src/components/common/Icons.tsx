@@ -286,3 +286,18 @@ export const IconGif: React.FC<IconProps> = ({ size = 18, color = 'currentColor'
   </svg>
 );
 
+export const IconArrowDown: React.FC<IconProps> = ({ size = 18, color = 'currentColor', strokeWidth = 2, className = '', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className} {...props}>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <polyline points="19 12 12 19 5 12" />
+  </svg>
+);
+
+export const IconChevronsDown: React.FC<IconProps> = ({ size = 18, color = 'currentColor', strokeWidth = 2, className = '', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className} {...props}>
+    <polyline points="7 13 12 18 17 13" />
+    <polyline points="7 6 12 11 17 6" />
+  </svg>
+);
+
+

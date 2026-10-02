@@ -1337,6 +1337,8 @@ export class RTCService {
       if (pc.connectionState === 'connected') {
         this.startStatsMonitoring();
         this.logPipelineDiagnostics('connectionstate:connected');
+        this.applyVideoSenderParameters().catch(() => {});
+        this.applyAudioSenderParameters().catch(() => {});
       } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         this.stopStatsMonitoring();
       }
@@ -1856,6 +1858,7 @@ export class RTCService {
     this.videoQualityMode = mode;
     console.log('[WIBBY VIDEO] Switching video quality mode to:', mode);
     await this.applyVideoSenderParameters(mode);
+    await this.applyAudioSenderParameters();
   }
 
   getVideoQualityMode(): VideoQualityMode {
@@ -2228,6 +2231,30 @@ export class RTCService {
       });
     } catch (err) {
       console.warn('[WIBBY WEBRTC] Could not set video sender parameters:', err);
+    }
+  }
+
+  /**
+   * Apply optimized audio encoding parameters on RTCRtpSender.
+   * Configures Opus maxBitrate up to 128 kbps (studio clarity) when network allows,
+   * stepping down to 48 kbps under high packet loss or data-saver mode.
+   */
+  async applyAudioSenderParameters(): Promise<void> {
+    if (!this.peerConnection) return;
+    const audioSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'audio');
+    if (!audioSender) return;
+
+    try {
+      const params = audioSender.getParameters();
+      if (!params.encodings || params.encodings.length === 0) {
+        params.encodings = [{}];
+      }
+      const targetAudioBps = this.videoQualityMode === 'data-saver' ? 48_000 : 128_000;
+      params.encodings[0].maxBitrate = targetAudioBps;
+      await audioSender.setParameters(params);
+      console.log(`[WIBBY AUDIO] Applied audio sender maxBitrate: ${targetAudioBps} bps`);
+    } catch (err) {
+      console.warn('[WIBBY AUDIO] Could not set audio sender parameters:', err);
     }
   }
 

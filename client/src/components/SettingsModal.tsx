@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import type { ChatThemePreset } from '../types/chat';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { notificationService, NOTIFICATION_TONES, type NotificationTone } from '../services/notificationService';
+import { ringtoneService } from '../services/ringtoneService';
 import {
   IconSettings,
   IconClose,
@@ -36,7 +37,9 @@ const THEME_PRESETS: Array<{ id: ChatThemePreset; name: string; gradient: string
   { id: 'midnight', name: 'Midnight Slate', gradient: 'linear-gradient(135deg, #6366F1, #1E1B4B)', description: 'Slate, Indigo & Monochrome' },
   { id: 'cyberpunk', name: 'Neon Cyberpunk', gradient: 'linear-gradient(135deg, #00F0FF, #FF007A)', description: 'Electric Cyan & Neon Magenta' },
   { id: 'sage', name: 'Calm Sage', gradient: 'linear-gradient(135deg, #10B981, #047857)', description: 'Eucalyptus & Earthy Greens' },
-  { id: 'monochrome', name: 'Monochrome Slate', gradient: 'linear-gradient(135deg, #64748B, #1E293B)', description: 'Minimalist Steel & Charcoal' }
+  { id: 'monochrome', name: 'Monochrome Slate', gradient: 'linear-gradient(135deg, #64748B, #1E293B)', description: 'Minimalist Steel & Charcoal' },
+  { id: 'wibby-whatsapp', name: 'WhatsApp Style', gradient: 'linear-gradient(135deg, #25D366, #128C7E)', description: 'Classic Emerald & Forest Atmosphere' },
+  { id: 'wibby-instagram', name: 'Instagram Style', gradient: 'linear-gradient(135deg, #833AB4, #FD1D1D, #FCB045)', description: 'Vibrant Sunset Purple & Coral Glow' }
 ];
 
 export default function SettingsModal({
@@ -61,6 +64,10 @@ export default function SettingsModal({
   const [soundEnabled, setSoundEnabled] = useState(() => notificationService.isSoundEnabled());
   const [selectedTone, setSelectedTone] = useState<NotificationTone>(() => notificationService.getNotificationTone());
   const [browserNotifications, setBrowserNotifications] = useState(() => notificationService.isBrowserNotificationsEnabled());
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
+    () => (typeof window !== 'undefined' && 'Notification' in window) ? Notification.permission : 'default'
+  );
+  const [requestingPermission, setRequestingPermission] = useState(false);
 
   useEffect(() => {
     const handleSoundChange = (e: any) => {
@@ -104,11 +111,74 @@ export default function SettingsModal({
 
   const handleToggleBrowserNotifications = async (enabled: boolean) => {
     if (enabled) {
+      setRequestingPermission(true);
       const granted = await notificationService.setBrowserNotificationsEnabled(true);
       setBrowserNotifications(granted);
+      setNotificationPermission(
+        ('Notification' in window) ? Notification.permission : 'default'
+      );
+      setRequestingPermission(false);
     } else {
       await notificationService.setBrowserNotificationsEnabled(false);
       setBrowserNotifications(false);
+    }
+  };
+
+  // Ringtone State (Issue 13)
+  const [customRingtoneInfo, setCustomRingtoneInfo] = useState(() => ringtoneService.getCustomRingtoneInfo());
+  const [ringtonePreviewing, setRingtonePreviewing] = useState(false);
+  const [ringtoneError, setRingtoneError] = useState<string | null>(null);
+  const [ringtoneLoading, setRingtoneLoading] = useState(false);
+  const ringtoneFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      ringtoneService.stopPreview();
+      setRingtonePreviewing(false);
+    } else {
+      setCustomRingtoneInfo(ringtoneService.getCustomRingtoneInfo());
+    }
+  }, [isOpen]);
+
+  const handleRingtoneUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRingtoneLoading(true);
+    setRingtoneError(null);
+    try {
+      const res = await ringtoneService.saveCustomRingtone(file);
+      setCustomRingtoneInfo({ hasCustom: true, name: res.name });
+    } catch (err: any) {
+      setRingtoneError(err?.message || 'Failed to upload custom ringtone');
+    } finally {
+      setRingtoneLoading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleToggleRingtonePreview = () => {
+    if (ringtonePreviewing) {
+      ringtoneService.stopPreview();
+      setRingtonePreviewing(false);
+    } else {
+      setRingtonePreviewing(true);
+      ringtoneService.startPreview(() => {
+        setRingtonePreviewing(false);
+      });
+    }
+  };
+
+  const handleResetRingtone = async () => {
+    setRingtoneLoading(true);
+    setRingtoneError(null);
+    try {
+      await ringtoneService.resetToDefault();
+      setCustomRingtoneInfo({ hasCustom: false, name: null });
+      setRingtonePreviewing(false);
+    } catch (err: any) {
+      setRingtoneError(err?.message || 'Failed to reset ringtone');
+    } finally {
+      setRingtoneLoading(false);
     }
   };
 
@@ -734,22 +804,141 @@ export default function SettingsModal({
                   )}
                 </div>
 
+                {/* Incoming Call Ringtone Section (Issue 13) */}
                 <div className="settings-group-card">
-                  <label className="settings-group-title">Desktop Browser Notifications</label>
+                  <label className="settings-group-title">Incoming Call Ringtone</label>
+                  <p className="privacy-desc" style={{ marginBottom: 12 }}>
+                    Choose the ringtone that sounds when your partner calls you.
+                  </p>
+
+                  <div className="settings-ringtone-options" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div
+                      className={`settings-tone-card ${!customRingtoneInfo.hasCustom ? 'active' : ''}`}
+                      onClick={handleResetRingtone}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div className="settings-tone-card-top">
+                        <span className="settings-tone-icon">🔔</span>
+                        <div className="settings-tone-info">
+                          <span className="settings-tone-name">Default Wibby Ringtone</span>
+                          <p className="settings-tone-desc">Original harmonic acoustic incoming call chime</p>
+                        </div>
+                        <div className={`settings-tone-radio ${!customRingtoneInfo.hasCustom ? 'checked' : ''}`}>
+                          {!customRingtoneInfo.hasCustom && <span className="settings-tone-radio-dot" />}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      className={`settings-tone-card ${customRingtoneInfo.hasCustom ? 'active' : ''}`}
+                      onClick={() => {
+                        if (!customRingtoneInfo.hasCustom) {
+                          ringtoneFileInputRef.current?.click();
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div className="settings-tone-card-top">
+                        <span className="settings-tone-icon">🎵</span>
+                        <div className="settings-tone-info">
+                          <span className="settings-tone-name">
+                            {customRingtoneInfo.hasCustom
+                              ? `Custom: ${customRingtoneInfo.name}`
+                              : 'Upload Custom Ringtone'}
+                          </span>
+                          <p className="settings-tone-desc">
+                            Supports MP3, playable MP4, WAV, M4A, OGG (Max 8MB)
+                          </p>
+                        </div>
+                        <div className={`settings-tone-radio ${customRingtoneInfo.hasCustom ? 'checked' : ''}`}>
+                          {customRingtoneInfo.hasCustom && <span className="settings-tone-radio-dot" />}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <input
+                    ref={ringtoneFileInputRef}
+                    type="file"
+                    accept="audio/*,.mp3,.mp4,.wav,.m4a,.ogg"
+                    style={{ display: 'none' }}
+                    onChange={handleRingtoneUpload}
+                  />
+
+                  {ringtoneError && (
+                    <div style={{ color: 'var(--wibby-danger, #ef4444)', fontSize: '0.8125rem', marginTop: 8 }}>
+                      ⚠️ {ringtoneError}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="settings-tone-preview-btn"
+                      onClick={handleToggleRingtonePreview}
+                      disabled={ringtoneLoading}
+                    >
+                      {ringtonePreviewing ? '⏹ Stop Ringtone' : '▶ Preview Ringtone'}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="settings-tone-preview-btn"
+                      onClick={() => ringtoneFileInputRef.current?.click()}
+                      disabled={ringtoneLoading}
+                    >
+                      📁 {customRingtoneInfo.hasCustom ? 'Change Audio File' : 'Upload Audio File'}
+                    </button>
+
+                    {customRingtoneInfo.hasCustom && (
+                      <button
+                        type="button"
+                        className="settings-tone-preview-btn"
+                        onClick={handleResetRingtone}
+                        disabled={ringtoneLoading}
+                        style={{ color: 'var(--wibby-text-muted)' }}
+                      >
+                        ↺ Reset to Default
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="settings-group-card">
+                  <label className="settings-group-title">Browser Notifications</label>
                   <div className="privacy-toggle-row">
-                    <div>
-                      <span className="privacy-title">Operating system popup banners</span>
-                      <p className="privacy-desc">Show browser OS notification banners when Wibby is running in a background tab</p>
-                      {!browserNotifications && (
-                        <span className="notifications-quiet-hint">✓ Quiet mode active: no disruptive browser popups</span>
+                    <div style={{ flex: 1 }}>
+                      <span className="privacy-title">Desktop popup banners</span>
+                      <p className="privacy-desc">Show an OS notification when a message or call arrives while Wibby is in a background tab</p>
+                      {notificationPermission === 'denied' && (
+                        <span className="notifications-permission-denied">
+                          ⚠️ Blocked by browser — go to <strong>Site Settings → Notifications</strong> and allow wibby024.web.app
+                        </span>
+                      )}
+                      {notificationPermission === 'default' && !browserNotifications && (
+                        <span className="notifications-quiet-hint">Click the toggle to allow browser notifications</span>
+                      )}
+                      {notificationPermission === 'granted' && !browserNotifications && (
+                        <span className="notifications-quiet-hint">✓ Quiet mode — no browser popups</span>
+                      )}
+                      {notificationPermission === 'granted' && browserNotifications && (
+                        <span className="notifications-granted-hint">✓ Active — you'll get OS banners when Wibby is in the background</span>
                       )}
                     </div>
-                    <input
-                      type="checkbox"
-                      className="settings-checkbox"
-                      checked={browserNotifications}
-                      onChange={e => handleToggleBrowserNotifications(e.target.checked)}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {requestingPermission && (
+                        <span style={{ fontSize: '12px', opacity: 0.6 }}>Requesting…</span>
+                      )}
+                      <input
+                        type="checkbox"
+                        className="settings-checkbox"
+                        checked={browserNotifications}
+                        disabled={notificationPermission === 'denied' || requestingPermission}
+                        onChange={e => handleToggleBrowserNotifications(e.target.checked)}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

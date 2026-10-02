@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { formatMessageTime } from '../utils/time';
@@ -16,7 +16,7 @@ import LinkPlayerModal from './LinkPlayerModal';
 import MiniMapWidget from './MiniMapWidget';
 import { AuthenticatedImage, AuthenticatedVideo } from './AuthenticatedMedia';
 import { resolvePartnerName } from '../utils/partnerName';
-import { IconPin, IconStar, IconBan, IconLock } from './common/Icons';
+import { IconPin, IconStar, IconBan, IconLock, IconChevronsDown } from './common/Icons';
 import { e2eeService } from '../services/e2eeService';
 import type { Message, PollData } from '../types/chat';
 import './MessageArea.css';
@@ -571,18 +571,18 @@ function IncomingMessage({
   const ref = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
-    if (msg.status === 'seen') return;
+    if (msg.status === 'seen' || (currentUserId && msg.senderId === currentUserId)) return;
     
     const observer = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
         onVisible(msg._id);
         observer.disconnect();
       }
-    }, { threshold: 0.5 });
+    }, { threshold: 0.1 });
     
     if (ref.current) observer.observe(ref.current);
     return () => observer.disconnect();
-  }, [msg._id, msg.status, onVisible]);
+  }, [msg._id, msg.status, msg.senderId, currentUserId, onVisible]);
 
   const isStarred = currentUserId && msg.starredBy ? msg.starredBy.includes(currentUserId) : false;
   const isSticker = Boolean(msg.type === 'sticker' || msg.sticker);
@@ -676,9 +676,10 @@ interface MessageAreaProps {
     [key: string]: any;
   };
   onOpenGame?: () => void;
+  jumpTarget?: { id: string; timestamp: number } | null;
 }
 
-export default function MessageArea({ conversationId, partner, onOpenGame }: MessageAreaProps) {
+export default function MessageArea({ conversationId, partner, onOpenGame, jumpTarget }: MessageAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [contextMenu, setContextMenu] = useState<{ msgId: string, x: number, y: number } | null>(null);
@@ -697,6 +698,26 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
   const [isDraggingOverChat, setIsDraggingOverChat] = useState(false);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const isNearBottomRef = useRef(true);
+  const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(true);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const isLoadingOlderMessagesRef = useRef(false);
+  const prependScrollAdjustRef = useRef<{ previousScrollHeight: number; previousScrollTop: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (prependScrollAdjustRef.current && scrollContainerRef.current) {
+      const { previousScrollHeight, previousScrollTop } = prependScrollAdjustRef.current;
+      const container = scrollContainerRef.current;
+      const newScrollHeight = container.scrollHeight;
+      const heightDifference = newScrollHeight - previousScrollHeight;
+      if (heightDifference > 0) {
+        container.scrollTop = previousScrollTop + heightDifference;
+      }
+      prependScrollAdjustRef.current = null;
+    }
+  }, [messages]);
   
   const { socket } = useSocket();
   const { user } = useAuth();
@@ -847,12 +868,20 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({
-        top: scrollContainerRef.current.scrollHeight,
-        behavior
-      });
-    } else {
-      messagesEndRef.current?.scrollIntoView({ behavior });
+      try {
+        scrollContainerRef.current.scrollTo({
+          top: scrollContainerRef.current.scrollHeight,
+          behavior
+        });
+      } catch {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
+    } else if (messagesEndRef.current) {
+      try {
+        messagesEndRef.current.scrollIntoView({ behavior });
+      } catch {
+        messagesEndRef.current.scrollIntoView();
+      }
     }
   }, []);
 
@@ -861,12 +890,11 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const handleNavigateToReply = useCallback(async (targetId: string) => {
-    const targetElement = messageRefs.current.get(targetId) || (document.querySelector(`[data-message-id="${targetId}"]`) as HTMLDivElement | null);
+  const navigateToMessage = useCallback(async (targetId: string) => {
+    if (!targetId || !conversationId) return;
 
-    if (targetElement) {
-      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      
+    const highlightAndScroll = (el: HTMLElement) => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setHighlightedMessageId(targetId);
       if (highlightTimerRef.current) {
         clearTimeout(highlightTimerRef.current);
@@ -874,53 +902,87 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       highlightTimerRef.current = setTimeout(() => {
         setHighlightedMessageId(null);
         highlightTimerRef.current = null;
-      }, 1800);
+      }, 2400);
+    };
+
+    // 1. Check if the element already exists in the DOM
+    const existingElement = messageRefs.current.get(targetId) || (document.querySelector(`[data-message-id="${targetId}"]`) as HTMLDivElement | null);
+    if (existingElement) {
+      highlightAndScroll(existingElement);
       return;
     }
 
-    if (!user || !conversationId) return;
+    if (!user) return;
 
     try {
       const token = await user.getIdToken();
-      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations/${conversationId}/messages/${targetId}`;
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const url = `${apiUrl}/api/conversations/${conversationId}/messages/${targetId}`;
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (!response.ok) {
-        showToast('Original message not found');
+        showToast('Message not found');
         return;
       }
 
       const data = await response.json();
       if (data.message) {
+        const targetMsg = normalizeMessage(data.message);
+
+        // Fetch surrounding older messages for context
+        let contextualOlder: Message[] = [];
+        try {
+          const contextRes = await fetch(`${apiUrl}/api/conversations/${conversationId}/messages?limit=25&before=${targetId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (contextRes.ok) {
+            const contextData = await contextRes.json();
+            contextualOlder = (contextData.messages || []).map(normalizeMessage);
+          }
+        } catch {
+          // Contextual fetch is optional
+        }
+
+        const allToLoad = [...contextualOlder, targetMsg];
+        const decryptedAll = await Promise.all(allToLoad.map(decryptMessage));
+
         setMessages(prev => {
-          if (prev.some(m => m._id === data.message._id)) return prev;
-          const updated = [...prev, data.message];
-          updated.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-          return updated;
+          const existingIds = new Set(prev.map(m => m._id));
+          const newItems = decryptedAll.filter(m => !existingIds.has(m._id));
+          if (newItems.length === 0) return prev;
+          return [...prev, ...newItems];
         });
 
-        setTimeout(() => {
+        // Poll briefly until the DOM mounts the newly added message element
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
           const el = messageRefs.current.get(targetId) || (document.querySelector(`[data-message-id="${targetId}"]`) as HTMLDivElement | null);
           if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setHighlightedMessageId(targetId);
-            if (highlightTimerRef.current) {
-              clearTimeout(highlightTimerRef.current);
-            }
-            highlightTimerRef.current = setTimeout(() => {
-              setHighlightedMessageId(null);
-              highlightTimerRef.current = null;
-            }, 1800);
+            clearInterval(interval);
+            highlightAndScroll(el);
+          } else if (attempts >= 15) {
+            clearInterval(interval);
           }
-        }, 100);
+        }, 50);
       }
     } catch (err) {
-      console.error('Failed to retrieve replied message:', err);
-      showToast('Could not load original message');
+      console.error('Failed to navigate to target message:', err);
+      showToast('Could not load message');
     }
-  }, [user, conversationId]);
+  }, [user, conversationId, decryptMessage]);
+
+  const handleNavigateToReply = useCallback((targetId: string) => {
+    navigateToMessage(targetId);
+  }, [navigateToMessage]);
+
+  useEffect(() => {
+    if (jumpTarget?.id) {
+      navigateToMessage(jumpTarget.id);
+    }
+  }, [jumpTarget, navigateToMessage]);
 
   useEffect(() => {
     return () => {
@@ -943,7 +1005,13 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
         const loaded = (data.messages || []).map(normalizeMessage);
         const decryptedList = await Promise.all(loaded.map(decryptMessage));
         setMessages(decryptedList);
+        setHasMoreOlderMessages(loaded.length >= 50);
+        setIsLoadingOlderMessages(false);
+        isLoadingOlderMessagesRef.current = false;
         setTimeout(scrollToBottom, 100);
+        setShowScrollBottom(false);
+        setUnreadCount(0);
+        isNearBottomRef.current = true;
 
         // Bulk delivery-ack: for any partner messages that are still 'sent' (not yet delivered),
         // emit acks so the sender sees double ticks. We do this once after the initial load.
@@ -967,8 +1035,97 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
   }, [user, conversationId, scrollToBottom, decryptMessage]);
 
   useEffect(() => {
+    setShowScrollBottom(false);
+    setUnreadCount(0);
+    isNearBottomRef.current = true;
+    setHasMoreOlderMessages(true);
+    setIsLoadingOlderMessages(false);
+    isLoadingOlderMessagesRef.current = false;
+    prependScrollAdjustRef.current = null;
+  }, [conversationId]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!user || !conversationId || isLoadingOlderMessagesRef.current || !hasMoreOlderMessages) return;
+
+    // Find the earliest persistent message with a valid 24-character hex MongoDB ObjectId
+    const earliestMsg = sortedMessages.find(m => /^[0-9a-fA-F]{24}$/.test(m._id));
+    if (!earliestMsg) {
+      setHasMoreOlderMessages(false);
+      return;
+    }
+
+    setIsLoadingOlderMessages(true);
+    isLoadingOlderMessagesRef.current = true;
+
+    // Snapshot scroll dimensions before prepending
+    const container = scrollContainerRef.current;
+    if (container) {
+      prependScrollAdjustRef.current = {
+        previousScrollHeight: container.scrollHeight,
+        previousScrollTop: container.scrollTop
+      };
+    }
+
+    try {
+      const token = await user.getIdToken();
+      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations/${conversationId}/messages?limit=50&before=${earliestMsg._id}`;
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        const loaded = (data.messages || []).map(normalizeMessage);
+        if (loaded.length === 0) {
+          setHasMoreOlderMessages(false);
+          prependScrollAdjustRef.current = null;
+        } else {
+          const decryptedList = await Promise.all(loaded.map(decryptMessage));
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(m => m._id));
+            const newOlder = decryptedList.filter(m => !existingIds.has(m._id));
+            if (newOlder.length === 0) {
+              setHasMoreOlderMessages(false);
+              prependScrollAdjustRef.current = null;
+              return prev;
+            }
+            if (loaded.length < 50) {
+              setHasMoreOlderMessages(false);
+            }
+            return [...newOlder, ...prev];
+          });
+        }
+      } else {
+        prependScrollAdjustRef.current = null;
+      }
+    } catch (err) {
+      console.error('Failed to load older messages:', err);
+      prependScrollAdjustRef.current = null;
+    } finally {
+      setIsLoadingOlderMessages(false);
+      isLoadingOlderMessagesRef.current = false;
+    }
+  }, [user, conversationId, hasMoreOlderMessages, sortedMessages, decryptMessage]);
+
+  useEffect(() => {
     fetchMessages();
   }, [fetchMessages]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      const isNearBottom = distanceFromBottom <= 150;
+      isNearBottomRef.current = isNearBottom;
+      if (isNearBottom) {
+        setShowScrollBottom(false);
+        setUnreadCount(0);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (!socket || !conversationId) return;
@@ -1026,12 +1183,28 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
         return next;
       });
 
+      const container = scrollContainerRef.current;
+      const isCurrentlyNearBottom = container
+        ? (container.scrollHeight - container.scrollTop - container.clientHeight <= 150)
+        : isNearBottomRef.current;
+
+      const isOwnMessage = message.senderId === user?.uid;
+
       setIsPartnerTyping(false);
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
-      setTimeout(() => scrollToBottom('smooth'), 50);
+
+      if (isCurrentlyNearBottom || isOwnMessage) {
+        setTimeout(() => scrollToBottom('smooth'), 50);
+        setShowScrollBottom(false);
+        setUnreadCount(0);
+        isNearBottomRef.current = true;
+      } else {
+        setShowScrollBottom(true);
+        setUnreadCount(prev => prev + 1);
+      }
     };
 
     const handleTypingStart = (data: { conversationId: string, userId: string }) => {
@@ -1039,7 +1212,13 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       if (data.userId === user?.uid) return;
 
       setIsPartnerTyping(true);
-      setTimeout(scrollToBottom, 50);
+      const container = scrollContainerRef.current;
+      const isCurrentlyNearBottom = container
+        ? (container.scrollHeight - container.scrollTop - container.clientHeight <= 150)
+        : isNearBottomRef.current;
+      if (isCurrentlyNearBottom) {
+        setTimeout(scrollToBottom, 50);
+      }
 
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -1153,6 +1332,18 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       }));
     };
 
+    const handleConversationCleared = (data: { conversationId: string; clearMediaAndStarred: boolean }) => {
+      if (data.conversationId !== conversationId) return;
+      if (data.clearMediaAndStarred) {
+        setMessages([]);
+      } else {
+        setMessages(prev => prev.filter(m => 
+          (m.type && ['image', 'video', 'file', 'audio'].includes(m.type)) ||
+          (user?.uid && m.starredBy && m.starredBy.includes(user.uid))
+        ));
+      }
+    };
+
     socket.on('new_message', handleNewMessage);
     socket.on('typing:start', handleTypingStart);
     socket.on('typing:stop', handleTypingStop);
@@ -1166,6 +1357,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
     socket.on('message:star', handleStarUpdate);
     socket.on('location:live_update', handleLiveLocationUpdate);
     socket.on('location:live_stop', handleLiveLocationStop);
+    socket.on('conversation:cleared', handleConversationCleared);
 
     return () => {
       socket.off('connect', joinRoom);
@@ -1182,6 +1374,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       socket.off('message:star', handleStarUpdate);
       socket.off('location:live_update', handleLiveLocationUpdate);
       socket.off('location:live_stop', handleLiveLocationStop);
+      socket.off('conversation:cleared', handleConversationCleared);
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
@@ -1323,12 +1516,15 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       fileSize: mediaProps?.fileSize,
       thumbnailUrl: mediaProps?.thumbnailUrl,
       createdAt: new Date().toISOString(),
-      status: 'sending',
+      status: 'sent',
       replyToMessageId: replyingTo ? replyingTo.id : undefined,
       forwardedFromMessageId
     };
 
     setMessages(prev => [...prev, tempMsg]);
+    setShowScrollBottom(false);
+    setUnreadCount(0);
+    isNearBottomRef.current = true;
     setTimeout(() => scrollToBottom('smooth'), 50);
 
     sendQueueRef.current = sendQueueRef.current.then(async () => {
@@ -1456,10 +1652,13 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       mimeType: specialData.mimeType,
       text: specialData.text,
       createdAt: new Date().toISOString(),
-      status: 'sending'
+      status: 'sent'
     };
 
     setMessages(prev => [...prev, tempMsg]);
+    setShowScrollBottom(false);
+    setUnreadCount(0);
+    isNearBottomRef.current = true;
     setTimeout(() => scrollToBottom('smooth'), 50);
 
     sendQueueRef.current = sendQueueRef.current.then(async () => {
@@ -1577,6 +1776,9 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
       }
       return [...prev, newMediaMsg];
     });
+    setShowScrollBottom(false);
+    setUnreadCount(0);
+    isNearBottomRef.current = true;
     setTimeout(() => scrollToBottom('smooth'), 50);
   }, [scrollToBottom]);
 
@@ -1689,6 +1891,47 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
   }, []);
+
+  const handleScroll = useCallback(() => {
+    if (contextMenu) closeContextMenu();
+    if (emojiPicker) setEmojiPicker(null);
+    setHoveredMessageId(null);
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // Upward pagination trigger: When within 150px of top
+    if (container.scrollTop <= 150 && hasMoreOlderMessages && !isLoadingOlderMessagesRef.current) {
+      loadOlderMessages();
+    }
+
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const isNearBottom = distanceFromBottom <= 150;
+
+    isNearBottomRef.current = isNearBottom;
+
+    if (isNearBottom) {
+      setShowScrollBottom(false);
+      setUnreadCount(0);
+    } else {
+      setShowScrollBottom(true);
+    }
+  }, [contextMenu, emojiPicker, closeContextMenu, hasMoreOlderMessages, loadOlderMessages]);
+
+  const handleJumpToLatest = useCallback(() => {
+    isNearBottomRef.current = true;
+    setUnreadCount(0);
+    scrollToBottom('smooth');
+    setTimeout(() => {
+      const container = scrollContainerRef.current;
+      if (container) {
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        if (distanceFromBottom <= 150) {
+          setShowScrollBottom(false);
+        }
+      }
+    }, 400);
+  }, [scrollToBottom]);
 
   const handleReactionSubmit = async (msgId: string, emoji: string) => {
     if (!user || !conversationId) return;
@@ -1958,41 +2201,44 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
         </div>
       )}
 
-      {visibleMessages.length === 0 ? (
-        <div className="message-area empty" ref={scrollContainerRef}>
-          <div className="empty-state">
-            <div className="empty-state-decor">
-              <div className="decor-ring ring-1" />
-              <div className="decor-ring ring-2" />
-              <div className="decor-ring ring-3" />
-            </div>
-            <div className="empty-state-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              <div className="empty-state-pulse" />
-            </div>
-            <h3 className="empty-state-title">Start your conversation</h3>
-            <p className="empty-state-text">
-              Send a message, share a photo, or just say hi.<br />
-              This is your private space.
-            </p>
-            <div className="empty-state-hint">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 10 20 15 15 20" />
-                <path d="M4 4v7a4 4 0 0 0 4 4h12" />
-              </svg>
-              <span>Type a message below to begin</span>
+      <div className="messages-scroll-wrapper">
+        {visibleMessages.length === 0 ? (
+          <div className="message-area empty" ref={scrollContainerRef}>
+            <div className="empty-state">
+              <div className="empty-state-decor">
+                <div className="decor-ring ring-1" />
+                <div className="decor-ring ring-2" />
+                <div className="decor-ring ring-3" />
+              </div>
+              <div className="empty-state-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                <div className="empty-state-pulse" />
+              </div>
+              <h3 className="empty-state-title">Start your conversation</h3>
+              <p className="empty-state-text">
+                Send a message, share a photo, or just say hi.<br />
+                This is your private space.
+              </p>
+              <div className="empty-state-hint">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 10 20 15 15 20" />
+                  <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+                </svg>
+                <span>Type a message below to begin</span>
+              </div>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="message-area has-messages" ref={scrollContainerRef} onScroll={() => {
-          if (contextMenu) closeContextMenu();
-          if (emojiPicker) setEmojiPicker(null);
-          setHoveredMessageId(null);
-        }}>
+        ) : (
+          <div className="message-area has-messages" ref={scrollContainerRef} onScroll={handleScroll}>
           <div className="message-list">
+            {isLoadingOlderMessages && (
+              <div className="loading-older-messages">
+                <div className="loading-older-spinner" />
+                <span>Loading older messages...</span>
+              </div>
+            )}
             {visibleMessages.map((msg, index) => {
               const isOwn = msg.senderId === user?.uid;
               const prevMsg = visibleMessages[index - 1];
@@ -2205,6 +2451,27 @@ export default function MessageArea({ conversationId, partner, onOpenGame }: Mes
           </div>
         </div>
       )}
+
+      {/* Floating Jump to Latest Button */}
+      {showScrollBottom && visibleMessages.length > 0 && (
+        <button
+          type="button"
+          className={`jump-to-latest-btn ${unreadCount > 0 ? 'has-unread' : ''}`}
+          onClick={handleJumpToLatest}
+          aria-label={unreadCount > 0 ? `Jump to latest messages (${unreadCount} new)` : "Jump to latest messages"}
+          title="Jump to latest"
+        >
+          <span className="jump-to-latest-icon">
+            <IconChevronsDown size={20} strokeWidth={2.4} />
+          </span>
+          {unreadCount > 0 && (
+            <span className="jump-to-latest-badge" aria-hidden="true">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </button>
+      )}
+    </div>
       
       {toastMessage && (
         <div className="toast-notification">
