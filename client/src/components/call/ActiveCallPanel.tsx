@@ -35,7 +35,8 @@ function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' | 'dire
       }
     }
     if (videoId) {
-      mediaUrl = `https://www.youtube-nocookie.com/embed/${videoId}?enablejsapi=1&autoplay=1`;
+      const originParam = typeof window !== 'undefined' && window.location?.origin ? `&origin=${encodeURIComponent(window.location.origin)}` : '';
+      mediaUrl = `https://www.youtube-nocookie.com/embed/${videoId}?enablejsapi=1&autoplay=1&playsinline=1${originParam}`;
     }
   }
   return { url: mediaUrl, type: mediaType };
@@ -135,6 +136,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   const hasDraggedRef = useRef(false);
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; pipX: number; pipY: number } | null>(null);
   const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth < 640 : false);
+  const [isMovieChatOpen, setIsMovieChatOpen] = useState<boolean>(true);
 
   useEffect(() => {
     const handleWinResize = () => {
@@ -502,6 +504,14 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className={`call-screenshare-hud-stop-btn ${isMovieChatOpen ? 'active' : ''}`}
+                  onClick={() => setIsMovieChatOpen(prev => !prev)}
+                  title={isMovieChatOpen ? 'Close movie chat window' : 'Pop up movie chat window'}
+                >
+                  <span>💬 Chat {isMovieChatOpen ? '✕' : ''}</span>
+                </button>
                 {movieUrl && setMovieUrl && (
                   <button
                     type="button"
@@ -580,7 +590,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
             )}
           </div>
 
-          {/* Right Column: Stacked Users (Top) + Integrated Chat (Bottom) */}
+          {/* Right Column: Stacked Users with Live Video Feeds */}
           <div className="call-moviemode-sidebar">
             <div className="call-moviemode-users-strip">
               {/* Top Tile: Partner User */}
@@ -681,12 +691,49 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               </div>
             </div>
 
-            {/* Integrated Chat inside Movie Mode */}
-            <div className="call-moviemode-chat-container">
-              <div className="call-moviemode-chat-header">
-                <span>💬 Movie Chat</span>
+            {/* Sidebar Chat Action Card */}
+            <div className="call-moviemode-sidebar-chat-action">
+              <button
+                type="button"
+                className={`call-moviemode-open-chat-btn ${isMovieChatOpen ? 'is-open' : ''}`}
+                onClick={() => setIsMovieChatOpen(prev => !prev)}
+                title={isMovieChatOpen ? 'Movie chat pop-up is active' : 'Click to pop up movie chat'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="call-moviemode-chat-btn-icon">💬</span>
+                  <span className="call-moviemode-chat-btn-text">
+                    {isMovieChatOpen ? 'Movie Chat Open' : 'Open Movie Chat'}
+                  </span>
+                </div>
+                <span className="call-moviemode-chat-btn-badge">
+                  {isMovieChatOpen ? 'Active' : 'Pop-up'}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Movie Chat Pop-up Window */}
+          {isMovieChatOpen && (
+            <div className="call-moviemode-chat-popup-window" role="dialog" aria-label="Movie Chat">
+              <div className="call-moviemode-chat-popup-header">
+                <div className="call-moviemode-chat-popup-title-group">
+                  <span className="call-moviemode-chat-popup-icon">💬</span>
+                  <span className="call-moviemode-chat-popup-title">Movie Chat</span>
+                  <span className="call-moviemode-chat-popup-tag">• {partnerName}</span>
+                </div>
+                <div className="call-moviemode-chat-popup-controls">
+                  <button
+                    type="button"
+                    className="call-moviemode-chat-popup-ctrl-btn"
+                    onClick={() => setIsMovieChatOpen(false)}
+                    title="Close movie chat window"
+                    aria-label="Close movie chat window"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
-              <div className="call-moviemode-chat-body">
+              <div className="call-moviemode-chat-popup-body">
                 <MessageArea
                   conversationId={conversationId || ''}
                   partner={partner}
@@ -694,7 +741,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                 />
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     );

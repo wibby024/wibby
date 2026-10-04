@@ -126,6 +126,8 @@ export interface TogetherSession {
   currentTime?: number;
   updatedAt?: string;
   version?: number;
+  lastActionUid?: string;
+  sentAt?: number;
 }
 
 export type ThemeFamily =

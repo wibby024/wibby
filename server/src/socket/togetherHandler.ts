@@ -15,6 +15,8 @@ export interface TogetherSessionState {
   playing: boolean;
   updatedAt: string;
   version: number;
+  lastActionUid?: string;
+  sentAt?: number;
 }
 
 const activeTogetherSessions = new Map<string, TogetherSessionState>();
@@ -45,6 +47,7 @@ export function registerTogetherHandlers(
       });
       if (!conversation || !conversation.members.includes(uid)) return;
 
+      const now = Date.now();
       const session: TogetherSessionState = {
         sessionId: crypto.randomUUID(),
         conversationId: data.conversationId,
@@ -55,8 +58,10 @@ export function registerTogetherHandlers(
         state: 'playing',
         position: 0,
         playing: true,
-        updatedAt: new Date().toISOString(),
-        version: 1
+        updatedAt: new Date(now).toISOString(),
+        version: 1,
+        lastActionUid: uid,
+        sentAt: now
       };
 
       activeTogetherSessions.set(data.conversationId, session);
@@ -72,6 +77,7 @@ export function registerTogetherHandlers(
     try {
       if (!data?.conversationId || !data?.mediaUrl) return;
 
+      const now = Date.now();
       let session = activeTogetherSessions.get(data.conversationId);
       if (!session) {
         session = {
@@ -84,8 +90,10 @@ export function registerTogetherHandlers(
           state: 'paused',
           position: 0,
           playing: false,
-          updatedAt: new Date().toISOString(),
-          version: 1
+          updatedAt: new Date(now).toISOString(),
+          version: 1,
+          lastActionUid: uid,
+          sentAt: now
         };
       } else {
         session.mediaUrl = data.mediaUrl;
@@ -95,8 +103,10 @@ export function registerTogetherHandlers(
         session.state = 'paused';
         session.playing = false;
         session.position = 0;
-        session.updatedAt = new Date().toISOString();
+        session.updatedAt = new Date(now).toISOString();
         session.version += 1;
+        session.lastActionUid = uid;
+        session.sentAt = now;
       }
 
       activeTogetherSessions.set(data.conversationId, session);
@@ -115,12 +125,10 @@ export function registerTogetherHandlers(
       if (!session) return;
 
       let newPos: number;
-      if (typeof data.position === 'number' && data.position > 0) {
+      if (typeof data.position === 'number' && !isNaN(data.position) && data.position >= 0) {
         newPos = data.position;
-      } else if (typeof data.currentTime === 'number' && data.currentTime > 0) {
+      } else if (typeof data.currentTime === 'number' && !isNaN(data.currentTime) && data.currentTime >= 0) {
         newPos = data.currentTime;
-      } else if (data.action === 'seek' && (data.position === 0 || data.currentTime === 0)) {
-        newPos = 0;
       } else {
         newPos = getAuthoritativePosition(session);
       }
@@ -137,8 +145,12 @@ export function registerTogetherHandlers(
         session.position = newPos;
       }
 
-      session.updatedAt = new Date().toISOString();
+      const now = Date.now();
+      session.hostUserId = uid;
+      session.updatedAt = new Date(now).toISOString();
       session.version += 1;
+      session.lastActionUid = uid;
+      session.sentAt = now;
 
       // Broadcast authoritative state to all participants in the room
       io.to(`conversation:${data.conversationId}`).emit('together:state', session);
@@ -147,7 +159,8 @@ export function registerTogetherHandlers(
         action: data.action,
         currentTime: session.position,
         position: session.position,
-        senderUid: uid
+        senderUid: uid,
+        sentAt: now
       });
     } catch (err) {
       console.error('together:control error:', err);
@@ -162,12 +175,10 @@ export function registerTogetherHandlers(
       if (!session) return;
 
       let newPos: number;
-      if (typeof data.position === 'number' && data.position > 0) {
+      if (typeof data.position === 'number' && !isNaN(data.position) && data.position >= 0) {
         newPos = data.position;
-      } else if (typeof data.currentTime === 'number' && data.currentTime > 0) {
+      } else if (typeof data.currentTime === 'number' && !isNaN(data.currentTime) && data.currentTime >= 0) {
         newPos = data.currentTime;
-      } else if (data.action === 'seek' && (data.position === 0 || data.currentTime === 0)) {
-        newPos = 0;
       } else {
         newPos = getAuthoritativePosition(session);
       }
@@ -184,15 +195,20 @@ export function registerTogetherHandlers(
         session.position = newPos;
       }
 
-      session.updatedAt = new Date().toISOString();
+      const now = Date.now();
+      session.hostUserId = uid;
+      session.updatedAt = new Date(now).toISOString();
       session.version += 1;
+      session.lastActionUid = uid;
+      session.sentAt = now;
 
       io.to(`conversation:${data.conversationId}`).emit('together:state', session);
       socket.to(`conversation:${data.conversationId}`).emit('together:action', {
         ...data,
         currentTime: session.position,
         position: session.position,
-        senderUid: uid
+        senderUid: uid,
+        sentAt: now
       });
     } catch (err) {
       console.error('together:action error:', err);
