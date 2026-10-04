@@ -33,7 +33,8 @@ function LoadingScreen() {
 function WibbyAppWrapper() {
   const { user, signOut } = useAuth();
   const { socket } = useSocket();
-  const { startCall } = useCall();
+  const { startCall, callState, activeCall } = useCall();
+  const isCallActive = Boolean(activeCall || callState === 'CONNECTING' || callState === 'CONNECTED' || callState === 'RECONNECTING');
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isPaired, setIsPaired] = useState<boolean | null>(() => {
@@ -272,7 +273,7 @@ function WibbyAppWrapper() {
     };
 
     const handleTogetherStarted = (data: any) => {
-      if (data.conversationId === conversationId) {
+      if (data.conversationId === conversationId && !isCallActive) {
         setShowTogether(true);
       }
     };
@@ -495,7 +496,7 @@ function WibbyAppWrapper() {
               onOpenGame={() => setShowGameModal(true)}
               onClearChat={handleClearChat}
             />
-            {showTogether && (
+            {showTogether && !isCallActive && (
               <Suspense fallback={null}>
                 <TogetherPlayer
                   conversationId={conversationId}
@@ -618,7 +619,7 @@ function WibbyAppWrapper() {
         </Suspense>
       )}
 
-      <CallModals />
+      <CallModals partner={partner} />
     </div>
   )
 }

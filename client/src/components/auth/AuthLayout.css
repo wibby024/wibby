@@ -18,9 +18,9 @@
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  background: #0b0914;
+  background: var(--wibby-background, #0b0914);
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: #f8fafc;
+  color: var(--wibby-text, #f8fafc);
 }
 
 /* ─── Ambient Glow Background ─────────────────────────── */
@@ -46,7 +46,7 @@
   height: clamp(280px, 38vw, 560px);
   top: -12%;
   left: -8%;
-  background: radial-gradient(circle, #7c3aed 0%, #4c1d95 65%, transparent 100%);
+  background: radial-gradient(circle, var(--wibby-accent, #7c3aed) 0%, var(--wibby-primary-hover, #4c1d95) 65%, transparent 100%);
   animation: auth-orb-drift-1 18s ease-in-out infinite alternate;
 }
 
@@ -55,7 +55,7 @@
   height: clamp(240px, 32vw, 480px);
   bottom: -10%;
   right: -6%;
-  background: radial-gradient(circle, #a855f7 0%, #6d28d9 65%, transparent 100%);
+  background: radial-gradient(circle, var(--wibby-accent-secondary, #a855f7) 0%, var(--wibby-primary, #6d28d9) 65%, transparent 100%);
   animation: auth-orb-drift-2 22s ease-in-out infinite alternate;
 }
 
@@ -65,7 +65,7 @@
   top: 45%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(circle, #ec4899 0%, #7c3aed 70%, transparent 100%);
+  background: radial-gradient(circle, var(--wibby-accent, #ec4899) 0%, var(--wibby-primary-hover, #7c3aed) 70%, transparent 100%);
   opacity: 0.18;
 }
 
@@ -133,22 +133,22 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  filter: drop-shadow(0 8px 16px rgba(124, 58, 237, 0.4));
+  filter: drop-shadow(0 8px 16px var(--wibby-primary-glow, rgba(124, 58, 237, 0.4)));
 }
 
 .auth-logo-name {
   font-size: clamp(22px, 2.5vw, 28px);
   font-weight: 800;
   letter-spacing: -0.04em;
-  color: #ffffff;
+  color: var(--wibby-text, #ffffff);
 }
 
 .auth-brand-pill {
   font-size: 11px;
   font-weight: 600;
-  color: #c4b5fd;
-  background: rgba(124, 58, 237, 0.16);
-  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: var(--wibby-accent, #c4b5fd);
+  background: var(--wibby-surface-secondary, rgba(124, 58, 237, 0.16));
+  border: 1px solid var(--wibby-border, rgba(139, 92, 246, 0.3));
   padding: 3px 9px;
   border-radius: 9999px;
   letter-spacing: 0.02em;
@@ -161,12 +161,12 @@
   font-weight: 900;
   line-height: 1.1;
   letter-spacing: -0.04em;
-  color: #ffffff;
+  color: var(--wibby-text, #ffffff);
   margin: 0 0 clamp(14px, 2vh, 22px);
 }
 
 .auth-brand-headline .gradient-word {
-  background: linear-gradient(135deg, #c084fc 0%, #818cf8 50%, #f472b6 100%);
+  background: linear-gradient(135deg, var(--wibby-accent, #c084fc) 0%, var(--wibby-accent-secondary, #818cf8) 50%, var(--wibby-primary-light, #f472b6) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -176,7 +176,7 @@
 .auth-brand-sub {
   font-size: clamp(15px, 1.4vw, 17px);
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--wibby-text-secondary, rgba(255, 255, 255, 0.65));
   line-height: 1.6;
   margin: 0 0 clamp(28px, 4vh, 42px);
 }
@@ -196,7 +196,7 @@
   align-items: center;
   gap: 12px;
   font-size: clamp(13px, 1.2vw, 15px);
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--wibby-text-secondary, rgba(255, 255, 255, 0.8));
   font-weight: 500;
 }
 
@@ -204,14 +204,14 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #a78bfa, #818cf8);
+  background: linear-gradient(135deg, var(--wibby-accent, #a78bfa), var(--wibby-accent-secondary, #818cf8));
   flex-shrink: 0;
-  box-shadow: 0 0 10px rgba(167, 139, 250, 0.8);
+  box-shadow: 0 0 10px var(--wibby-primary-glow, rgba(167, 139, 250, 0.8));
 }
 
 .auth-brand-watermark {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--wibby-text-muted, rgba(255, 255, 255, 0.25));
   font-weight: 500;
 }
 
@@ -238,13 +238,13 @@
   position: relative;
   z-index: 1;
   border-radius: 24px;
-  background: rgba(22, 18, 38, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--wibby-surface-elevated, var(--wibby-surface, rgba(22, 18, 38, 0.82)));
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.12));
   backdrop-filter: blur(28px) saturate(1.5);
   -webkit-backdrop-filter: blur(28px) saturate(1.5);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
-    0 24px 64px -12px rgba(0, 0, 0, 0.65),
+    0 0 0 1px var(--wibby-border, rgba(255, 255, 255, 0.06)) inset,
+    0 24px 64px -12px var(--wibby-shadow, rgba(0, 0, 0, 0.65)),
     0 4px 16px rgba(0, 0, 0, 0.35);
   animation: auth-slide-fade 0.6s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
 }

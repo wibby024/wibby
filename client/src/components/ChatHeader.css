@@ -8,7 +8,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  background: var(--wibby-surface);
+  background: var(--wibby-header, var(--wibby-surface));
   border-bottom: 1px solid var(--wibby-border);
   flex-shrink: 0;
   z-index: 10;
@@ -222,7 +222,7 @@
   top: calc(100% + 8px);
   right: 0;
   min-width: 200px;
-  background: var(--wibby-surface);
+  background: var(--wibby-surface-elevated, var(--wibby-surface));
   border: 1px solid var(--wibby-border);
   border-radius: var(--radius-md);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
@@ -373,7 +373,7 @@
 .clear-confirm-card {
   width: 100%;
   max-width: 390px;
-  background: var(--wibby-surface);
+  background: var(--wibby-surface-elevated, var(--wibby-surface));
   border: 1px solid var(--wibby-border);
   border-radius: var(--radius-xl, 20px);
   padding: 28px 24px 22px;

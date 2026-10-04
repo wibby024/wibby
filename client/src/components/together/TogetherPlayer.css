@@ -72,7 +72,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.625rem 1rem;
-  background: var(--wibby-chat-bg);
+  background: var(--wibby-header, var(--wibby-surface));
   border-bottom: 1px solid var(--wibby-border);
 }
 
@@ -111,8 +111,8 @@
 .together-badge {
   font-size: 0.8125rem;
   font-weight: 700;
-  color: var(--wibby-primary);
-  background: var(--wibby-primary-subtle);
+  color: var(--wibby-text-inverse, #fff);
+  background: var(--wibby-button, var(--wibby-primary));
   padding: 0.2rem 0.55rem;
   border-radius: var(--radius-full);
   white-space: nowrap;
@@ -183,7 +183,7 @@
 .together-url-input {
   flex: 1;
   padding: 0.625rem 1rem;
-  background: var(--wibby-chat-bg);
+  background: var(--wibby-input, var(--wibby-chat-bg));
   border: 1px solid var(--wibby-border);
   border-radius: var(--radius-md);
   color: var(--wibby-text);
@@ -191,15 +191,15 @@
 }
 
 .together-url-input:focus {
-  border-color: var(--wibby-primary);
+  border-color: var(--wibby-accent, var(--wibby-primary));
   box-shadow: 0 0 0 3px var(--wibby-primary-glow);
   outline: none;
 }
 
 .together-start-btn {
   padding: 0.625rem 1.25rem;
-  background: var(--wibby-primary);
-  color: #fff;
+  background: var(--wibby-button, var(--wibby-primary));
+  color: var(--wibby-text-inverse, #fff);
   border: none;
   border-radius: var(--radius-md);
   font-size: 0.875rem;
@@ -209,7 +209,7 @@
 }
 
 .together-start-btn:hover:not(:disabled) {
-  background: var(--wibby-primary-hover);
+  background: var(--wibby-button-hover, var(--wibby-primary-hover));
 }
 
 .together-start-btn:disabled {
@@ -230,10 +230,11 @@
 }
 
 /* ============================================
-   EXACT 16:9 Video Ratio & Frame Protection (Issue 5)
+   Viewing Area & Frame Protection (Issue 5 - Black Border Fix)
    ============================================ */
 .together-player-frame-wrap {
   width: 100%;
+  height: 100%;
   background: #000000;
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -247,10 +248,10 @@
 }
 
 .together-player-frame-wrap.full-frame {
-  flex: 1;
+  flex: 1 1 0;
   width: 100%;
-  min-height: 200px;
-  aspect-ratio: 16 / 9;
+  height: 100%;
+  min-height: 220px;
 }
 
 .together-player-frame-wrap.mini-frame {
@@ -265,7 +266,7 @@
   border: none;
   background: #000000;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
   direction: ltr;
   transform: none;
 }
@@ -367,8 +368,8 @@
 
 .together-sync-play-btn {
   padding: 0.38rem 0.95rem;
-  background: var(--wibby-primary-subtle);
-  color: var(--wibby-primary);
+  background: var(--wibby-button, var(--wibby-primary));
+  color: var(--wibby-text-inverse, #fff);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   font-size: 0.8125rem;
@@ -378,7 +379,7 @@
 }
 
 .together-sync-play-btn:hover {
-  background: var(--wibby-primary);
+  background: var(--wibby-button-hover, var(--wibby-primary-hover));
   color: #fff;
 }
 

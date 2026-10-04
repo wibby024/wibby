@@ -45,6 +45,20 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   const [showChangeMedia, setShowChangeMedia] = useState(false);
   const [changeUrlInput, setChangeUrlInput] = useState('');
   const [syncStatus, setSyncStatus] = useState('Sync ready');
+  const [duration, setDuration] = useState<number>(0);
+  const [playbackPos, setPlaybackPos] = useState<number>(0);
+
+  // Helper to format playback seconds as mm:ss
+  const formatSeconds = (secs: number): string => {
+    const s = Math.floor(Math.max(0, secs));
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const remainingSecs = s % 60;
+    if (hrs > 0) {
+      return `${hrs}:${String(mins).padStart(2, '0')}:${String(remainingSecs).padStart(2, '0')}`;
+    }
+    return `${String(mins).padStart(2, '0')}:${String(remainingSecs).padStart(2, '0')}`;
+  };
 
   // Draggable Mini-Player Coordinates & Snapping State
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -232,7 +246,18 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     return Math.max(0, pos);
   }, [session?.mediaType, isPlaying]);
 
-  // Listen to YouTube player messages for live time update
+  // Update scrubber position periodically during playback
+  useEffect(() => {
+    const updatePos = () => {
+      setPlaybackPos(getCurrentPosition());
+    };
+    updatePos();
+    if (!isPlaying) return;
+    const interval = setInterval(updatePos, 500);
+    return () => clearInterval(interval);
+  }, [isPlaying, getCurrentPosition]);
+
+  // Listen to YouTube player messages for live time update and duration
   useEffect(() => {
     const handleWindowMessage = (event: MessageEvent) => {
       try {
@@ -243,6 +268,9 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
             if (playStartTimestampRef.current) {
               playStartTimestampRef.current = Date.now();
             }
+          }
+          if (typeof data.info.duration === 'number' && data.info.duration > 0) {
+            setDuration(data.info.duration);
           }
         }
       } catch {
@@ -256,18 +284,25 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     };
   }, []);
 
-  // Tell YouTube iframe to listen for API commands
+  // Tell YouTube iframe to listen for API commands and synchronize initial position
   useEffect(() => {
     if (session?.mediaType === 'youtube' && iframeRef.current) {
       const timer = setTimeout(() => {
         if (iframeRef.current?.contentWindow) {
           iframeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*');
+          const pos = getCurrentPosition();
+          if (pos > 0) {
+            sendYouTubeCommand('seekTo', [pos, true]);
+          }
+          if (isPlaying) {
+            sendYouTubeCommand('playVideo');
+          }
           applyLocalVolume(localVolume, isMuted);
         }
-      }, 800);
+      }, 700);
       return () => clearTimeout(timer);
     }
-  }, [session?.mediaUrl, session?.mediaType, applyLocalVolume, localVolume, isMuted]);
+  }, [session?.mediaUrl, session?.mediaType, applyLocalVolume, localVolume, isMuted, getCurrentPosition, isPlaying, sendYouTubeCommand]);
 
   // Request initial authoritative session state and register socket listeners
   useEffect(() => {
@@ -281,12 +316,36 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
         const isPlayingState = data.state === 'playing' || data.playing || data.isPlaying;
         setSyncStatus(isPlayingState ? `Watching in sync with ${partnerName}` : `Paused with ${partnerName}`);
 
-        const authoritativePos = typeof data.position === 'number' ? data.position : (typeof data.currentTime === 'number' ? data.currentTime : 0);
+        let authoritativePos = typeof data.position === 'number' ? data.position : (typeof data.currentTime === 'number' ? data.currentTime : 0);
+        if (isPlayingState && data.updatedAt) {
+          const elapsed = (Date.now() - new Date(data.updatedAt).getTime()) / 1000;
+          if (elapsed > 0 && elapsed < 86400) {
+            authoritativePos += elapsed;
+          }
+        }
         currentPosRef.current = authoritativePos;
         if (isPlayingState) {
           playStartTimestampRef.current = Date.now();
         } else {
           playStartTimestampRef.current = null;
+        }
+
+        // Apply authoritative position to active player immediately (late-join & reconnect)
+        const isYt = (data.mediaUrl && (data.mediaUrl.includes('youtube') || data.mediaUrl.includes('youtu.be'))) || data.mediaType === 'youtube';
+        if (isYt && iframeRef.current) {
+          sendYouTubeCommand('seekTo', [authoritativePos, true]);
+          if (isPlayingState) {
+            sendYouTubeCommand('playVideo');
+          } else {
+            sendYouTubeCommand('pauseVideo');
+          }
+        } else if (videoRef.current) {
+          videoRef.current.currentTime = authoritativePos;
+          if (isPlayingState) {
+            videoRef.current.play().catch(() => {});
+          } else {
+            videoRef.current.pause();
+          }
         }
       }
     };
@@ -362,6 +421,43 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [socket, conversationId, partnerName, onClose, user?.uid, sendYouTubeCommand, getCurrentPosition, isPlaying]);
+
+  // Active Drift Detection & Continuous Sync (every 3s during playback)
+  useEffect(() => {
+    if (!isPlaying || !session) return;
+
+    const driftInterval = setInterval(() => {
+      const expectedPos = getCurrentPosition();
+      let actualPos = 0;
+
+      if (session.mediaType === 'direct' && videoRef.current) {
+        actualPos = videoRef.current.currentTime || 0;
+      } else if (session.mediaType === 'youtube') {
+        actualPos = currentPosRef.current;
+      }
+
+      if (actualPos > 0 && expectedPos > 0) {
+        const drift = Math.abs(actualPos - expectedPos);
+        // Explicit seek correction for significant drift (> 3.5s)
+        if (drift > 3.5) {
+          if (session.mediaType === 'youtube') {
+            sendYouTubeCommand('seekTo', [expectedPos, true]);
+          } else if (videoRef.current) {
+            videoRef.current.currentTime = expectedPos;
+          }
+        } else if (drift > 1.5) {
+          // Gentle alignment for moderate drift (1.5s - 3.5s)
+          if (session.mediaType === 'youtube') {
+            sendYouTubeCommand('seekTo', [expectedPos, true]);
+          } else if (videoRef.current) {
+            videoRef.current.currentTime = expectedPos;
+          }
+        }
+      }
+    }, 3000);
+
+    return () => clearInterval(driftInterval);
+  }, [isPlaying, session, getCurrentPosition, sendYouTubeCommand]);
 
   // Default position for minimized card (docked to bottom-right or bottom-left)
   const getDefaultPosition = useCallback((side: 'left' | 'right' = 'right') => {
@@ -580,9 +676,11 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   const handleSeekRelative = (seconds: number) => {
     if (!socket || !session) return;
     const currentPos = getCurrentPosition();
-    const newPos = Math.max(0, currentPos + seconds);
+    const maxLimit = duration > 0 ? duration : Infinity;
+    const newPos = Math.max(0, Math.min(maxLimit, currentPos + seconds));
 
     currentPosRef.current = newPos;
+    setPlaybackPos(newPos);
     if (isPlaying) {
       playStartTimestampRef.current = Date.now();
     }
@@ -598,6 +696,31 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       action: 'seek',
       position: newPos,
       currentTime: newPos
+    });
+  };
+
+  const handleArbitrarySeek = (targetSec: number) => {
+    if (!socket || !session) return;
+    const maxLimit = duration > 0 ? duration : Infinity;
+    const clamped = Math.max(0, Math.min(maxLimit, targetSec));
+
+    currentPosRef.current = clamped;
+    setPlaybackPos(clamped);
+    if (isPlaying) {
+      playStartTimestampRef.current = Date.now();
+    }
+
+    if (session.mediaType === 'youtube') {
+      sendYouTubeCommand('seekTo', [clamped, true]);
+    } else if (videoRef.current) {
+      videoRef.current.currentTime = clamped;
+    }
+
+    socket.emit('together:control', {
+      conversationId,
+      action: 'seek',
+      position: clamped,
+      currentTime: clamped
     });
   };
 
@@ -727,6 +850,11 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                   controls={!isMinimized}
                   playsInline
                   muted={isMuted}
+                  onLoadedMetadata={(e) => {
+                    if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
+                      setDuration(e.currentTarget.duration);
+                    }
+                  }}
                   onPlay={() => {
                     if (!isLocalActionRef.current && socket) {
                       const pos = videoRef.current?.currentTime || 0;
@@ -777,6 +905,33 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                 />
               )}
             </div>
+
+            {/* Timeline Scrubber for Arbitrary Seek */}
+            {!isMinimized && duration > 0 && (
+              <div className="together-timeline-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'var(--wibby-surface, rgba(0,0,0,0.35))', borderTop: '1px solid var(--wibby-border, rgba(255,255,255,0.08))' }}>
+                <span style={{ fontSize: '11px', color: 'var(--wibby-text-secondary, #94a3b8)', minWidth: '42px', fontFamily: 'monospace' }}>
+                  {formatSeconds(playbackPos)}
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max={duration}
+                  step="0.5"
+                  value={Math.min(duration, playbackPos)}
+                  onChange={(e) => {
+                    const target = parseFloat(e.target.value);
+                    setPlaybackPos(target);
+                    handleArbitrarySeek(target);
+                  }}
+                  style={{ flex: 1, accentColor: 'var(--wibby-accent, #6366f1)', cursor: 'pointer', height: '4px' }}
+                  aria-label="Timeline seek"
+                  title="Drag or click to seek for both users"
+                />
+                <span style={{ fontSize: '11px', color: 'var(--wibby-text-secondary, #94a3b8)', minWidth: '42px', textAlign: 'right', fontFamily: 'monospace' }}>
+                  {formatSeconds(duration)}
+                </span>
+              </div>
+            )}
 
             {/* Action Bar */}
             {!isMinimized ? (

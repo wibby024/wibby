@@ -6,6 +6,7 @@ import { rtcService } from '../../services/rtcService';
 import { resolvePartnerName } from '../../utils/partnerName';
 import { resolveAvatarUrl } from '../../utils/avatar';
 import TogetherPlayer from '../together/TogetherPlayer';
+import MessageArea from '../MessageArea';
 import './CallModal.css';
 
 function formatCallDuration(seconds: number): string {
@@ -84,7 +85,8 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   setMovieUrl,
   movieInput,
   setMovieInput,
-  handleStartMovie
+  handleStartMovie,
+  partner
 }: {
   viewMode: 'grid' | 'stacked' | 'pip' | 'screenshare' | 'moviemode';
   setViewMode: React.Dispatch<React.SetStateAction<'stacked' | 'pip' | 'screenshare' | 'moviemode'>>;
@@ -125,17 +127,18 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   movieInput?: string;
   setMovieInput?: React.Dispatch<React.SetStateAction<string>>;
   handleStartMovie?: (url: string) => void;
+  partner?: any;
 }) {
   const localPanelRef = useRef<HTMLDivElement | null>(null);
   const posRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
   const hasDraggedRef = useRef(false);
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; pipX: number; pipY: number } | null>(null);
-  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth < 640 : false);
 
   useEffect(() => {
     const handleWinResize = () => {
-      setIsMobile(window.innerWidth <= 768);
+      setIsMobile(window.innerWidth < 640);
     };
     window.addEventListener('resize', handleWinResize);
     return () => window.removeEventListener('resize', handleWinResize);
@@ -577,101 +580,119 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
             )}
           </div>
 
-          {/* Right Stacked Column: Both users stacked vertically (User 1 top, User 2 bottom) */}
-          <div className="call-screenshare-sidebar">
-            {/* Top Tile: Partner User */}
-            <div className="call-sidebar-user-tile remote">
-              <video
-                ref={(el) => {
-                  if (remoteVideoRef) (remoteVideoRef as any).current = el;
-                  if (el) {
-                    rtcService.bindRemoteVideoElement(el);
-                    const stream = rtcService.getRemoteVideoStream();
-                    if (stream && el.srcObject !== stream) {
-                      el.srcObject = stream;
+          {/* Right Column: Stacked Users (Top) + Integrated Chat (Bottom) */}
+          <div className="call-moviemode-sidebar">
+            <div className="call-moviemode-users-strip">
+              {/* Top Tile: Partner User */}
+              <div className="call-moviemode-user-tile remote">
+                <video
+                  ref={(el) => {
+                    if (remoteVideoRef) (remoteVideoRef as any).current = el;
+                    if (el) {
+                      rtcService.bindRemoteVideoElement(el);
+                      const stream = rtcService.getRemoteVideoStream();
+                      if (stream && el.srcObject !== stream) {
+                        el.srcObject = stream;
+                      }
+                      el.play().catch(() => { });
                     }
-                    el.play().catch(() => { });
-                  }
-                }}
-                className={`call-video-fg-live ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
-                autoPlay
-                playsInline
-                muted
-              />
-              {(isRemoteCameraOff || !isConnected) && (
-                <div className="call-video-placeholder">
-                  <div className="call-avatar-wrapper" style={{ width: 56, height: 56 }}>
-                    <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
-                      {avatar ? <img src={avatar} alt="" /> : <span>{initial}</span>}
+                  }}
+                  className={`call-video-fg-live ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
+                  autoPlay
+                  playsInline
+                  muted
+                />
+                {(isRemoteCameraOff || !isConnected) && (
+                  <div className="call-video-placeholder">
+                    <div className="call-avatar-wrapper" style={{ width: 44, height: 44 }}>
+                      <div className="call-avatar" style={{ width: 40, height: 40, fontSize: 16 }}>
+                        {avatar ? <img src={avatar} alt="" /> : <span>{initial}</span>}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+                <div className="call-moviemode-tile-badge">{partnerName}</div>
+              </div>
+
+              {/* Bottom Tile: You (Live Local Camera Feed) */}
+              <div className={`call-moviemode-user-tile local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''}`}>
+                <video
+                  ref={(el) => {
+                    if (localVideoRef) (localVideoRef as any).current = el;
+                    if (el) {
+                      rtcService.bindLocalVideoElement(el);
+                      const stream = rtcService.getLocalStream();
+                      if (stream && el.srcObject !== stream) {
+                        el.srcObject = stream;
+                      }
+                      el.play().catch(() => { });
+                    }
+                  }}
+                  className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
+                  autoPlay
+                  playsInline
+                  muted
+                />
+                {(isCameraOff || isCameraUnavailable) && (
+                  <div className="call-video-placeholder">
+                    <div className="call-avatar-wrapper" style={{ width: 44, height: 44 }}>
+                      <div className="call-avatar" style={{ width: 40, height: 40, fontSize: 16 }}>
+                        <span>Y</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="call-moviemode-tile-badge">You</div>
+                {!isCameraOff && !isCameraUnavailable && (
+                  <button
+                    type="button"
+                    className="call-panel-switch-cam-btn"
+                    style={{
+                      position: 'absolute',
+                      bottom: 4,
+                      right: 4,
+                      zIndex: 10,
+                      width: 24,
+                      height: 24,
+                      background: 'rgba(0, 0, 0, 0.45)',
+                      backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      color: '#fff'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      flipCamera();
+                    }}
+                    title={currentFacingMode === 'user' ? 'Switch camera' : 'Front camera'}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="23 4 23 10 17 10" />
+                      <polyline points="1 20 1 14 7 14" />
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Bottom Tile: You (Live Local Camera Feed) */}
-            <div className={`call-sidebar-user-tile local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''}`}>
-              <video
-                ref={(el) => {
-                  if (localVideoRef) (localVideoRef as any).current = el;
-                  if (el) {
-                    rtcService.bindLocalVideoElement(el);
-                    const stream = rtcService.getLocalStream();
-                    if (stream && el.srcObject !== stream) {
-                      el.srcObject = stream;
-                    }
-                    el.play().catch(() => { });
-                  }
-                }}
-                className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
-                autoPlay
-                playsInline
-                muted
-              />
-              {(isCameraOff || isCameraUnavailable) && (
-                <div className="call-video-placeholder">
-                  <div className="call-avatar-wrapper" style={{ width: 56, height: 56 }}>
-                    <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
-                      <span>Y</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {!isCameraOff && !isCameraUnavailable && (
-                <button
-                  type="button"
-                  className="call-panel-switch-cam-btn"
-                  style={{
-                    position: 'absolute',
-                    bottom: 8,
-                    right: 8,
-                    zIndex: 10,
-                    width: 26,
-                    height: 26,
-                    background: 'rgba(0, 0, 0, 0.45)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    color: '#fff'
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    flipCamera();
-                  }}
-                  title={currentFacingMode === 'user' ? 'Switch camera' : 'Front camera'}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="23 4 23 10 17 10" />
-                    <polyline points="1 20 1 14 7 14" />
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                  </svg>
-                </button>
-              )}
+            {/* Integrated Chat inside Movie Mode */}
+            <div className="call-moviemode-chat-container">
+              <div className="call-moviemode-chat-header">
+                <span>💬 Movie Chat</span>
+              </div>
+              <div className="call-moviemode-chat-body">
+                <MessageArea
+                  conversationId={conversationId || ''}
+                  partner={partner}
+                  isMovieMode={true}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -899,7 +920,11 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
 });
 
 
-export default function ActiveCallPanel() {
+interface ActiveCallPanelProps {
+  partner?: any;
+}
+
+export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) {
 
   const {
     activeCall,
@@ -954,10 +979,10 @@ export default function ActiveCallPanel() {
 
   const [_moviePlaying, setMoviePlaying] = useState<boolean>(true);
   const [movieInput, setMovieInput] = useState<string>('');
-  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth < 640 : false);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    const handleResize = () => setIsMobile(window.innerWidth < 640);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -1251,6 +1276,7 @@ export default function ActiveCallPanel() {
           movieInput={movieInput}
           setMovieInput={setMovieInput}
           handleStartMovie={handleStartMovie}
+          partner={partner}
         />
 
         {/* Top Bar Header (Auto-Hiding) */}

@@ -11,11 +11,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(26, 23, 38, 0.88);
+  background: var(--wibby-surface-elevated, rgba(26, 23, 38, 0.88));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(167, 139, 250, 0.22);
-  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 0 20px rgba(124, 58, 237, 0.2);
+  border: 1px solid var(--wibby-border, rgba(167, 139, 250, 0.22));
+  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 0 20px var(--wibby-shadow, rgba(124, 58, 237, 0.2));
   border-radius: 9999px;
   padding: 6px 10px 6px 8px;
   animation: capsuleDropIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -266,9 +266,9 @@
   z-index: 9999;
   border-radius: 16px;
   overflow: hidden;
-  background: #090713;
-  border: 1.5px solid rgba(167, 139, 250, 0.35);
-  box-shadow: 0 20px 48px -6px rgba(0, 0, 0, 0.85), 0 0 28px rgba(124, 58, 237, 0.25);
+  background: var(--wibby-surface, #090713);
+  border: 1.5px solid var(--wibby-border, rgba(167, 139, 250, 0.35));
+  box-shadow: 0 20px 48px -6px rgba(0, 0, 0, 0.85), 0 0 28px var(--wibby-shadow, rgba(124, 58, 237, 0.25));
   cursor: grab;
   user-select: none;
   touch-action: none;

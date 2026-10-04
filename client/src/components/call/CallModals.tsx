@@ -6,7 +6,11 @@ import FloatingCallCapsule from './FloatingCallCapsule';
 import ErrorBoundary from '../ErrorBoundary';
 import './CallModal.css';
 
-export default function CallModals() {
+interface CallModalsProps {
+  partner?: any;
+}
+
+export default function CallModals({ partner }: CallModalsProps = {}) {
   const {
     callState,
     errorMessage,
@@ -60,7 +64,7 @@ export default function CallModals() {
             className={`call-active-panel-container ${isMinimized ? 'is-minimized-dormant' : ''}`}
             aria-hidden={isMinimized}
           >
-            <ActiveCallPanel />
+            <ActiveCallPanel partner={partner} />
           </div>
           {isMinimized && <FloatingCallCapsule />}
         </>

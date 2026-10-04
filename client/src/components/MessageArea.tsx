@@ -677,9 +677,10 @@ interface MessageAreaProps {
   };
   onOpenGame?: () => void;
   jumpTarget?: { id: string; timestamp: number } | null;
+  isMovieMode?: boolean;
 }
 
-export default function MessageArea({ conversationId, partner, onOpenGame, jumpTarget }: MessageAreaProps) {
+export default function MessageArea({ conversationId, partner, onOpenGame, jumpTarget, isMovieMode }: MessageAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [contextMenu, setContextMenu] = useState<{ msgId: string, x: number, y: number } | null>(null);
@@ -2173,7 +2174,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
 
   return (
     <div 
-      className="chat-area-container"
+      className={`chat-area-container ${isMovieMode ? 'is-moviemode' : ''}`}
       onDragEnter={handleChatDragEnter}
       onDragLeave={handleChatDragLeave}
       onDragOver={handleChatDragOver}

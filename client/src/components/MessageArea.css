@@ -796,6 +796,27 @@
   writing-mode: horizontal-tb;
 }
 
+.chat-area-container.is-moviemode {
+  background: var(--wibby-surface, rgba(15, 23, 42, 0.95));
+  border-radius: 12px;
+}
+
+.chat-area-container.is-moviemode .message-area.has-messages,
+.chat-area-container.is-moviemode .message-area.empty {
+  padding: 8px;
+  background: transparent;
+}
+
+.chat-area-container.is-moviemode .message-wrapper {
+  max-width: 92%;
+  margin-bottom: 2px;
+}
+
+.chat-area-container.is-moviemode .message-bubble {
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
 .chat-drag-drop-overlay {
   position: absolute;
   inset: 0;

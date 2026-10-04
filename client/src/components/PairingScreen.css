@@ -4,7 +4,7 @@
   align-items: center;
   height: 100%;
   width: 100%;
-  background: var(--wibby-bg);
+  background: var(--wibby-background, var(--wibby-bg));
   color: var(--wibby-text);
 }
 
@@ -14,7 +14,7 @@
   padding: 2rem;
   background: var(--wibby-surface);
   border-radius: 1.5rem;
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--wibby-shadow, 0 10px 40px -10px rgba(0, 0, 0, 0.2));
   border: 1px solid var(--wibby-border);
   text-align: center;
 }
@@ -43,16 +43,16 @@
 }
 
 .pairing-btn.primary {
-  background: var(--wibby-primary);
+  background: var(--wibby-button, var(--wibby-primary));
   color: white;
 }
 
 .pairing-btn.primary:hover:not(:disabled) {
-  background: var(--wibby-primary-hover);
+  background: var(--wibby-button-hover, var(--wibby-primary-hover));
 }
 
 .pairing-btn.secondary {
-  background: var(--wibby-surface-active);
+  background: var(--wibby-surface-secondary, var(--wibby-surface-active));
   color: var(--wibby-text);
 }
 
@@ -103,7 +103,7 @@
   width: 100%;
   padding: 0.875rem 1rem;
   border-radius: 0.75rem;
-  background: var(--wibby-bg);
+  background: var(--wibby-input, var(--wibby-bg));
   border: 1px solid var(--wibby-border);
   color: var(--wibby-text);
   font-size: 1rem;
@@ -112,12 +112,12 @@
 }
 
 .pairing-form input:focus {
-  border-color: var(--wibby-primary);
+  border-color: var(--wibby-accent, var(--wibby-primary));
 }
 
 .pairing-error {
   background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: var(--wibby-danger, #ef4444);
   padding: 0.75rem;
   border-radius: 0.5rem;
   margin-bottom: 1.5rem;
@@ -129,8 +129,8 @@
   font-size: 2.5rem;
   font-weight: 700;
   letter-spacing: 0.2rem;
-  color: var(--wibby-primary);
-  background: var(--wibby-bg);
+  color: var(--wibby-accent, var(--wibby-primary));
+  background: var(--wibby-surface-secondary, var(--wibby-bg));
   padding: 1.5rem;
   border-radius: 1rem;
   margin-bottom: 1rem;

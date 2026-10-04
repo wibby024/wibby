@@ -25,7 +25,7 @@
   top: 0;
   bottom: 0;
   width: var(--sidebar-width);
-  background: var(--wibby-surface);
+  background: var(--wibby-sidebar, var(--wibby-surface));
   border-right: 1px solid var(--wibby-border);
   display: flex;
   flex-direction: column;
@@ -52,7 +52,7 @@
   width: 40px;
   height: 40px;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, #7C3AED, #5B21B6);
+  background: var(--wibby-button, linear-gradient(135deg, #7C3AED, #5B21B6));
   display: grid;
   place-items: center;
   color: white;
@@ -70,7 +70,7 @@
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.5px;
-  background: linear-gradient(135deg, #7C3AED, #A78BFA);
+  background: linear-gradient(135deg, var(--wibby-accent, #7C3AED), var(--wibby-accent-secondary, #A78BFA));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -118,10 +118,11 @@
   width: 100%;
   height: 40px;
   padding: 0 16px 0 38px;
-  background: var(--wibby-bg);
+  background: var(--wibby-input, var(--wibby-bg));
   border-radius: var(--radius-md);
   font-size: 14px;
   color: var(--wibby-text);
+  border: 1px solid var(--wibby-border);
   transition: all var(--transition-fast);
 }
 
@@ -131,7 +132,8 @@
 
 .search-input:focus {
   background: var(--wibby-surface);
-  box-shadow: 0 0 0 2px var(--wibby-primary-subtle), var(--shadow-sm);
+  border-color: var(--wibby-accent, var(--wibby-primary));
+  box-shadow: 0 0 0 2px var(--wibby-accent-secondary, var(--wibby-primary-subtle)), var(--shadow-sm);
 }
 
 /* ---- Section Label ---- */
@@ -172,7 +174,7 @@
 }
 
 .conversation-item.active {
-  background: var(--wibby-primary-subtle);
+  background: var(--wibby-surface-secondary, var(--wibby-primary-subtle));
 }
 
 .conversation-avatar {
@@ -242,7 +244,7 @@
 .sidebar-footer {
   padding: 12px 14px;
   border-top: 1px solid var(--wibby-border);
-  background: var(--wibby-surface);
+  background: var(--wibby-sidebar, var(--wibby-surface));
 }
 
 .sidebar-user {
