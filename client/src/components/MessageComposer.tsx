@@ -279,15 +279,13 @@ export default function MessageComposer({
         await onEdit(editingMessage.id, text);
         if (onCancelReplyOrEdit) onCancelReplyOrEdit();
       } else {
-        await onSend(text);
         if (onCancelReplyOrEdit) onCancelReplyOrEdit();
+        await onSend(text);
       }
     } catch (err) {
       console.error('Error sending message:', err);
       // Restore the message so the user can try again
-      if (editingMessage) {
-        setMessage(prevMessage);
-      }
+      setMessage(prevMessage);
     } finally {
       requestAnimationFrame(() => {
         textareaRef.current?.focus();

@@ -73,7 +73,10 @@ export default function RegisterForm({ onLogin }: RegisterFormProps) {
       }
 
       await refreshProfile()
-      await sendEmailVerification(userCredential.user)
+      // Send verification email in background without blocking signup completion
+      sendEmailVerification(userCredential.user).catch((err) => {
+        console.warn('Failed to send verification email in background:', err)
+      })
       setSuccess('Account created! Check your email to verify your Wibby account.')
     } catch (err: any) {
       setError(err.message || 'Failed to sign up')

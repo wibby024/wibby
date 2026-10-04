@@ -24,6 +24,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <title>Wibby</title>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('wibby-theme') || 'dark';
+          var ct = localStorage.getItem('wibby-chat-theme') || 'classic';
+          document.documentElement.setAttribute('data-theme', t);
+          document.documentElement.setAttribute('data-chat-theme', ct);
+          document.documentElement.setAttribute('data-theme-family', ct);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

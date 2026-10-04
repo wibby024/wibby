@@ -209,11 +209,13 @@ function WibbyAppWrapper() {
         }
 
         setConversationId(data.conversationId);
-        const syncedTheme = data.themeFamily || 'classic';
-        setChatThemePreset(syncedTheme);
-        localStorage.setItem('wibby-chat-theme', syncedTheme);
+        const userSavedTheme = user?.uid ? (localStorage.getItem(`wibby-chat-theme-${user.uid}`) as ChatThemePreset) : null;
+        const localTheme = localStorage.getItem('wibby-chat-theme') as ChatThemePreset;
+        const effectiveTheme = userSavedTheme || localTheme || data.themeFamily || 'classic';
+        setChatThemePreset(effectiveTheme);
+        localStorage.setItem('wibby-chat-theme', effectiveTheme);
         if (user?.uid) {
-          localStorage.setItem(`wibby-chat-theme-${user.uid}`, syncedTheme);
+          localStorage.setItem(`wibby-chat-theme-${user.uid}`, effectiveTheme);
           localStorage.setItem(`wibby-conv-${user.uid}`, data.conversationId);
         }
       } else {
@@ -303,16 +305,6 @@ function WibbyAppWrapper() {
       }
     };
 
-    const handleThemeFamilyUpdate = (data: { conversationId: string; themeFamily: ChatThemePreset }) => {
-      if (data.themeFamily) {
-        setChatThemePreset(data.themeFamily);
-        localStorage.setItem('wibby-chat-theme', data.themeFamily);
-        if (user?.uid) {
-          localStorage.setItem(`wibby-chat-theme-${user.uid}`, data.themeFamily);
-        }
-      }
-    };
-
     const handleNewMessage = (msg: any) => {
       if (user && msg.senderId !== user.uid) {
         const preview = msg.text || (msg.type === 'image' ? 'Sent a photo' : msg.type === 'video' ? 'Sent a video' : msg.type === 'audio' ? 'Sent a voice message' : msg.fileName || 'Sent an attachment');
@@ -343,7 +335,6 @@ function WibbyAppWrapper() {
 
     socket.on('presence:update', handlePresence);
     socket.on('together:started', handleTogetherStarted);
-    socket.on('conversation:theme-family-update', handleThemeFamilyUpdate);
     socket.on('user:profile_updated', handlePartnerProfileUpdated);
     socket.on('unpair', handleUnpair);
     socket.on('session:conflict', handleSessionConflict);
@@ -353,7 +344,6 @@ function WibbyAppWrapper() {
     return () => {
       socket.off('presence:update', handlePresence);
       socket.off('together:started', handleTogetherStarted);
-      socket.off('conversation:theme-family-update', handleThemeFamilyUpdate);
       socket.off('user:profile_updated', handlePartnerProfileUpdated);
       socket.off('unpair', handleUnpair);
       socket.off('session:conflict', handleSessionConflict);
@@ -440,35 +430,13 @@ function WibbyAppWrapper() {
     }
   };
 
-  const handleSelectThemePreset = useCallback(async (preset: ChatThemePreset) => {
+  const handleSelectThemePreset = useCallback((preset: ChatThemePreset) => {
     setChatThemePreset(preset);
     localStorage.setItem('wibby-chat-theme', preset);
     if (user?.uid) {
       localStorage.setItem(`wibby-chat-theme-${user.uid}`, preset);
     }
-    if (conversationId && user) {
-      if (socket) {
-        socket.emit('conversation:theme-family', {
-          conversationId,
-          themeFamily: preset
-        });
-      }
-      try {
-        const token = await user.getIdToken();
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-        fetch(`${apiUrl}/api/conversations/${conversationId}/theme`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ themeFamily: preset })
-        }).catch(err => console.error('Failed to persist theme family:', err));
-      } catch (err) {
-        console.error('Theme family save error:', err);
-      }
-    }
-  }, [conversationId, user, socket]);
+  }, [user?.uid]);
 
   const [chatClearCount, setChatClearCount] = useState(0);
 

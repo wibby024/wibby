@@ -43,8 +43,9 @@
   --header-height: 68px;
   --composer-height: 72px;
 
-  /* ---- Typography ---- */
-  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* ---- Typography & Native Emoji Fonts ---- */
+  --font-emoji: "Samsung Color Emoji", "Noto Color Emoji", "Segoe UI Emoji", "Apple Color Emoji", "Android Emoji", sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, "Samsung Color Emoji", "Noto Color Emoji", "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
 
   /* ---- Border Radius ---- */
   --radius-xs: 6px;
@@ -271,23 +272,63 @@
   --wibby-chat-theme-bubble: linear-gradient(135deg, #64748B 0%, #475569 50%, #334155 100%);
 }
 
-[data-chat-theme="wibby-whatsapp"] {
+[data-chat-theme="wibby-whatsapp"],
+[data-theme="dark"][data-chat-theme="wibby-whatsapp"] {
   --wibby-primary: #00A884;
   --wibby-primary-hover: #02906F;
   --wibby-primary-light: #25D366;
   --wibby-primary-subtle: rgba(0, 168, 132, 0.16);
   --wibby-primary-glow: rgba(0, 168, 132, 0.22);
+  --wibby-bg: #0C1317;
+  --wibby-surface: #111B21;
+  --wibby-surface-hover: #202C33;
+  --wibby-surface-active: #222E35;
+  --wibby-surface-secondary: #182229;
+  --wibby-header: #111B21;
+  --wibby-chat-bg: #0B141A;
+  --wibby-border: #222D34;
+  --wibby-border-light: #182229;
+  --wibby-text: #E9EDEF;
+  --wibby-text-secondary: #8696A0;
+  --wibby-text-muted: #667781;
+  --wibby-message-own: #005C4B;
+  --wibby-message-other: #202C33;
+  --wibby-accent: #00A884;
+  --wibby-accent-secondary: #25D366;
+  --wibby-input: #2A3942;
+  --wibby-overlay: rgba(11, 20, 26, 0.88);
+  --wibby-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   --wibby-chat-theme-bg: #0B141A;
   --wibby-chat-theme-gradient: radial-gradient(circle at 50% 50%, rgba(17, 27, 33, 0.95) 0%, #0B141A 100%);
   --wibby-chat-theme-bubble: linear-gradient(135deg, #005C4B 0%, #025142 100%);
 }
 
-[data-chat-theme="wibby-instagram"] {
+[data-chat-theme="wibby-instagram"],
+[data-theme="dark"][data-chat-theme="wibby-instagram"] {
   --wibby-primary: #E1306C;
   --wibby-primary-hover: #C13584;
   --wibby-primary-light: #FD1D1D;
   --wibby-primary-subtle: rgba(225, 48, 108, 0.16);
   --wibby-primary-glow: rgba(225, 48, 108, 0.25);
+  --wibby-bg: #000000;
+  --wibby-surface: #121212;
+  --wibby-surface-hover: #1C1C1C;
+  --wibby-surface-active: #262626;
+  --wibby-surface-secondary: #181818;
+  --wibby-header: #121212;
+  --wibby-chat-bg: #050505;
+  --wibby-border: #262626;
+  --wibby-border-light: #1C1C1C;
+  --wibby-text: #F5F5F5;
+  --wibby-text-secondary: #A8A8A8;
+  --wibby-text-muted: #737373;
+  --wibby-message-own: linear-gradient(135deg, #833AB4 0%, #FD1D1D 50%, #FCB045 100%);
+  --wibby-message-other: #262626;
+  --wibby-accent: #E1306C;
+  --wibby-accent-secondary: #833AB4;
+  --wibby-input: #1C1C1C;
+  --wibby-overlay: rgba(0, 0, 0, 0.88);
+  --wibby-shadow: 0 4px 24px rgba(225, 48, 108, 0.15);
   --wibby-chat-theme-bg: #000000;
   --wibby-chat-theme-gradient: radial-gradient(ellipse at 50% 0%, rgba(131, 58, 180, 0.25) 0%, rgba(253, 29, 29, 0.14) 50%, #000000 100%);
   --wibby-chat-theme-bubble: linear-gradient(135deg, #833AB4 0%, #FD1D1D 50%, #FCB045 100%);
@@ -428,6 +469,25 @@
   --wibby-primary-light: #25D366;
   --wibby-primary-subtle: #E8F5E9;
   --wibby-primary-glow: rgba(0, 128, 105, 0.15);
+  --wibby-bg: #EFEAE2;
+  --wibby-surface: #FFFFFF;
+  --wibby-surface-hover: #F5F6F6;
+  --wibby-surface-active: #E9EDEF;
+  --wibby-surface-secondary: #F0F2F5;
+  --wibby-header: #F0F2F5;
+  --wibby-chat-bg: #EFEAE2;
+  --wibby-border: #E9EDEF;
+  --wibby-border-light: #F0F2F5;
+  --wibby-text: #111B21;
+  --wibby-text-secondary: #667781;
+  --wibby-text-muted: #8696A0;
+  --wibby-message-own: #D9FDD3;
+  --wibby-message-other: #FFFFFF;
+  --wibby-accent: #008069;
+  --wibby-accent-secondary: #25D366;
+  --wibby-input: #FFFFFF;
+  --wibby-overlay: rgba(11, 20, 26, 0.5);
+  --wibby-shadow: 0 2px 8px rgba(11, 20, 26, 0.08);
   --wibby-chat-theme-bg: #EFEAE2;
   --wibby-chat-theme-gradient: radial-gradient(circle at 50% 50%, #EAE5DE 0%, #EFEAE2 100%);
   --wibby-chat-theme-bubble: linear-gradient(135deg, #D9FDD3 0%, #C8F7C2 100%);
@@ -439,6 +499,25 @@
   --wibby-primary-light: #E1306C;
   --wibby-primary-subtle: #FCE7F3;
   --wibby-primary-glow: rgba(193, 53, 132, 0.15);
+  --wibby-bg: #FFFFFF;
+  --wibby-surface: #FFFFFF;
+  --wibby-surface-hover: #FAFAFA;
+  --wibby-surface-active: #F0F0F0;
+  --wibby-surface-secondary: #FAFAFA;
+  --wibby-header: #FFFFFF;
+  --wibby-chat-bg: #FFFFFF;
+  --wibby-border: #DBDBDB;
+  --wibby-border-light: #EFEFEF;
+  --wibby-text: #262626;
+  --wibby-text-secondary: #737373;
+  --wibby-text-muted: #8E8E8E;
+  --wibby-message-own: linear-gradient(135deg, #833AB4 0%, #E1306C 50%, #FD1D1D 100%);
+  --wibby-message-other: #EFEFEF;
+  --wibby-accent: #E1306C;
+  --wibby-accent-secondary: #833AB4;
+  --wibby-input: #EFEFEF;
+  --wibby-overlay: rgba(0, 0, 0, 0.65);
+  --wibby-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   --wibby-chat-theme-bg: #FAFAFA;
   --wibby-chat-theme-gradient: radial-gradient(ellipse at 50% 0%, rgba(131, 58, 180, 0.12) 0%, rgba(253, 29, 29, 0.08) 50%, #FAFAFA 100%);
   --wibby-chat-theme-bubble: linear-gradient(135deg, #833AB4 0%, #E1306C 50%, #FD1D1D 100%);
@@ -552,4 +631,27 @@ ol {
     font-size: 16px !important;
   }
 }
+
+/* ============================================
+   Native & System Emoji Rendering (Samsung/System Unicode)
+   ============================================ */
+.emoji-btn,
+.reaction-badge,
+.reaction-btn,
+.reaction-picker-btn,
+.category-btn-icon,
+.message-text,
+.message-composer textarea,
+.reply-preview,
+.emoji-picker-container,
+.recent-emojis,
+.emoji-item,
+.emoji-picker-grid button,
+.emoji-mart,
+.quick-reaction-btn {
+  font-family: var(--font-emoji);
+  font-style: normal;
+  text-decoration: none;
+}
+
 

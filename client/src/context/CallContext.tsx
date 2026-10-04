@@ -188,9 +188,15 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       console.log('[CallContext] Camera facing mode updated:', mode);
       setCurrentFacingMode(mode);
     });
+    rtcService.setOnAudioOutputDeviceChangedCallback((deviceId) => {
+      console.log('[CallContext] Audio output device changed:', deviceId);
+      setSelectedOutputDeviceId(deviceId);
+      rtcService.getAudioOutputDevices().then(setAvailableOutputDevices).catch(() => {});
+    });
     return () => {
       rtcService.setOnTelemetryCallback(null);
       rtcService.setOnFacingModeChangeCallback(null);
+      rtcService.setOnAudioOutputDeviceChangedCallback(null);
     };
   }, []);
 
@@ -924,12 +930,51 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     sessionIdRef.current = freshSessionId;
     sessionStorage.setItem('wibby_active_call_id', callId);
 
+    const partnerName = resolvePartnerName(partner);
+    const partnerAvatar = partner?.avatarUrl || partner?.avatar || null;
+    const newCall: ActiveCall = {
+      callId,
+      sessionId: freshSessionId,
+      conversationId,
+      callType: type,
+      isCaller: true,
+      remoteUser: {
+        id: partner?.firebaseUid || '',
+        name: partnerName,
+        avatar: partnerAvatar
+      },
+      duration: 0,
+      isMuted: false,
+      isCameraOff: false,
+      isRemoteCameraOff: false,
+      isCameraUnavailable: false
+    };
+
+    // Instant UI feedback (Issue 3B - Call start feels instantaneous)
+    setActiveCall(newCall);
+    setIsCameraOff(false);
+    setIsCameraUnavailable(false);
+    setIsRemoteCameraOff(false);
+    setIsRemoteMuted(false);
+    setRemoteMuteNotification(null);
+    setCallState('OUTGOING_CALLING');
+
     try {
       clearError();
       rtcService.unlockRemoteAudio();
 
       // 1. Acquire local media (audio + video, or audio-only fallback)
       const { stream, cameraUnavailable } = await rtcService.acquireLocalMedia(type);
+
+      if (cameraUnavailable) {
+        setIsCameraOff(true);
+        setIsCameraUnavailable(true);
+        setActiveCall(prev => prev ? {
+          ...prev,
+          isCameraOff: true,
+          isCameraUnavailable: true
+        } : prev);
+      }
 
       // 2. Initialize PeerConnection
       rtcService.initPeerConnection(
@@ -947,35 +992,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         freshSessionId
       );
 
-      const partnerName = resolvePartnerName(partner);
-      const partnerAvatar = partner?.avatarUrl || partner?.avatar || null;
-      const newCall: ActiveCall = {
-        callId,
-        sessionId: freshSessionId,
-        conversationId,
-        callType: type,
-        isCaller: true,
-        remoteUser: {
-          id: partner?.firebaseUid || '',
-          name: partnerName,
-          avatar: partnerAvatar
-        },
-        duration: 0,
-        isMuted: false,
-        isCameraOff: cameraUnavailable,
-        isRemoteCameraOff: false,
-        isCameraUnavailable: cameraUnavailable
-      };
-
-      setActiveCall(newCall);
-      setIsCameraOff(cameraUnavailable);
-      setIsCameraUnavailable(cameraUnavailable);
-      setIsRemoteCameraOff(false);
-      setIsRemoteMuted(false);
-      setRemoteMuteNotification(null);
-      setCallState('OUTGOING_CALLING');
-
-      // 4. Emit call invite to server
+      // 3. Emit call invite to server
       socket.emit('call:invite', {
         callId,
         sessionId: freshSessionId,
@@ -1020,6 +1037,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     try {
       clearError();
       console.log('[WIBBY CALL] Accepting call:', currentCall.callId);
+
+      // Instant UI response: stop ringtone and show CONNECTING state immediately
+      ringtoneService.stop(currentCall.callId);
+      setCallState('CONNECTING');
 
       rtcService.unlockRemoteAudio();
 

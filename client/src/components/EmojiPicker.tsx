@@ -41,10 +41,30 @@ export default function EmojiPicker({ onSelect, onSelectSticker, onClose, anchor
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState(emojiCategories[0].id);
   const [position, setPosition] = useState<{ top: number, left: number, maxHeight: number } | null>(null);
+  const [recentEmojis, setRecentEmojis] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('wibby_recent_emojis');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   
   const searchResults = useMemo(() => searchEmojis(search), [search]);
+
+  const handleEmojiSelect = (emoji: string) => {
+    try {
+      const updated = [emoji, ...recentEmojis.filter(e => e !== emoji)].slice(0, 24);
+      setRecentEmojis(updated);
+      localStorage.setItem('wibby_recent_emojis', JSON.stringify(updated));
+    } catch {
+      // Ignore localStorage write failure
+    }
+    onSelect(emoji);
+    onClose();
+  };
 
   // Handle escape key
   useEffect(() => {
@@ -201,6 +221,17 @@ export default function EmojiPicker({ onSelect, onSelectSticker, onClose, anchor
           
           {!search && (
             <div className="emoji-categories-nav">
+              {recentEmojis.length > 0 && (
+                <button
+                  className={`category-btn ${activeCategory === 'recent' ? 'active' : ''}`}
+                  onClick={() => scrollToCategory('recent')}
+                  aria-label="Recently Used"
+                  title="Recently Used"
+                >
+                  <span className="category-btn-icon">🕒</span>
+                  <span className="category-btn-name">Recent</span>
+                </button>
+              )}
               {emojiCategories.map(cat => (
                 <button
                   key={cat.id}
@@ -222,7 +253,7 @@ export default function EmojiPicker({ onSelect, onSelectSticker, onClose, anchor
                 {searchResults.length > 0 ? (
                   <div className="emoji-grid">
                     {searchResults.map(emoji => (
-                      <button key={emoji} className="emoji-btn" onClick={() => { onSelect(emoji); onClose(); }}>
+                      <button key={emoji} className="emoji-btn" onClick={() => handleEmojiSelect(emoji)}>
                         {emoji}
                       </button>
                     ))}
@@ -232,18 +263,32 @@ export default function EmojiPicker({ onSelect, onSelectSticker, onClose, anchor
                 )}
               </div>
             ) : (
-              emojiCategories.map(cat => (
-                <div key={cat.id} id={`category-${cat.id}`} className="emoji-category-section">
-                  <div className="category-header">{cat.name}</div>
-                  <div className="emoji-grid">
-                    {cat.emojis.map(emoji => (
-                      <button key={emoji} className="emoji-btn" onClick={() => { onSelect(emoji); onClose(); }}>
-                        {emoji}
-                      </button>
-                    ))}
+              <>
+                {recentEmojis.length > 0 && (
+                  <div id="category-recent" className="emoji-category-section">
+                    <div className="category-header">Recently Used</div>
+                    <div className="emoji-grid">
+                      {recentEmojis.map(emoji => (
+                        <button key={`recent-${emoji}`} className="emoji-btn" onClick={() => handleEmojiSelect(emoji)}>
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))
+                )}
+                {emojiCategories.map(cat => (
+                  <div key={cat.id} id={`category-${cat.id}`} className="emoji-category-section">
+                    <div className="category-header">{cat.name}</div>
+                    <div className="emoji-grid">
+                      {cat.emojis.map(emoji => (
+                        <button key={emoji} className="emoji-btn" onClick={() => handleEmojiSelect(emoji)}>
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </>
             )}
           </div>
         </>

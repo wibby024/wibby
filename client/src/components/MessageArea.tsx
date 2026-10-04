@@ -1458,7 +1458,12 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
     }
   }, [socket, conversationId]);
 
-  const handleSend = async (text: string, forwardedFromMessageId?: string, mediaProps?: Partial<Message>) => {
+  const handleSend = async (
+    text: string, 
+    forwardedFromMessageId?: string, 
+    mediaProps?: Partial<Message>,
+    explicitReplyToMessageId?: string
+  ) => {
     if (!user || !conversationId) return;
 
     let e2eeData: { ciphertext: string; iv: string; version: number } | undefined;
@@ -1496,9 +1501,13 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
       // CRITICAL: Block sending if E2EE encryption failed or partner key is missing. NEVER silently fall back to plaintext.
       if (!e2eeData) {
         showToast('Message blocked: E2EE key for partner is unavailable. Plaintext fallback is disabled.');
-        return;
+        throw new Error('E2EE key unavailable');
       }
     }
+
+    const replyTargetId = explicitReplyToMessageId || (replyingTo ? replyingTo.id : undefined);
+    // Immediately clear reply mode when message is accepted into send flow
+    setReplyingTo(null);
 
     const tempId = generateUUID();
     const tempMsg: Message = {
@@ -1517,7 +1526,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
       thumbnailUrl: mediaProps?.thumbnailUrl,
       createdAt: new Date().toISOString(),
       status: 'sent',
-      replyToMessageId: replyingTo ? replyingTo.id : undefined,
+      replyToMessageId: replyTargetId,
       forwardedFromMessageId
     };
 
@@ -1546,8 +1555,8 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
           fileSize: mediaProps?.fileSize,
           thumbnailUrl: mediaProps?.thumbnailUrl
         };
-        if (replyingTo) {
-          payload.replyToMessageId = replyingTo.id;
+        if (replyTargetId) {
+          payload.replyToMessageId = replyTargetId;
         }
         if (forwardedFromMessageId) {
           payload.forwardedFromMessageId = forwardedFromMessageId;
@@ -1634,6 +1643,9 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
       }
     }
 
+    const replyTargetId = replyingTo?.id;
+    setReplyingTo(null);
+
     const tempId = generateUUID();
     const tempMsg: Message = {
       _id: tempId,
@@ -1651,6 +1663,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
       fileName: specialData.fileName,
       mimeType: specialData.mimeType,
       text: specialData.text,
+      replyToMessageId: replyTargetId,
       createdAt: new Date().toISOString(),
       status: 'sent'
     };
@@ -1676,7 +1689,8 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
             text: e2eeData ? `[Encrypted ${specialData.type.toUpperCase()}]` : specialData.text,
             e2ee: e2eeData,
             clientMessageId: tempId,
-            clientCreatedAt: tempMsg.createdAt
+            clientCreatedAt: tempMsg.createdAt,
+            replyToMessageId: replyTargetId
           })
         });
 
@@ -1784,15 +1798,20 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
 
   const handleRetry = async (msg: Message) => {
     setMessages(prev => prev.filter(m => m._id !== msg._id));
-    handleSend(msg.text || '', msg.forwardedFromMessageId || undefined, {
-      type: msg.type,
-      mediaUrl: msg.mediaUrl,
-      mediaKey: msg.mediaKey,
-      mimeType: msg.mimeType,
-      fileName: msg.fileName,
-      fileSize: msg.fileSize,
-      thumbnailUrl: msg.thumbnailUrl
-    }).catch(() => {});
+    handleSend(
+      msg.text || '', 
+      msg.forwardedFromMessageId || undefined, 
+      {
+        type: msg.type,
+        mediaUrl: msg.mediaUrl,
+        mediaKey: msg.mediaKey,
+        mimeType: msg.mimeType,
+        fileName: msg.fileName,
+        fileSize: msg.fileSize,
+        thumbnailUrl: msg.thumbnailUrl
+      },
+      msg.replyToMessageId || undefined
+    ).catch(() => {});
   };
 
   const handleDownloadFile = async (msg: Message) => {

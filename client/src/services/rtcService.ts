@@ -104,6 +104,46 @@ export class RTCService {
   private pendingIceCandidates: RTCIceCandidateInit[] = [];
   private remoteDescriptionSet = false;
 
+  // Audio Output Routing & Device Change Detection (Issue 4)
+  private selectedOutputDeviceId: string | null = null;
+  private onAudioOutputDeviceChangedCallback: ((deviceId: string) => void) | null = null;
+
+  constructor() {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', this.handleDeviceChange);
+    }
+  }
+
+  setOnAudioOutputDeviceChangedCallback(cb: ((deviceId: string) => void) | null) {
+    this.onAudioOutputDeviceChangedCallback = cb;
+  }
+
+  handleDeviceChange = async () => {
+    console.log('[WIBBY AUDIO] Browser devicechange event detected');
+    try {
+      const outputDevices = await this.getAudioOutputDevices();
+      console.log('[WIBBY AUDIO] Available audio outputs on devicechange:', outputDevices.map(d => ({ label: d.label, id: d.deviceId })));
+
+      // If there is an active call or remote audio element
+      if (this.peerConnection || this.remoteAudioElement) {
+        let targetId = 'default';
+        if (this.selectedOutputDeviceId && outputDevices.some(d => d.deviceId === this.selectedOutputDeviceId)) {
+          targetId = this.selectedOutputDeviceId;
+        } else if (outputDevices.length > 0) {
+          targetId = outputDevices.find(d => d.deviceId === 'default')?.deviceId || outputDevices[0].deviceId;
+        }
+
+        await this.setAudioOutputDevice(targetId);
+
+        if (this.onAudioOutputDeviceChangedCallback) {
+          this.onAudioOutputDeviceChangedCallback(targetId);
+        }
+      }
+    } catch (err) {
+      console.warn('[WIBBY AUDIO] Error handling devicechange:', err);
+    }
+  };
+
   // Video Engine State (Phase 9)
   private callType: 'voice' | 'video' = 'voice';
   private sessionId: string | null = null;
@@ -234,6 +274,14 @@ export class RTCService {
    * Acquire local microphone audio stream with device echo cancellation & noise suppression
    */
   async acquireLocalMicrophone(): Promise<MediaStream> {
+    if (this.localStream) {
+      const existingAudio = this.localStream.getAudioTracks()[0];
+      if (existingAudio && existingAudio.readyState === 'live') {
+        console.log('[WIBBY WEBRTC] Fast-path: reusing existing live local microphone track');
+        return this.localStream;
+      }
+    }
+
     if (!navigator.mediaDevices?.getUserMedia) {
       const unsupportedErr = new Error('Microphone access is not supported by your browser');
       unsupportedErr.name = 'NotSupportedError';
@@ -309,6 +357,28 @@ export class RTCService {
     preferredVideoDeviceId?: string
   ): Promise<{ stream: MediaStream; cameraUnavailable: boolean }> {
     this.callType = callType;
+
+    // Fast-path: Reuse existing live stream if tracks are live (Issue 3C - fast call reconnect)
+    if (this.localStream && !preferredVideoDeviceId) {
+      const audioTrack = this.localStream.getAudioTracks()[0];
+      const videoTrack = this.localStream.getVideoTracks()[0];
+      const hasLiveAudio = audioTrack && audioTrack.readyState === 'live';
+      const hasLiveVideo = videoTrack && videoTrack.readyState === 'live';
+
+      if (callType === 'voice' && hasLiveAudio) {
+        console.log('[WIBBY WEBRTC] Fast-path: reusing existing live audio stream for voice call');
+        this.isCameraUnavailable = false;
+        this.isCameraOff = false;
+        return { stream: this.localStream, cameraUnavailable: false };
+      }
+      if (callType === 'video' && hasLiveAudio && hasLiveVideo) {
+        console.log('[WIBBY WEBRTC] Fast-path: reusing existing live audio+video stream for video call');
+        this.isCameraUnavailable = false;
+        this.isCameraOff = false;
+        return { stream: this.localStream, cameraUnavailable: false };
+      }
+    }
+
     if (callType === 'voice') {
       const stream = await this.acquireLocalMicrophone();
       this.isCameraUnavailable = false;
@@ -2694,20 +2764,35 @@ export class RTCService {
    * Route audio to specific output device via setSinkId where supported
    */
   async setAudioOutputDevice(deviceId: string): Promise<boolean> {
+    this.selectedOutputDeviceId = deviceId;
     let success = false;
     try {
       if (this.remoteAudioElement && typeof (this.remoteAudioElement as any).setSinkId === 'function') {
         await (this.remoteAudioElement as any).setSinkId(deviceId);
         console.log('[WIBBY AUDIO] Remote audio element setSinkId succeeded:', deviceId);
+        if (this.remoteAudioElement.paused && this.remoteAudioElement.srcObject) {
+          this.remoteAudioElement.play().catch(() => {});
+        }
+        success = true;
+      }
+      if (this.remoteDisplayAudioElement && typeof (this.remoteDisplayAudioElement as any).setSinkId === 'function') {
+        await (this.remoteDisplayAudioElement as any).setSinkId(deviceId);
+        console.log('[WIBBY AUDIO] Remote display audio element setSinkId succeeded:', deviceId);
+        if (this.remoteDisplayAudioElement.paused && this.remoteDisplayAudioElement.srcObject) {
+          this.remoteDisplayAudioElement.play().catch(() => {});
+        }
         success = true;
       }
       if (this.audioCtx && typeof (this.audioCtx as any).setSinkId === 'function') {
         await (this.audioCtx as any).setSinkId(deviceId);
         console.log('[WIBBY AUDIO] AudioContext setSinkId succeeded:', deviceId);
+        if (this.audioCtx.state === 'suspended') {
+          this.audioCtx.resume().catch(() => {});
+        }
         success = true;
       }
     } catch (e) {
-      console.warn('[WIBBY AUDIO] setSinkId error:', e);
+      console.warn('[WIBBY AUDIO] setSinkId error or unsupported by browser:', e);
     }
     return success;
   }
@@ -2739,6 +2824,10 @@ export class RTCService {
 
       if (this.remoteAudioElement.srcObject !== stream) {
         this.remoteAudioElement.srcObject = stream;
+      }
+
+      if (this.selectedOutputDeviceId && typeof (this.remoteAudioElement as any).setSinkId === 'function') {
+        (this.remoteAudioElement as any).setSinkId(this.selectedOutputDeviceId).catch(() => {});
       }
 
       if (this.audioPipelineMode === 'native') {

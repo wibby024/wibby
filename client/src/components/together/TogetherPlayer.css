@@ -432,6 +432,74 @@
   cursor: pointer;
 }
 
+/* Local Volume Control (Issue 5 - Local Only) */
+.together-volume-control {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--wibby-surface-active);
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--wibby-border);
+}
+
+.together-volume-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  color: var(--wibby-text);
+}
+
+.together-volume-slider {
+  width: 65px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--wibby-border);
+  border-radius: var(--radius-full);
+  outline: none;
+  cursor: pointer;
+}
+
+.together-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--wibby-primary);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.together-volume-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.together-volume-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--wibby-primary);
+  border: none;
+  cursor: pointer;
+}
+
+.together-volume-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--wibby-text-secondary);
+  min-width: 26px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .together-dock.standard {

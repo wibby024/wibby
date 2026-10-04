@@ -51,6 +51,23 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   const [isDragging, setIsDragging] = useState(false);
   const [snappedSide, setSnappedSide] = useState<'left' | 'right'>('right');
 
+  // Local Watch Together volume control (Issue 5 - Local Only)
+  const [localVolume, setLocalVolume] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('wibby_together_volume');
+      return saved !== null ? Math.min(1, Math.max(0, parseFloat(saved))) : 0.8;
+    } catch {
+      return 0.8;
+    }
+  });
+  const [isMuted, setIsMuted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('wibby_together_muted') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   // User Resizable Viewing Window (Issue 4)
   const [customSize, setCustomSize] = useState<{ width?: number; height?: number }>(() => {
     try {
@@ -149,7 +166,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     moved: false
   });
 
-  const sendYouTubeCommand = useCallback((func: 'playVideo' | 'pauseVideo' | 'seekTo', args: any[] = []) => {
+  const sendYouTubeCommand = useCallback((func: 'playVideo' | 'pauseVideo' | 'seekTo' | 'setVolume' | 'mute' | 'unMute', args: any[] = []) => {
     if (iframeRef.current && iframeRef.current.contentWindow) {
       iframeRef.current.contentWindow.postMessage(
         JSON.stringify({
@@ -161,6 +178,43 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       );
     }
   }, []);
+
+  const applyLocalVolume = useCallback((vol: number, muted: boolean) => {
+    if (videoRef.current) {
+      videoRef.current.volume = vol;
+      videoRef.current.muted = muted;
+    }
+    if (iframeRef.current) {
+      if (muted) {
+        sendYouTubeCommand('mute');
+      } else {
+        sendYouTubeCommand('unMute');
+        sendYouTubeCommand('setVolume', [Math.round(vol * 100)]);
+      }
+    }
+  }, [sendYouTubeCommand]);
+
+  useEffect(() => {
+    applyLocalVolume(localVolume, isMuted);
+  }, [localVolume, isMuted, applyLocalVolume, session?.mediaUrl]);
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVol = parseFloat(e.target.value);
+    setLocalVolume(newVol);
+    if (newVol > 0 && isMuted) {
+      setIsMuted(false);
+      try { localStorage.setItem('wibby_together_muted', 'false'); } catch {}
+    }
+    try { localStorage.setItem('wibby_together_volume', String(newVol)); } catch {}
+    applyLocalVolume(newVol, false);
+  };
+
+  const handleToggleMute = () => {
+    const newMuted = !isMuted;
+    setIsMuted(newMuted);
+    try { localStorage.setItem('wibby_together_muted', String(newMuted)); } catch {}
+    applyLocalVolume(localVolume, newMuted);
+  };
 
   const isPlaying = Boolean(session?.state === 'playing' || session?.playing || session?.isPlaying);
 
@@ -208,11 +262,12 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       const timer = setTimeout(() => {
         if (iframeRef.current?.contentWindow) {
           iframeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*');
+          applyLocalVolume(localVolume, isMuted);
         }
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [session?.mediaUrl, session?.mediaType]);
+  }, [session?.mediaUrl, session?.mediaType, applyLocalVolume, localVolume, isMuted]);
 
   // Request initial authoritative session state and register socket listeners
   useEffect(() => {
@@ -671,6 +726,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                   className="together-video-player"
                   controls={!isMinimized}
                   playsInline
+                  muted={isMuted}
                   onPlay={() => {
                     if (!isLocalActionRef.current && socket) {
                       const pos = videoRef.current?.currentTime || 0;
@@ -749,6 +805,31 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                 >
                   +10s ⏩
                 </button>
+
+                {/* Local Volume Control (Issue 5 - Local Only) */}
+                <div className="together-volume-control" title="Local Watch Together volume">
+                  <button
+                    type="button"
+                    className="together-volume-btn"
+                    onClick={handleToggleMute}
+                    aria-label={isMuted ? 'Unmute' : 'Mute'}
+                    title={isMuted ? 'Unmute' : 'Mute'}
+                  >
+                    {isMuted || localVolume === 0 ? '🔇' : localVolume < 0.5 ? '🔉' : '🔊'}
+                  </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={isMuted ? 0 : localVolume}
+                    onChange={handleVolumeChange}
+                    className="together-volume-slider"
+                    aria-label="Local playback volume"
+                  />
+                  <span className="together-volume-label">{Math.round((isMuted ? 0 : localVolume) * 100)}%</span>
+                </div>
+
                 <span className="together-host-tag">
                   {isHost ? '🎮 Synced Host' : `🎮 Synced with ${partnerName}`}
                 </span>
@@ -778,6 +859,15 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                   title="Forward 10s"
                 >
                   ⏩
+                </button>
+                <button
+                  type="button"
+                  className="together-seek-btn mini"
+                  onClick={handleToggleMute}
+                  title={isMuted ? 'Unmute local volume' : 'Mute local volume'}
+                  aria-label={isMuted ? 'Unmute local volume' : 'Mute local volume'}
+                >
+                  {isMuted || localVolume === 0 ? '🔇' : '🔊'}
                 </button>
               </div>
             )}
