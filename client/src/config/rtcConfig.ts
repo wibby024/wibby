@@ -53,108 +53,97 @@ export const AUDIO_MEDIA_CONSTRAINTS: MediaStreamConstraints = {
     echoCancellation: true,
     noiseSuppression: true,
     autoGainControl: true,
-    channelCount: 2,
+    channelCount: 1, // Optimal mono configuration for human voice; prevents phase cancellation and robotic audio
     sampleRate: { ideal: 48000 }
   },
   video: false
 };
 
 export const VIDEO_MEDIA_CONSTRAINTS: MediaTrackConstraints = {
-  width: { ideal: 1920, max: 1920 },
-  height: { ideal: 1080, max: 1080 },
+  width: { ideal: 1280, max: 1920 },
+  height: { ideal: 720, max: 1080 },
   frameRate: { ideal: 30, max: 30 },
-  facingMode: 'user'
+  facingMode: { ideal: 'user' }
 };
 
 /**
- * Device Camera Constraints matching CameraCaptureModal.tsx.
- * Uses ideal 1080p target with facingMode: 'user', allowing the browser
- * to natively access the physical device camera without overconstraint errors.
+ * High-definition Camera Constraints.
+ * Requests ideal 1080p target with 30 FPS ceiling, allowing the browser
+ * to natively access physical camera capability without overconstraint errors.
  */
 export const CAMERA_1080P_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: 'user',
-  width: { ideal: 1920 },
-  height: { ideal: 1080 },
-  frameRate: { ideal: 30 }
+  facingMode: { ideal: 'user' },
+  width: { ideal: 1920, max: 1920 },
+  height: { ideal: 1080, max: 1080 },
+  frameRate: { ideal: 30, max: 30 }
 };
 
-export const DEVICE_CAMERA_CONSTRAINTS: MediaTrackConstraints = CAMERA_1080P_CONSTRAINTS;
+export const CAMERA_720P_CONSTRAINTS: MediaTrackConstraints = {
+  facingMode: { ideal: 'user' },
+  width: { ideal: 1280, max: 1920 },
+  height: { ideal: 720, max: 1080 },
+  frameRate: { ideal: 30, max: 30 }
+};
+
+export const DEVICE_CAMERA_CONSTRAINTS: MediaTrackConstraints = CAMERA_720P_CONSTRAINTS;
 
 export const PRODUCTION_CAMERA_CONSTRAINTS: MediaTrackConstraints[] = [
-  // 1. Primary device camera constraint: Landscape 1080p target @ 30 FPS
+  // 1. Primary device camera constraint: 1080p FHD target @ 30 FPS
   {
-    facingMode: 'user',
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
-    frameRate: { ideal: 30 }
+    facingMode: { ideal: 'user' },
+    width: { ideal: 1920, max: 1920 },
+    height: { ideal: 1080, max: 1080 },
+    frameRate: { ideal: 30, max: 30 }
   },
-  // 2. High-performance 720p HD @ 30 FPS (ultra-smooth 30fps motion on mobile & webcams)
+  // 2. High-performance 720p HD target (ideal 1280x720, up to 1080p) @ 30 FPS
   {
-    facingMode: 'user',
-    width: { ideal: 1280 },
-    height: { ideal: 720 },
-    frameRate: { ideal: 30 }
+    facingMode: { ideal: 'user' },
+    width: { ideal: 1280, max: 1920 },
+    height: { ideal: 720, max: 1080 },
+    frameRate: { ideal: 30, max: 30 }
   },
   // 3. Portrait 1080p target @ 30 FPS (Smartphone held vertically)
   {
-    facingMode: 'user',
-    width: { ideal: 1080 },
-    height: { ideal: 1920 },
-    frameRate: { ideal: 30 }
+    facingMode: { ideal: 'user' },
+    width: { ideal: 1080, max: 1080 },
+    height: { ideal: 1920, max: 1920 },
+    frameRate: { ideal: 30, max: 30 }
   },
   // 4. Portrait 720p HD @ 30 FPS (Smartphone held vertically)
   {
-    facingMode: 'user',
-    width: { ideal: 720 },
-    height: { ideal: 1280 },
-    frameRate: { ideal: 30 }
-  },
-  // 5. Ideal facing mode with high-definition target
-  {
     facingMode: { ideal: 'user' },
+    width: { ideal: 720, max: 1080 },
+    height: { ideal: 1280, max: 1920 },
+    frameRate: { ideal: 30, max: 30 }
+  },
+  // 5. Universal desktop / USB webcam target without facingMode constraint (never drops resolution)
+  {
+    width: { ideal: 1280, max: 1920 },
+    height: { ideal: 720, max: 1080 },
+    frameRate: { ideal: 30, max: 30 }
+  },
+  // 6. Safe baseline HD: ideal 1280x720 (minimum target for normal calls)
+  {
     width: { ideal: 1280 },
     height: { ideal: 720 },
     frameRate: { ideal: 30 }
-  },
-  // 6. Ideal facing mode fallback
-  {
-    facingMode: { ideal: 'user' }
-  },
-  // 7. Exact facing mode fallback
-  {
-    facingMode: 'user'
-  },
-  // 8. Any camera on device
-  {}
-];
-
-export const STEPPED_VIDEO_CONSTRAINTS: MediaTrackConstraints[] = [
-  // 1. Full 1080p Full HD (Target)
-  CAMERA_1080P_CONSTRAINTS,
-  // 2. 720p HD Fallback (Test suite compatibility only)
-  {
-    width: { ideal: 1280, max: 1280 },
-    height: { ideal: 720, max: 720 },
-    frameRate: { ideal: 30, max: 30 },
-    facingMode: 'user'
-  },
-  // 3. 540p qHD Fallback
-  {
-    width: { ideal: 960, max: 960 },
-    height: { ideal: 540, max: 540 },
-    frameRate: { ideal: 30, max: 30 },
-    facingMode: 'user'
-  },
-  // 4. 480p SD Fallback
-  {
-    width: { ideal: 640, max: 640 },
-    height: { ideal: 480, max: 480 },
-    frameRate: { ideal: 24, max: 30 },
-    facingMode: 'user'
   }
 ];
 
-export const FALLBACK_VIDEO_CONSTRAINTS: MediaTrackConstraints = STEPPED_VIDEO_CONSTRAINTS[3];
+export const STEPPED_VIDEO_CONSTRAINTS: MediaTrackConstraints[] = [
+  // 1. Full 1080p Full HD Target
+  CAMERA_1080P_CONSTRAINTS,
+  // 2. 720p HD Standard
+  CAMERA_720P_CONSTRAINTS,
+  // 3. 720p Universal
+  {
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    frameRate: { ideal: 30 }
+  }
+];
+
+export const FALLBACK_VIDEO_CONSTRAINTS: MediaTrackConstraints = STEPPED_VIDEO_CONSTRAINTS[2];
 
 /**
  * Reconnection grace period for persistent call recovery (Level 1 & Level 2)
@@ -164,6 +153,7 @@ export const CALL_RECONNECT_GRACE_PERIOD_MS = 90000; // 90 seconds
 /**
  * Enables Opus In-Band Forward Error Correction (FEC) and optimizes for clear mono speech.
  * Eliminates packet loss dropouts and choppy/stuck voice over wireless networks.
+ * Uses 64 kbps voice target with DTX and in-band FEC without stereo splitting.
  */
 export function formatSdpWithOpusFec(sdp: string): string {
   const match = sdp.match(/a=rtpmap:(\d+)\s+opus\/48000/i);
@@ -178,10 +168,10 @@ export function formatSdpWithOpusFec(sdp: string): string {
         updated += ';useinbandfec=1';
       }
       if (!updated.includes('maxaveragebitrate=')) {
-        updated += ';maxaveragebitrate=128000';
+        updated += ';maxaveragebitrate=64000';
       }
-      if (!updated.includes('stereo=')) {
-        updated += ';stereo=1;sprop-stereo=1';
+      if (!updated.includes('usedtx=')) {
+        updated += ';usedtx=1';
       }
       return `a=fmtp:${pt} ${updated}`;
     });
@@ -189,7 +179,7 @@ export function formatSdpWithOpusFec(sdp: string): string {
 
   return sdp.replace(
     new RegExp(`(a=rtpmap:${pt}\\s+opus\/48000[^\r\n]*)`, 'i'),
-    `$1\r\na=fmtp:${pt} useinbandfec=1;maxaveragebitrate=128000;stereo=1;sprop-stereo=1`
+    `$1\r\na=fmtp:${pt} useinbandfec=1;maxaveragebitrate=64000;usedtx=1`
   );
 }
 

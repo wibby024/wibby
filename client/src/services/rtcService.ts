@@ -249,6 +249,9 @@ export class RTCService {
   private prevTimestamp = 0;
   private currentAudioQuality: CallAudioQuality = 'excellent';
   private consecutivePoorStatsCount = 0;
+  private consecutiveCongestedStatsCount = 0;
+  private consecutiveCleanStatsCount = 0;
+  private currentNetworkAdaptationState: 'normal' | 'degraded_bitrate' | 'degraded_resolution' = 'normal';
   private lastAudioLevelFromStats = 0; // Updated by stats loop, used for native-mode speaking detection
   private onQualityChangeCallback: ((quality: CallAudioQuality, metrics: CallQualityMetrics) => void) | null = null;
   private onTelemetryCallback: ((telemetry: RealtimeCallTelemetry) => void) | null = null;
@@ -395,19 +398,19 @@ export class RTCService {
       throw unsupportedErr;
     }
 
-    // Device camera constraints matching CameraCaptureModal.tsx:
-    // Requests ideal 1080p target with facingMode (or preferred deviceId), allowing the browser
-    // to negotiate the native camera resolution without OverconstrainedError failures.
+    // High-Clarity Camera Constraints:
+    // Requests ideal 1080p/720p target with 30 FPS ceiling, allowing the browser
+    // to negotiate native camera resolution without OverconstrainedError failures.
     const currentFacing = this.currentFacingMode || 'user';
     const constraintsList: MediaTrackConstraints[] = preferredVideoDeviceId
       ? [
-          { deviceId: { exact: preferredVideoDeviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-          { deviceId: { exact: preferredVideoDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          { deviceId: { ideal: preferredVideoDeviceId } }
+          { deviceId: { exact: preferredVideoDeviceId }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 30 } },
+          { deviceId: { ideal: preferredVideoDeviceId }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 30 } },
+          { deviceId: { ideal: preferredVideoDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
         ]
       : PRODUCTION_CAMERA_CONSTRAINTS.map(c => ({
           ...c,
-          facingMode: c.facingMode ? currentFacing : undefined
+          facingMode: c.facingMode ? { ideal: currentFacing } : undefined
         }));
 
     let acquiredStream: MediaStream | null = null;
@@ -476,10 +479,8 @@ export class RTCService {
         this.onFacingModeChangeCallback(this.currentFacingMode);
       }
 
-      if ('contentHint' in vTrack) {
-        vTrack.contentHint = 'motion';
-        console.log('[WIBBY WEBRTC] Applied contentHint = "motion" to camera video track for buttery-smooth 30fps motion');
-      }
+      // Do NOT set contentHint = 'motion' on camera video track as it degrades spatial resolution and causes blocky pixelation!
+      // Native camera capture preserves pristine sharpness and facial detail without artificial downclocking.
 
       console.log('[WIBBY WEBRTC] Actual camera capture settings & capabilities:', {
         label: vTrack.label,
@@ -1033,31 +1034,28 @@ export class RTCService {
 
       const candidateConstraints: MediaTrackConstraints[] = [];
 
-      // 1. If explicit verified deviceId was passed, prioritize it first
+      // 1. If explicit verified deviceId was passed, prioritize it first (always maintaining 720p/1080p target)
       if (isExplicitDeviceId && targetDeviceId) {
         candidateConstraints.push(
-          { deviceId: { exact: targetDeviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-          { deviceId: { exact: targetDeviceId } },
-          { deviceId: targetDeviceId }
+          { deviceId: { exact: targetDeviceId }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 30 } },
+          { deviceId: { ideal: targetDeviceId }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 30 } },
+          { deviceId: targetDeviceId, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
         );
       }
 
-      // 2. Mobile/Tablet standard: Prioritize facingMode constraints ladder without forcing landscape width/height
+      // 2. High-clarity facing mode ladder (ALWAYS specifies ideal 720p/1080p to prevent 640x480 SD drop):
       candidateConstraints.push(
-        { facingMode: { exact: nextFacing } },
-        { facingMode: { exact: nextFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        { facingMode: nextFacing },
-        { facingMode: nextFacing, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        { facingMode: { ideal: nextFacing } },
-        { facingMode: { ideal: nextFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+        { facingMode: { exact: nextFacing }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 30 } },
+        { facingMode: { ideal: nextFacing }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 30 } },
+        { facingMode: { ideal: nextFacing }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
       );
 
       // 3. Fallback for desktop / environments without native facingMode support: try enumerated deviceId
       if (!isExplicitDeviceId && targetDeviceId) {
         candidateConstraints.push(
-          { deviceId: { exact: targetDeviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-          { deviceId: { exact: targetDeviceId } },
-          { deviceId: targetDeviceId }
+          { deviceId: { exact: targetDeviceId }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 30 } },
+          { deviceId: { exact: targetDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+          { deviceId: targetDeviceId, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
         );
       }
 
@@ -1094,7 +1092,7 @@ export class RTCService {
             if (rearDev && rearDev.deviceId && rearDev.deviceId !== trackSettings.deviceId) {
               newVideoTrack.stop();
               const directStream = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: rearDev.deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+                video: { deviceId: { exact: rearDev.deviceId }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 30 } }
               });
               if (directStream && directStream.getVideoTracks().length > 0) {
                 newStream = directStream;
@@ -1116,7 +1114,7 @@ export class RTCService {
             if (frontDev && frontDev.deviceId && frontDev.deviceId !== trackSettings.deviceId) {
               newVideoTrack.stop();
               const directStream = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: frontDev.deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+                video: { deviceId: { exact: frontDev.deviceId }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 30 } }
               });
               if (directStream && directStream.getVideoTracks().length > 0) {
                 newStream = directStream;
@@ -1180,10 +1178,6 @@ export class RTCService {
       this.currentCaptureHeight = finalSettings.height || 0;
       this.currentCaptureFps = Math.round(finalSettings.frameRate || 0);
 
-      if ('contentHint' in newVideoTrack) {
-        newVideoTrack.contentHint = 'motion';
-      }
-
       console.log(`[WIBBY WEBRTC] Camera switch succeeded. Active facingMode: ${this.currentFacingMode}, label: "${newVideoTrack.label}", capture: ${this.currentCaptureWidth}x${this.currentCaptureHeight}`);
 
       // Add new track to local stream
@@ -1227,7 +1221,7 @@ export class RTCService {
     // Recovery: re-acquire previous camera stream so user is never left without video
     try {
       const recoveryStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: previousFacing, width: { ideal: 1920 }, height: { ideal: 1080 } }
+        video: { facingMode: { ideal: previousFacing }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 30 } }
       });
       const recoveryTrack = recoveryStream.getVideoTracks()[0];
       if (recoveryTrack && this.localStream) {
@@ -1736,7 +1730,9 @@ export class RTCService {
       );
       if (!videoTransceiver || typeof videoTransceiver.setCodecPreferences !== 'function') return;
 
-      const capabilities = (RTCRtpReceiver as any).getCapabilities?.('video');
+      const senderCaps = (RTCRtpSender as any).getCapabilities?.('video');
+      const receiverCaps = (RTCRtpReceiver as any).getCapabilities?.('video');
+      const capabilities = receiverCaps || senderCaps;
       if (!capabilities?.codecs) return;
 
       const codecs = [...capabilities.codecs];
@@ -1746,19 +1742,20 @@ export class RTCService {
             const mime = (c.mimeType || '').toLowerCase();
             const fmtp = (c.sdpFmtpLine || '').toLowerCase();
             if (mime.includes('h264')) {
-              // Dedicated hardware encoder on iOS, Android, macOS & Windows (near-zero CPU, buttery 30fps)
-              if (fmtp.includes('profile-level-id=42e0') || fmtp.includes('profile-level-id=640c')) return 100;
-              return 90;
+              // High profile first (640c) for superior clarity and reduced macroblocking, then Constrained Baseline (42e0)
+              if (fmtp.includes('profile-level-id=640c')) return 100;
+              if (fmtp.includes('profile-level-id=42e0')) return 90;
+              return 85;
             }
-            if (mime.includes('vp8')) return 75; // Fast, lightweight software fallback
-            if (mime.includes('vp9')) return 50; // Heavy software encoder, avoided on mobile devices
-            if (mime.includes('av1')) return 30;
+            if (mime.includes('vp8')) return 80; // High-quality, fast universal WebRTC codec
+            if (mime.includes('vp9')) return 60; // High-compression codec
+            if (mime.includes('av1')) return 40;
             return 10;
           };
           return getScore(b) - getScore(a);
         });
         videoTransceiver.setCodecPreferences(codecs);
-        console.log('[WIBBY WEBRTC] Prioritized hardware-accelerated H.264/VP8 video codecs for buttery-smooth 30fps playback');
+        console.log('[WIBBY WEBRTC] Prioritized high-clarity video codecs (H.264 High/Baseline, VP8)');
       } else if (this.videoCodecPreference === 'vp8') {
         codecs.sort((a, b) => {
           const aVP8 = a.mimeType?.toLowerCase().includes('vp8') ? 1 : 0;
@@ -2316,13 +2313,14 @@ export class RTCService {
 
   /**
    * Apply video encoding parameters on RTCRtpSender.
-   * Uses 'maintain-framerate' degradation preference (Guardrail #1) so Chrome
-   * guarantees smooth 30 FPS motion during head and hand movements rather than
-   * dropping framerate to 12-15 FPS.
-   * When screen sharing, switches to 'maintain-resolution' with 5 Mbps budget
-   * so presentation text and fine details remain pin-sharp without downsampling.
+   * Ensures high-clarity 720p (2.0–2.5 Mbps) or 1080p (2.5–4.5 Mbps) @ 30 FPS under normal conditions.
+   * Supports temporary adaptiveOverride during confirmed network congestion, which automatically
+   * recovers back to full quality when network improves.
    */
-  async applyVideoSenderParameters(mode?: VideoQualityMode): Promise<void> {
+  async applyVideoSenderParameters(
+    mode?: VideoQualityMode,
+    adaptiveOverride?: { maxBitrate?: number; scaleResolutionDownBy?: number }
+  ): Promise<void> {
     if (!this.peerConnection) return;
     const currentMode = mode || this.videoQualityMode;
     const videoSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'video');
@@ -2337,48 +2335,57 @@ export class RTCService {
       if (this.isScreenSharing) {
         // SCREEN SHARE: Absolute highest clarity & sharp resolution for slides/documents/code
         params.degradationPreference = 'maintain-resolution';
-        params.encodings[0].maxBitrate = 8_000_000; // 8 Mbps for pristine 1080p+ text
+        params.encodings[0].maxBitrate = 6_000_000; // 6 Mbps for pristine 1080p+ text
         params.encodings[0].maxFramerate = 30;
         params.encodings[0].scaleResolutionDownBy = 1.0;
         if ('minBitrate' in params.encodings[0]) {
           (params.encodings[0] as any).minBitrate = 1_500_000;
         }
       } else {
-        // High clarity & smooth motion optimization:
-        // 'balanced' degradation ensures both fluid 30 FPS motion and sharp resolution without stutter or severe downclocking.
+        // Camera video: 'balanced' ensures smooth 30 FPS motion and sharp spatial detail
         params.degradationPreference = 'balanced';
 
-        // Hard 1080p transmission requirement:
-        // If camera capture is 4K (>=3840 wide), downsample by 2.0 to transmit pristine 1080p.
-        // If camera capture is 1080p (or standard), scaleResolutionDownBy is 1.0 to transmit 1080p.
         const is4KCapture = this.currentCaptureWidth >= 3840;
+        const is1080pCapture = this.currentCaptureWidth >= 1920 || this.currentCaptureHeight >= 1080;
         const baseScale = is4KCapture ? 2.0 : 1.0;
-        const targetBps = Math.min(Math.max(Math.round(this.videoBitrateTargetMbps * 1_000_000), 2_000_000), 6_000_000);
 
-        if (currentMode === 'data-saver') {
-          params.degradationPreference = 'balanced';
-          params.encodings[0].maxBitrate = 900_000;
-          params.encodings[0].maxFramerate = 24;
-          params.encodings[0].scaleResolutionDownBy = baseScale * 1.5;
-        } else if (currentMode === '720p') {
-          params.degradationPreference = 'balanced';
-          params.encodings[0].maxBitrate = 2_000_000;
+        if (adaptiveOverride) {
+          // Dynamic network adaptation (temporary during verified congestion)
+          if (adaptiveOverride.maxBitrate) {
+            params.encodings[0].maxBitrate = adaptiveOverride.maxBitrate;
+          }
+          if (adaptiveOverride.scaleResolutionDownBy) {
+            params.encodings[0].scaleResolutionDownBy = adaptiveOverride.scaleResolutionDownBy;
+          }
           params.encodings[0].maxFramerate = 30;
+        } else if (currentMode === 'data-saver') {
+          // Conservative data-saver: 1.0 Mbps HD, 24 FPS
+          params.encodings[0].maxBitrate = 1_000_000;
+          params.encodings[0].maxFramerate = 24;
           params.encodings[0].scaleResolutionDownBy = baseScale;
-        } else {
-          // Standard / 1080p / auto: Fluid 30 FPS HD transmission with crisp clarity and no buffer queues
-          params.degradationPreference = 'balanced';
-          params.encodings[0].maxBitrate = targetBps;
+        } else if (currentMode === '720p' || (!is1080pCapture && currentMode === 'auto')) {
+          // Normal 720p HD target: 2.0–2.5 Mbps @ 30 FPS (high clarity)
+          params.encodings[0].maxBitrate = 2_200_000;
           params.encodings[0].maxFramerate = 30;
           params.encodings[0].scaleResolutionDownBy = baseScale;
           if ('minBitrate' in params.encodings[0]) {
-            (params.encodings[0] as any).minBitrate = Math.round(targetBps * 0.35);
+            (params.encodings[0] as any).minBitrate = 800_000;
+          }
+        } else {
+          // 1080p FHD target: 3.2–4.5 Mbps @ 30 FPS
+          const default1080pTarget = 3_500_000;
+          const targetBps = Math.min(Math.max(Math.round(this.videoBitrateTargetMbps * 1_000_000), 2_500_000), 4_500_000);
+          params.encodings[0].maxBitrate = targetBps || default1080pTarget;
+          params.encodings[0].maxFramerate = 30;
+          params.encodings[0].scaleResolutionDownBy = baseScale;
+          if ('minBitrate' in params.encodings[0]) {
+            (params.encodings[0] as any).minBitrate = 1_000_000;
           }
         }
       }
 
       await videoSender.setParameters(params);
-      console.log(`[WIBBY WEBRTC] Applied video sender parameters [isScreenSharing=${this.isScreenSharing}, mode=${currentMode}, degradation=${params.degradationPreference}]:`, {
+      console.log(`[WIBBY WEBRTC] Applied video sender parameters [isScreenSharing=${this.isScreenSharing}, mode=${currentMode}, adaptation=${this.currentNetworkAdaptationState}]:`, {
         maxBitrate: params.encodings[0].maxBitrate,
         maxFramerate: params.encodings[0].maxFramerate,
         scaleResolutionDownBy: params.encodings[0].scaleResolutionDownBy,
@@ -2391,8 +2398,8 @@ export class RTCService {
 
   /**
    * Apply optimized audio encoding parameters on RTCRtpSender.
-   * Configures Opus maxBitrate up to 128 kbps (studio clarity) when network allows,
-   * stepping down to 48 kbps under high packet loss or data-saver mode.
+   * Configures Opus maxBitrate at 64 kbps (high-clarity speech) under normal conditions,
+   * stepping down to 32 kbps under data-saver mode.
    */
   async applyAudioSenderParameters(): Promise<void> {
     if (!this.peerConnection) return;
@@ -2404,7 +2411,7 @@ export class RTCService {
       if (!params.encodings || params.encodings.length === 0) {
         params.encodings = [{}];
       }
-      const targetAudioBps = this.videoQualityMode === 'data-saver' ? 48_000 : 128_000;
+      const targetAudioBps = this.videoQualityMode === 'data-saver' ? 32_000 : 64_000;
       params.encodings[0].maxBitrate = targetAudioBps;
       await audioSender.setParameters(params);
       console.log(`[WIBBY AUDIO] Applied audio sender maxBitrate: ${targetAudioBps} bps`);
@@ -3312,14 +3319,60 @@ export class RTCService {
           this.onQualityChangeCallback(quality, metrics);
         }
 
-        // Hard 1080p requirement: Do NOT silently downgrade resolution to 720p/540p.
-        // The sender maintains 1080p @ 30 FPS. Network status badge adapts to show
-        // 'Connection unstable' when packet loss or RTT rises, without degrading resolution.
+        // Intelligent Multi-Stat Network Adaptation (Section 2 & 10)
+        // Only adapt when multiple confirming metrics prove actual sustained congestion.
+        // Never degrade simply due to high RTT when packet loss is 0.
+        const isActuallyCongested = !isTransportDisconnected && (
+          (videoPacketLossRate > 0.08 && videoPacketsLost > 5) ||
+          (packetLossRate > 0.08 && inLost > this.prevPacketsLost + 3) ||
+          (packetLossRate > 0.05 && jitterMs > 100 && rtt > 350) ||
+          (availableOutgoingBitrateKbps > 0 && availableOutgoingBitrateKbps < 900 && (packetLossRate > 0.03 || videoPacketLossRate > 0.03))
+        );
+
+        const isCleanNetwork = !isTransportDisconnected &&
+          packetLossRate <= 0.02 &&
+          videoPacketLossRate <= 0.02 &&
+          jitterMs < 60 &&
+          (availableOutgoingBitrateKbps === 0 || availableOutgoingBitrateKbps > 2000);
+
+        if (isActuallyCongested) {
+          this.consecutiveCongestedStatsCount++;
+          this.consecutiveCleanStatsCount = 0;
+
+          if (this.consecutiveCongestedStatsCount >= 3 && this.currentNetworkAdaptationState === 'normal') {
+            // Tier 1 Congestion: Temporarily step down bitrate to relieve network while keeping full resolution
+            this.currentNetworkAdaptationState = 'degraded_bitrate';
+            const is1080p = this.currentCaptureWidth >= 1920 || this.currentCaptureHeight >= 1080;
+            const adaptiveBitrate = is1080p ? 1_800_000 : 1_200_000;
+            console.warn(`[WIBBY ADAPTIVE] Sustained congestion detected (${(packetLossRate * 100).toFixed(1)}% loss). Temporarily adapting maxBitrate to ${adaptiveBitrate} bps.`);
+            this.applyVideoSenderParameters(undefined, { maxBitrate: adaptiveBitrate }).catch(() => {});
+          } else if (this.consecutiveCongestedStatsCount >= 6 && this.currentNetworkAdaptationState === 'degraded_bitrate' && (packetLossRate > 0.15 || videoPacketLossRate > 0.15)) {
+            // Tier 2 Severe Congestion: Temporarily scale resolution down slightly to prevent call dropout
+            this.currentNetworkAdaptationState = 'degraded_resolution';
+            console.warn(`[WIBBY ADAPTIVE] Severe sustained congestion (${(packetLossRate * 100).toFixed(1)}% loss). Temporarily adapting resolution.`);
+            const baseScale = this.currentCaptureWidth >= 3840 ? 2.0 : 1.0;
+            this.applyVideoSenderParameters(undefined, { maxBitrate: 900_000, scaleResolutionDownBy: baseScale * 1.5 }).catch(() => {});
+          }
+        } else if (isCleanNetwork) {
+          this.consecutiveCleanStatsCount++;
+          this.consecutiveCongestedStatsCount = 0;
+
+          // When network recovers cleanly for 3 consecutive seconds: AUTOMATICALLY RESTORE HIGH QUALITY!
+          if (this.currentNetworkAdaptationState !== 'normal' && this.consecutiveCleanStatsCount >= 3) {
+            console.log('[WIBBY ADAPTIVE] Network conditions improved and stabilized. AUTOMATICALLY RESTORING HIGH-QUALITY VIDEO.');
+            this.currentNetworkAdaptationState = 'normal';
+            this.applyVideoSenderParameters().catch(() => {});
+          }
+        } else {
+          // Conditions in-between: do not abruptly change state
+          this.consecutiveCongestedStatsCount = Math.max(0, this.consecutiveCongestedStatsCount - 1);
+          this.consecutiveCleanStatsCount = Math.max(0, this.consecutiveCleanStatsCount - 1);
+        }
 
         // Update lastAudioLevelFromStats for native-mode speaking detection fallback
         this.lastAudioLevelFromStats = inAudioLevel;
 
-        // Autonomous Frozen-Video Recovery Watchdog (Requirement #3)
+        // Autonomous Frozen-Video Recovery Watchdog (Requirement #3 / #11)
         if (this.callType === 'video' && this.remoteVideoStream) {
           const videoEl = this.remoteVideoElement || (this.remoteVideoElements.size > 0 ? this.remoteVideoElements.values().next().value : null);
           const liveVideoTrack = this.remoteVideoStream.getVideoTracks().find(t => t.readyState === 'live');
@@ -3359,9 +3412,9 @@ export class RTCService {
           }
         }
 
-        // Log 1s stats sample for developer forensic analysis
+        // Log 1s stats sample for developer forensic analysis (Section 16)
         console.log(
-          `[WIBBY RTP STATS][1s] Capture: ${this.currentCaptureWidth}x${this.currentCaptureHeight}@${this.currentCaptureFps}fps | Send: ${sendWidth}x${sendHeight}@${sendFps}fps (${sendBitrateMbps}Mbps, enc: ${encoderImplementation || 'default'}, limit: ${qualityLimitationReason}) | Recv: ${receiveWidth}x${receiveHeight}@${receiveFps}fps (${receiveBitrateMbps}Mbps, dec: ${decoderImplementation || 'default'}, drop: ${framesDropped}) | Motion: ${this.peakMotionBitrateMbps}Mbps | RTT: ${rtt}ms`
+          `[WIBBY RTP STATS][1s] Capture: ${this.currentCaptureWidth}x${this.currentCaptureHeight}@${this.currentCaptureFps}fps | Send: ${sendWidth}x${sendHeight}@${sendFps}fps (${Math.round(sendBitrateMbps * 1000)} kbps, codec: ${this.activeNegotiatedVideoCodec || 'H264/VP8'}, limit: ${qualityLimitationReason}) | Recv: ${receiveWidth}x${receiveHeight}@${receiveFps}fps (${Math.round(receiveBitrateMbps * 1000)} kbps, loss: ${(videoPacketLossRate * 100).toFixed(1)}%) | RTT: ${rtt}ms | Adaptation: ${this.currentNetworkAdaptationState}`
         );
       } catch (e) {
         // Silently ignore stats reading errors
@@ -3377,6 +3430,9 @@ export class RTCService {
     this.lastRemoteVideoCurrentTime = -1;
     this.lastRemoteVideoProgressTimestamp = 0;
     this.lastWatchdogRecoveryTimestamp = 0;
+    this.consecutiveCongestedStatsCount = 0;
+    this.consecutiveCleanStatsCount = 0;
+    this.currentNetworkAdaptationState = 'normal';
   }
 
   /**
@@ -3625,6 +3681,9 @@ export class RTCService {
     this.onQualityChangeCallback = null;
     this.currentAudioQuality = 'excellent';
     this.consecutivePoorStatsCount = 0;
+    this.consecutiveCongestedStatsCount = 0;
+    this.consecutiveCleanStatsCount = 0;
+    this.currentNetworkAdaptationState = 'normal';
     this.onScreenSharingEndedCallback = null;
   }
 }
