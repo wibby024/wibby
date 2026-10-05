@@ -79,9 +79,9 @@ app.use("/api/conversations/:conversationId/messages", messagesRouter);
 app.use("/api/conversations/:conversationId/media", mediaRouter);
 app.use("/api/conversations/:conversationId/stories", storiesRouter);
 // Public cached avatar stream endpoint (allows cross-origin img tags in browser & mobile)
-app.get(["/api/users/avatar-file/*", "/api/conversations/media/avatars/*"], async (req, res) => {
+app.get(["/api/users/avatar-file/*key", "/api/conversations/media/avatars/*key"], async (req, res) => {
   try {
-    const rawParam = (req.params as any)[0] as string;
+    const rawParam = req.params.key as string;
     const key = rawParam.startsWith("avatars/") ? rawParam : `avatars/${rawParam}`;
     if (!key || key.includes("..")) {
       return res.status(400).json({ error: "Invalid avatar key" });

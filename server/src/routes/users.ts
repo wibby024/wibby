@@ -246,9 +246,9 @@ router.put('/profile', requireAuth, async (req: Request, res: Response) => {
 });
 
 // Public cached avatar stream endpoint (allows cross-origin img tags in browser & mobile)
-router.get('/avatar-file/*', async (req: Request, res: Response) => {
+router.get('/avatar-file/*key', async (req: Request, res: Response) => {
   try {
-    const rawKey = (req.params as any)[0] as string;
+    const rawKey = req.params.key as string;
     const key = rawKey.startsWith('avatars/') ? rawKey : `avatars/${rawKey}`;
     if (!key || key.includes('..')) {
       return res.status(400).json({ error: 'Invalid avatar key' });
