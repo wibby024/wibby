@@ -1961,6 +1961,27 @@ video.is-screen-share {
   animation: screen-share-pulse 2s ease-in-out infinite;
 }
 
+/* Movie Mode / Watch Together Button */
+.call-btn.movie-ctrl {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--wibby-text, #fff);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, color 0.2s;
+}
+
+.call-btn.movie-ctrl:hover {
+  background: rgba(124, 58, 237, 0.25);
+  border-color: rgba(167, 139, 250, 0.5);
+  color: #fff;
+}
+
+.call-btn.movie-ctrl.active {
+  background: #7c3aed;
+  border-color: #a78bfa;
+  color: #fff;
+  box-shadow: 0 4px 18px rgba(124, 58, 237, 0.45);
+}
+
 @keyframes screen-share-pulse {
 
   0%,

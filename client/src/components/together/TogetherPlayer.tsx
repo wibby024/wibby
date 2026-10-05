@@ -146,6 +146,8 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   const isScrubbingRef = useRef<boolean>(false);
   const scrubTargetPosRef = useRef<number>(0);
   const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number }>({ x: 0, y: 0, posX: 0, posY: 0 });
+  const pendingSeekTargetRef = useRef<number | null>(null);
+  const seekClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isPlaying = Boolean(session && (session.state === 'playing' || session.playing || session.isPlaying));
 
@@ -531,40 +533,40 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
         const absDrift = Math.abs(drift);
 
         if (session.mediaType === 'direct' && videoRef.current) {
-          if (absDrift < 0.5) {
-            // In comfortable sync; maintain normal 1.0x playback rate
+          if (absDrift < 0.30) {
+            // < 0.30s: In comfortable sync; maintain normal 1.0x playback rate
             if (videoRef.current.playbackRate !== 1.0) {
               videoRef.current.playbackRate = 1.0;
             }
-          } else if (absDrift <= 1.8) {
-            // Seamless micro-catchup via playback rate without audio stutter or seeking
-            if (drift < -0.5) {
-              videoRef.current.playbackRate = 1.05;
-            } else if (drift > 0.5) {
-              videoRef.current.playbackRate = 0.95;
+          } else if (absDrift <= 1.0) {
+            // 0.30–1.0s: Gentle playback-rate correction without audio stutter or seeking
+            if (drift < -0.30) {
+              videoRef.current.playbackRate = 1.03;
+            } else if (drift > 0.30) {
+              videoRef.current.playbackRate = 0.97;
             }
           } else {
-            // Substantial drift (> 1.8s) - perform clean seek
+            // > 1.0s: Substantial drift - perform controlled seek
             videoRef.current.playbackRate = 1.0;
             isRemoteSyncingRef.current = true;
             videoRef.current.currentTime = expectedPos;
             setTimeout(() => {
               isRemoteSyncingRef.current = false;
-            }, 500);
+            }, 400);
           }
         } else if (session.mediaType === 'youtube' && iframeRef.current) {
-          // For YouTube, only seek if drift is noticeably large (> 2.0s) to prevent buffering loops
-          if (absDrift > 2.0) {
+          // For YouTube, perform clean seek when drift exceeds 1.2s
+          if (absDrift > 1.2) {
             isRemoteSyncingRef.current = true;
             sendYouTubeCommandRef.current('seekTo', [expectedPos, true]);
             currentPosRef.current = expectedPos;
             setTimeout(() => {
               isRemoteSyncingRef.current = false;
-            }, 600);
+            }, 500);
           }
         }
       }
-    }, 2500);
+    }, 2000);
 
     return () => clearInterval(driftInterval);
   }, [isPlaying, session, user?.uid]);
@@ -833,9 +835,12 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
 
   const handleSeekRelative = (seconds: number) => {
     if (!socket || !session) return;
-    const currentPos = getCurrentPosition();
-    const newPos = Math.max(0, currentPos + seconds);
+    const basePos = pendingSeekTargetRef.current !== null
+      ? pendingSeekTargetRef.current
+      : getCurrentPosition();
+    const newPos = Math.max(0, duration > 0 ? Math.min(basePos + seconds, duration) : basePos + seconds);
 
+    pendingSeekTargetRef.current = newPos;
     isLocalActionRef.current = true;
     currentPosRef.current = newPos;
     setPlaybackPos(newPos);
@@ -849,6 +854,13 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     } else if (videoRef.current) {
       videoRef.current.currentTime = newPos;
     }
+
+    if (seekClearTimeoutRef.current) {
+      clearTimeout(seekClearTimeoutRef.current);
+    }
+    seekClearTimeoutRef.current = setTimeout(() => {
+      pendingSeekTargetRef.current = null;
+    }, 600);
 
     socket.emit('together:control', {
       conversationId,
@@ -866,6 +878,11 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   // Commit arbitrary seek (called on pointer-up or keyboard committed change)
   const handleArbitrarySeek = (targetSec: number) => {
     if (!socket || !session) return;
+    pendingSeekTargetRef.current = null;
+    if (seekClearTimeoutRef.current) {
+      clearTimeout(seekClearTimeoutRef.current);
+    }
+
     const clamped = Math.max(0, duration > 0 ? Math.min(targetSec, duration) : targetSec);
 
     isLocalActionRef.current = true;

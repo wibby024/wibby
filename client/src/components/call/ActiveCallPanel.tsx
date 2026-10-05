@@ -111,7 +111,9 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   movieInput,
   setMovieInput,
   handleStartMovie,
-  partner
+  partner,
+  isVideo = true,
+  isLocalMuted = false
 }: {
   viewMode: 'grid' | 'stacked' | 'pip' | 'screenshare' | 'moviemode';
   setViewMode: React.Dispatch<React.SetStateAction<'stacked' | 'pip' | 'screenshare' | 'moviemode'>>;
@@ -151,6 +153,8 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   setMovieInput?: React.Dispatch<React.SetStateAction<string>>;
   handleStartMovie?: (url: string) => void;
   partner?: any;
+  isVideo?: boolean;
+  isLocalMuted?: boolean;
 }) {
   const localPanelRef = useRef<HTMLDivElement | null>(null);
   const posRef = useRef<{ x: number; y: number } | null>(null);
@@ -649,24 +653,38 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                       el.play().catch(() => { });
                     }
                   }}
-                  className={`call-video-fg-live ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
+                  className={`call-video-fg-live ${(!isVideo || isRemoteCameraOff || !isConnected) ? 'hidden' : ''}`}
                   autoPlay
                   playsInline
                   muted
                 />
-                {(isRemoteCameraOff || !isConnected) && (
+                {(!isVideo || isRemoteCameraOff || !isConnected) && (
                   <div className="call-video-placeholder">
-                    <div className="call-avatar-wrapper" style={{ width: 44, height: 44 }}>
-                      <div className="call-avatar" style={{ width: 40, height: 40, fontSize: 16 }}>
-                        {avatar ? <img src={avatar} alt="" /> : <span>{initial}</span>}
+                    <div className="call-avatar-wrapper" style={{ width: 48, height: 48, position: 'relative' }}>
+                      {isConnected && isRemoteSpeaking && <div className="call-pulse-ring speaking" />}
+                      <div className={`call-avatar ${isRemoteSpeaking ? 'avatar-speaking' : ''}`} style={{ width: 44, height: 44, fontSize: 17 }}>
+                        {avatar ? (
+                          <img
+                            src={resolveAvatarUrl(avatar) || avatar}
+                            alt=""
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <span>{initial}</span>
+                        )}
                       </div>
                     </div>
                   </div>
                 )}
-                <div className="call-moviemode-tile-badge">{partnerName}</div>
+                <div className="call-moviemode-tile-badge">
+                  <span>{partnerName}</span>
+                  {isRemoteMuted && <span style={{ marginLeft: 4, opacity: 0.85 }}>🔇</span>}
+                </div>
               </div>
 
-              {/* Bottom Tile: You (Live Local Camera Feed) */}
+              {/* Bottom Tile: You (Live Local Camera Feed or Avatar) */}
               <div className={`call-moviemode-user-tile local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''}`}>
                 <video
                   ref={(el) => {
@@ -680,22 +698,25 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                       el.play().catch(() => { });
                     }
                   }}
-                  className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
+                  className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${(!isVideo || isCameraOff || isCameraUnavailable) ? 'hidden' : ''}`}
                   autoPlay
                   playsInline
                   muted
                 />
-                {(isCameraOff || isCameraUnavailable) && (
+                {(!isVideo || isCameraOff || isCameraUnavailable) && (
                   <div className="call-video-placeholder">
-                    <div className="call-avatar-wrapper" style={{ width: 44, height: 44 }}>
-                      <div className="call-avatar" style={{ width: 40, height: 40, fontSize: 16 }}>
+                    <div className="call-avatar-wrapper" style={{ width: 48, height: 48, position: 'relative' }}>
+                      <div className="call-avatar" style={{ width: 44, height: 44, fontSize: 17 }}>
                         <span>Y</span>
                       </div>
                     </div>
                   </div>
                 )}
-                <div className="call-moviemode-tile-badge">You</div>
-                {!isCameraOff && !isCameraUnavailable && (
+                <div className="call-moviemode-tile-badge">
+                  <span>You</span>
+                  {isLocalMuted && <span style={{ marginLeft: 4, opacity: 0.85 }}>🔇</span>}
+                </div>
+                {isVideo && !isCameraOff && !isCameraUnavailable && (
                   <button
                     type="button"
                     className="call-panel-switch-cam-btn"
@@ -721,12 +742,15 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                       e.stopPropagation();
                       flipCamera();
                     }}
-                    title={currentFacingMode === 'user' ? 'Switch camera' : 'Front camera'}
+                    title="Switch camera"
+                    aria-label="Switch camera"
                   >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polyline points="23 4 23 10 17 10" />
-                      <polyline points="1 20 1 14 7 14" />
-                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 7h-3a2 2 0 0 1-2-2V2" />
+                      <path d="M9 2H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5" />
+                      <path d="M14 2v3a2 2 0 0 0 2 2h4" />
+                      <circle cx="10" cy="13" r="3" />
+                      <path d="M16 10l2 2-2 2" />
                     </svg>
                   </button>
                 )}
@@ -1234,9 +1258,9 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
   const isVideo = activeCall.callType === 'video';
 
   // -------------------------------------------------------------
-  // VIDEO CALL LAYOUT (Phase 9)
+  // CALL PRESENTATION STAGE (Video Call or Movie Mode)
   // -------------------------------------------------------------
-  if (isVideo) {
+  if (isVideo || viewMode === 'moviemode') {
     return (
       <div
         ref={containerRef}
@@ -1265,8 +1289,8 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
           localVideoRef={localVideoRef}
           screenVideoRef={screenVideoRef}
           remoteScreenVideoRef={remoteScreenVideoRef}
-          isRemoteCameraOff={isRemoteCameraOff}
-          isCameraOff={isCameraOff}
+          isRemoteCameraOff={!isVideo || isRemoteCameraOff}
+          isCameraOff={!isVideo || isCameraOff}
           isCameraUnavailable={isCameraUnavailable}
           isRemoteMuted={isRemoteMuted}
           isConnected={isConnected}
@@ -1275,7 +1299,7 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
           isRemoteSpeaking={isRemoteSpeaking}
           partnerName={partnerName}
           initial={initial}
-          avatar={resolveAvatarUrl(activeCall.remoteUser.avatar) || undefined}
+          avatar={resolveAvatarUrl(activeCall.remoteUser.avatar) || activeCall.remoteUser.avatar || undefined}
           flipCamera={flipCamera}
           currentFacingMode={currentFacingMode}
           stopScreenSharing={stopScreenSharing}
@@ -1287,6 +1311,8 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
           setMovieInput={setMovieInput}
           handleStartMovie={handleStartMovie}
           partner={partner}
+          isVideo={isVideo}
+          isLocalMuted={activeCall.isMuted}
         />
 
         {/* Top Bar Header (Auto-Hiding) */}
@@ -1353,6 +1379,25 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
                 </svg>
                 <span>Split View</span>
               </button>
+            )}
+
+            {/* Audio Output Device Selector in Video / Movie Mode */}
+            {isConnected && availableOutputDevices.length > 1 && (
+              <div className="call-device-selector-wrap" style={{ margin: '0 4px', maxWidth: 160 }}>
+                <select
+                  className="call-device-select"
+                  value={selectedOutputDeviceId || ''}
+                  onChange={(e) => setAudioOutputDevice(e.target.value)}
+                  title="Select audio output device"
+                >
+                  <option value="">Default Speaker</option>
+                  {availableOutputDevices.map((d) => (
+                    <option key={d.deviceId} value={d.deviceId}>
+                      {d.label || `Device ${d.deviceId.slice(0, 5)}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
 
             {/* Fullscreen Button */}
@@ -1518,33 +1563,35 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
             </span>
           </div>
 
-          {/* Camera Toggle Button */}
-          <div className="call-control-item">
-            <button
-              type="button"
-              className={`call-btn video-ctrl ${isCameraOff || isCameraUnavailable ? 'muted' : 'active'}`}
-              onClick={toggleCamera}
-              disabled={isCameraUnavailable}
-              title={isCameraOff ? 'Turn on camera' : 'Turn off camera'}
-              aria-label={isCameraOff ? 'Turn on camera' : 'Turn off camera'}
-            >
-              {isCameraOff || isCameraUnavailable ? (
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                  <path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56" />
-                </svg>
-              ) : (
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="23 7 16 12 23 17 23 7" />
-                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                </svg>
-              )}
-            </button>
-            <span className="call-btn-label">{isCameraOff ? 'Camera off' : 'Camera on'}</span>
-          </div>
+          {/* Camera Toggle Button (Visible in Video Calls) */}
+          {isVideo && (
+            <div className="call-control-item">
+              <button
+                type="button"
+                className={`call-btn video-ctrl ${isCameraOff || isCameraUnavailable ? 'muted' : 'active'}`}
+                onClick={toggleCamera}
+                disabled={isCameraUnavailable}
+                title={isCameraOff ? 'Turn on camera' : 'Turn off camera'}
+                aria-label={isCameraOff ? 'Turn on camera' : 'Turn off camera'}
+              >
+                {isCameraOff || isCameraUnavailable ? (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                    <path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56" />
+                  </svg>
+                ) : (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="23 7 16 12 23 17 23 7" />
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                  </svg>
+                )}
+              </button>
+              <span className="call-btn-label">{isCameraOff ? 'Camera off' : 'Camera on'}</span>
+            </div>
+          )}
 
-          {/* Flip / Switch Camera Button — always visible in video calls */}
-          {!isCameraOff && !isCameraUnavailable && (
+          {/* Flip / Switch Camera Button — visible when camera is active in video calls */}
+          {isVideo && !isCameraOff && !isCameraUnavailable && (
             <div className="call-control-item">
               <button
                 type="button"
@@ -1623,6 +1670,9 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
                   setViewMode('stacked');
                 } else {
                   setViewMode('moviemode');
+                  if (!movieUrl && socket && activeCall?.conversationId) {
+                    socket.emit('together:get-state', { conversationId: activeCall.conversationId });
+                  }
                 }
               }}
               title={viewMode === 'moviemode' ? 'Exit Movie Mode' : 'Movie Mode (Watch Together in Call)'}
@@ -1877,6 +1927,31 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
 
         {/* Action Controls */}
         <div className="call-actions">
+          {/* Watch Together in Voice Call */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <button
+              id="voice-movie-mode-btn"
+              type="button"
+              className="call-btn movie-ctrl"
+              onClick={() => {
+                setViewMode('moviemode');
+                if (!movieUrl && socket && activeCall?.conversationId) {
+                  socket.emit('together:get-state', { conversationId: activeCall.conversationId });
+                }
+              }}
+              title="Watch Together in Call"
+              aria-label="Watch Together in Call"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                <line x1="7" y1="2" x2="7" y2="22" />
+                <line x1="17" y1="2" x2="17" y2="22" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+              </svg>
+            </button>
+            <span className="call-btn-label">Watch</span>
+          </div>
+
           {/* Mute Button */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <button

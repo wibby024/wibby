@@ -315,11 +315,22 @@ function WibbyAppWrapper() {
 
     const handleTogetherStarted = (data: any) => {
       if (data.conversationId === conversationId) {
-        if (!isCallActive) {
-          setShowTogether(true);
-        } else {
+        setShowTogether(true);
+        if (isCallActive) {
           window.dispatchEvent(new CustomEvent('wibby:open-moviemode'));
         }
+      }
+    };
+
+    const handleTogetherState = (data: any) => {
+      if (data?.conversationId === conversationId && data?.mediaUrl) {
+        setShowTogether(true);
+      }
+    };
+
+    const handleTogetherEnded = (data: any) => {
+      if (data?.conversationId === conversationId) {
+        setShowTogether(false);
       }
     };
 
@@ -381,6 +392,8 @@ function WibbyAppWrapper() {
 
     socket.on('presence:update', handlePresence);
     socket.on('together:started', handleTogetherStarted);
+    socket.on('together:state', handleTogetherState);
+    socket.on('together:ended', handleTogetherEnded);
     socket.on('user:profile_updated', handlePartnerProfileUpdated);
     socket.on('unpair', handleUnpair);
     socket.on('session:conflict', handleSessionConflict);
@@ -390,13 +403,15 @@ function WibbyAppWrapper() {
     return () => {
       socket.off('presence:update', handlePresence);
       socket.off('together:started', handleTogetherStarted);
+      socket.off('together:state', handleTogetherState);
+      socket.off('together:ended', handleTogetherEnded);
       socket.off('user:profile_updated', handlePartnerProfileUpdated);
       socket.off('unpair', handleUnpair);
       socket.off('session:conflict', handleSessionConflict);
       socket.off('session:force_logout', handleForceLogout);
       socket.off('new_message', handleNewMessage);
     };
-  }, [socket, conversationId, signOut, user, partner]);
+  }, [socket, conversationId, signOut, user, partner, isCallActive]);
 
   // Window focus & visibility reset for unread notifications & presence sync
   useEffect(() => {
