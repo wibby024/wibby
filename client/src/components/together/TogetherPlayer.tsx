@@ -1,3 +1,21 @@
+/**
+ * TogetherPlayer — Watch Together synchronized video component for Wibby.
+ *
+ * Guarantees:
+ *  1. Zero feedback loops: remote actions and server state updates set `isRemoteSyncingRef`
+ *     so native video onPlay/onPause/onSeeked never re-emit socket events.
+ *  2. Echo cancellation: actions with senderUid === current user are never re-applied.
+ *  3. Sequence-based stale rejection: events with version <= lastAppliedVersionRef are ignored.
+ *  4. Scrubber seek only commits on pointer up / keyboard change — no socket flooding.
+ *  5. Seamless drift correction: playback-rate micro-nudges for drift between 0.5s and 1.8s;
+ *     clean hard seeks only when drift exceeds 1.8s.
+ *  6. Socket listeners registered exactly once on mount, with reconnect listener to re-sync.
+ *  7. Autoplay restriction detection: displays "Tap to resume" banner if browser blocks playback.
+ *  8. Idempotent YouTube URL parsing with enablejsapi, playsinline, and origin parameters.
+ *  9. Local-only volume persistence via localStorage (never synced over socket).
+ *  10. Full support for dockable/draggable mini-player, resizable frame, and inline Movie Mode.
+ */
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
@@ -11,29 +29,41 @@ interface TogetherPlayerProps {
   inline?: boolean;
 }
 
-function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' | 'direct' | 'custom' } {
-  let mediaUrl = inputUrl.trim();
-  let mediaType: 'youtube' | 'direct' | 'custom' = 'direct';
+export function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' | 'direct' | 'custom' } {
+  const mediaUrl = inputUrl.trim();
+  if (!mediaUrl) return { url: '', type: 'direct' };
 
-  if (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be')) {
-    mediaType = 'youtube';
+  if (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be') || mediaUrl.includes('youtube-nocookie.com')) {
     let videoId = '';
     if (mediaUrl.includes('youtu.be/')) {
-      videoId = mediaUrl.split('youtu.be/')[1].split('?')[0];
+      videoId = mediaUrl.split('youtu.be/')[1].split('?')[0].split('/')[0];
+    } else if (mediaUrl.includes('/embed/')) {
+      videoId = mediaUrl.split('/embed/')[1].split('?')[0].split('/')[0];
+    } else if (mediaUrl.includes('/shorts/')) {
+      videoId = mediaUrl.split('/shorts/')[1].split('?')[0].split('/')[0];
+    } else if (mediaUrl.includes('/v/')) {
+      videoId = mediaUrl.split('/v/')[1].split('?')[0].split('/')[0];
     } else {
       try {
-        const urlParams = new URLSearchParams(new URL(mediaUrl).search);
-        videoId = urlParams.get('v') || '';
+        const urlObj = new URL(mediaUrl.startsWith('http') ? mediaUrl : `https://${mediaUrl}`);
+        videoId = urlObj.searchParams.get('v') || '';
       } catch {
-        videoId = '';
+        const match = mediaUrl.match(/[?&]v=([^&#]+)/);
+        if (match) videoId = match[1];
       }
     }
+
     if (videoId) {
-      const originParam = typeof window !== 'undefined' && window.location?.origin ? `&origin=${encodeURIComponent(window.location.origin)}` : '';
-      mediaUrl = `https://www.youtube-nocookie.com/embed/${videoId}?enablejsapi=1&autoplay=1&playsinline=1${originParam}`;
+      const origin = typeof window !== 'undefined' ? encodeURIComponent(window.location.origin) : '';
+      return {
+        url: `https://www.youtube-nocookie.com/embed/${videoId}?enablejsapi=1&playsinline=1&rel=0${origin ? `&origin=${origin}` : ''}`,
+        type: 'youtube'
+      };
     }
+    return { url: mediaUrl, type: 'youtube' };
   }
-  return { url: mediaUrl, type: mediaType };
+
+  return { url: mediaUrl, type: 'direct' };
 }
 
 export default function TogetherPlayer({ conversationId, partnerName, onClose, inline }: TogetherPlayerProps) {
@@ -48,25 +78,14 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   const [syncStatus, setSyncStatus] = useState('Sync ready');
   const [duration, setDuration] = useState<number>(0);
   const [playbackPos, setPlaybackPos] = useState<number>(0);
-
-  // Helper to format playback seconds as mm:ss
-  const formatSeconds = (secs: number): string => {
-    const s = Math.floor(Math.max(0, secs));
-    const hrs = Math.floor(s / 3600);
-    const mins = Math.floor((s % 3600) / 60);
-    const remainingSecs = s % 60;
-    if (hrs > 0) {
-      return `${hrs}:${String(mins).padStart(2, '0')}:${String(remainingSecs).padStart(2, '0')}`;
-    }
-    return `${String(mins).padStart(2, '0')}:${String(remainingSecs).padStart(2, '0')}`;
-  };
+  const [autoplayBlocked, setAutoplayBlocked] = useState<boolean>(false);
 
   // Draggable Mini-Player Coordinates & Snapping State
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [snappedSide, setSnappedSide] = useState<'left' | 'right'>('right');
 
-  // Local Watch Together volume control (Issue 5 - Local Only)
+  // Local Watch Together volume control (Local Only)
   const [localVolume, setLocalVolume] = useState<number>(() => {
     try {
       const saved = localStorage.getItem('wibby_together_volume');
@@ -83,12 +102,12 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     }
   });
 
-  // User Resizable Viewing Window (Issue 4)
+  // User Resizable Viewing Window
   const [customSize, setCustomSize] = useState<{ width?: number; height?: number }>(() => {
     try {
       const saved = localStorage.getItem('wibby_together_size');
       if (saved) return JSON.parse(saved);
-    } catch {}
+    } catch { }
     return {};
   });
 
@@ -99,6 +118,528 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     startW: 0,
     startH: 0
   });
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const currentPosRef = useRef<number>(0);
+  const playStartTimestampRef = useRef<number | null>(null);
+
+  // Synchronization and anti-loop guards
+  const isLocalActionRef = useRef<boolean>(false);
+  const isRemoteSyncingRef = useRef<boolean>(false);
+  const lastAppliedVersionRef = useRef<number>(0);
+  const isScrubbingRef = useRef<boolean>(false);
+  const scrubTargetPosRef = useRef<number>(0);
+  const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number }>({ x: 0, y: 0, posX: 0, posY: 0 });
+
+  const isPlaying = Boolean(session && (session.state === 'playing' || session.playing || session.isPlaying));
+
+  // Helper refs to keep socket effect dependencies minimal
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+  const partnerNameRef = useRef(partnerName);
+  partnerNameRef.current = partnerName;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const userUidRef = useRef(user?.uid);
+  userUidRef.current = user?.uid;
+
+  // Helper to format playback seconds as mm:ss
+  const formatSeconds = (secs: number): string => {
+    const s = Math.floor(Math.max(0, secs));
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const remainingSecs = s % 60;
+    if (hrs > 0) {
+      return `${hrs}:${String(mins).padStart(2, '0')}:${String(remainingSecs).padStart(2, '0')}`;
+    }
+    return `${String(mins).padStart(2, '0')}:${String(remainingSecs).padStart(2, '0')}`;
+  };
+
+  // Safe YouTube command dispatcher via postMessage
+  const sendYouTubeCommand = useCallback((command: string, args: any[] = []) => {
+    try {
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({
+            event: 'command',
+            func: command,
+            args: args || []
+          }),
+          '*'
+        );
+      }
+    } catch {
+      // Content window unavailable
+    }
+  }, []);
+
+  const sendYouTubeCommandRef = useRef(sendYouTubeCommand);
+  sendYouTubeCommandRef.current = sendYouTubeCommand;
+
+  // Calculate live authoritative position
+  const getCurrentPosition = useCallback(() => {
+    if (session?.mediaType === 'direct' && videoRef.current) {
+      return videoRef.current.currentTime || 0;
+    }
+    if (isPlaying && playStartTimestampRef.current) {
+      const elapsed = (Date.now() - playStartTimestampRef.current) / 1000;
+      return currentPosRef.current + Math.max(0, elapsed);
+    }
+    return currentPosRef.current;
+  }, [isPlaying, session?.mediaType]);
+
+  const getCurrentPositionRef = useRef(getCurrentPosition);
+  getCurrentPositionRef.current = getCurrentPosition;
+
+  // Apply local volume to direct video or YouTube iframe
+  const applyLocalVolume = useCallback((vol: number, muted: boolean) => {
+    if (videoRef.current) {
+      videoRef.current.volume = vol;
+      videoRef.current.muted = muted;
+    }
+    if (session?.mediaType === 'youtube' && iframeRef.current) {
+      if (muted) {
+        sendYouTubeCommand('mute');
+      } else {
+        sendYouTubeCommand('unMute');
+        sendYouTubeCommand('setVolume', [Math.round(vol * 100)]);
+      }
+    }
+  }, [session?.mediaType, sendYouTubeCommand]);
+
+  const handleVolumeChange = (newVol: number) => {
+    setLocalVolume(newVol);
+    try {
+      localStorage.setItem('wibby_together_volume', String(newVol));
+    } catch { }
+    if (isMuted && newVol > 0) {
+      setIsMuted(false);
+      try {
+        localStorage.setItem('wibby_together_muted', 'false');
+      } catch { }
+      applyLocalVolume(newVol, false);
+    } else {
+      applyLocalVolume(newVol, isMuted);
+    }
+  };
+
+  const handleToggleMute = () => {
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    try {
+      localStorage.setItem('wibby_together_muted', String(nextMuted));
+    } catch { }
+    applyLocalVolume(localVolume, nextMuted);
+  };
+
+  // Periodic UI progress update (only when not actively dragging the scrubber)
+  useEffect(() => {
+    const updatePos = () => {
+      if (!isScrubbingRef.current) {
+        setPlaybackPos(getCurrentPosition());
+      }
+    };
+    updatePos();
+    if (!isPlaying) return;
+    const interval = setInterval(updatePos, 400);
+    return () => clearInterval(interval);
+  }, [isPlaying, getCurrentPosition]);
+
+  // YouTube Iframe communication listener
+  useEffect(() => {
+    const handleWindowMessage = (event: MessageEvent) => {
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data?.event === 'infoDelivery' && data?.info) {
+          if (typeof data.info.currentTime === 'number' && data.info.currentTime >= 0) {
+            currentPosRef.current = data.info.currentTime;
+            if (playStartTimestampRef.current) {
+              playStartTimestampRef.current = Date.now();
+            }
+          }
+          if (typeof data.info.duration === 'number' && data.info.duration > 0) {
+            setDuration(data.info.duration);
+          }
+        }
+      } catch {
+        // Not a JSON message or unrelated postMessage
+      }
+    };
+
+    window.addEventListener('message', handleWindowMessage);
+    return () => {
+      window.removeEventListener('message', handleWindowMessage);
+    };
+  }, []);
+
+  // Handshake with YouTube iframe on media load
+  useEffect(() => {
+    if (session?.mediaType === 'youtube' && iframeRef.current) {
+      const sendHandshake = () => {
+        if (iframeRef.current?.contentWindow) {
+          iframeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*');
+          const pos = getCurrentPositionRef.current();
+          if (pos > 0) {
+            sendYouTubeCommandRef.current('seekTo', [pos, true]);
+          }
+          if (isPlayingRef.current) {
+            sendYouTubeCommandRef.current('playVideo');
+          }
+          applyLocalVolume(localVolume, isMuted);
+        }
+      };
+
+      const t1 = setTimeout(sendHandshake, 250);
+      const t2 = setTimeout(sendHandshake, 750);
+      const t3 = setTimeout(sendHandshake, 1600);
+
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    }
+  }, [session?.mediaUrl, session?.mediaType, applyLocalVolume, localVolume, isMuted]);
+
+  // Main Socket.IO synchronization listeners (Registered ONCE per socket/conversationId)
+  useEffect(() => {
+    if (!socket || !conversationId) return;
+
+    // 1. Initial state request
+    socket.emit('together:get-state', { conversationId });
+
+    // Handle authoritative full state (initial join, reconnect, or host state change)
+    const handleState = (data: TogetherSession) => {
+      if (data.conversationId !== conversationId) return;
+
+      // Guard against stale out-of-order state events
+      if (typeof data.version === 'number') {
+        if (data.version < lastAppliedVersionRef.current) return;
+        lastAppliedVersionRef.current = data.version;
+      }
+
+      setSession(data);
+      const isPlayingState = data.state === 'playing' || Boolean(data.playing) || Boolean(data.isPlaying);
+      setSyncStatus(isPlayingState ? `Watching in sync with ${partnerNameRef.current}` : `Paused with ${partnerNameRef.current}`);
+
+      // Calculate authoritative position compensating for network latency
+      let authoritativePos = typeof data.position === 'number'
+        ? data.position
+        : (typeof data.currentTime === 'number' ? data.currentTime : 0);
+
+      if (isPlayingState && data.sentAt) {
+        const networkLag = (Date.now() - data.sentAt) / 1000;
+        if (networkLag > 0 && networkLag < 30) {
+          authoritativePos += networkLag;
+        }
+      } else if (isPlayingState && data.updatedAt) {
+        const elapsed = (Date.now() - new Date(data.updatedAt).getTime()) / 1000;
+        if (elapsed > 0 && elapsed < 86400) {
+          authoritativePos += elapsed;
+        }
+      }
+
+      // Do NOT forcefully seek backward if current user initiated the action less than 1.2s ago
+      const isSelfAction = data.lastActionUid === userUidRef.current;
+      const now = Date.now();
+      const isRecentAction = data.sentAt ? (now - data.sentAt < 1200) : false;
+      if (isSelfAction && isRecentAction) {
+        return;
+      }
+
+      currentPosRef.current = authoritativePos;
+      if (!isScrubbingRef.current) {
+        setPlaybackPos(authoritativePos);
+      }
+
+      if (isPlayingState) {
+        playStartTimestampRef.current = Date.now();
+      } else {
+        playStartTimestampRef.current = null;
+      }
+
+      // Apply authoritative position to active player
+      const isYt = (data.mediaUrl && (data.mediaUrl.includes('youtube') || data.mediaUrl.includes('youtu.be'))) || data.mediaType === 'youtube';
+      if (isYt && iframeRef.current) {
+        sendYouTubeCommandRef.current('seekTo', [authoritativePos, true]);
+        if (isPlayingState) {
+          sendYouTubeCommandRef.current('playVideo');
+        } else {
+          sendYouTubeCommandRef.current('pauseVideo');
+        }
+      } else if (videoRef.current) {
+        isRemoteSyncingRef.current = true;
+        videoRef.current.currentTime = authoritativePos;
+        if (isPlayingState) {
+          videoRef.current.play().then(() => {
+            setAutoplayBlocked(false);
+          }).catch((err: any) => {
+            if (err?.name === 'NotAllowedError' || String(err).includes('autoplay')) {
+              setAutoplayBlocked(true);
+            }
+          });
+        } else {
+          videoRef.current.pause();
+        }
+        setTimeout(() => {
+          isRemoteSyncingRef.current = false;
+        }, 400);
+      }
+    };
+
+    // Handle real-time actions from partner (play, pause, seek)
+    const handleAction = (data: {
+      action: 'play' | 'pause' | 'seek';
+      currentTime?: number;
+      position?: number;
+      senderUid: string;
+      version?: number;
+    }) => {
+      // Echo cancellation: Never apply our own action back onto local player
+      if (data.senderUid === userUidRef.current) return;
+
+      if (typeof data.version === 'number') {
+        if (data.version < lastAppliedVersionRef.current) return;
+        lastAppliedVersionRef.current = data.version;
+      }
+
+      setSyncStatus(`${partnerNameRef.current} ${data.action}ed`);
+
+      const incomingPos = typeof data.currentTime === 'number'
+        ? data.currentTime
+        : (typeof data.position === 'number' ? data.position : currentPosRef.current);
+
+      currentPosRef.current = incomingPos;
+      if (!isScrubbingRef.current) {
+        setPlaybackPos(incomingPos);
+      }
+
+      if (data.action === 'play') {
+        playStartTimestampRef.current = Date.now();
+        setSession(prev => prev ? { ...prev, state: 'playing', playing: true, isPlaying: true, position: incomingPos } : null);
+      } else if (data.action === 'pause') {
+        playStartTimestampRef.current = null;
+        setSession(prev => prev ? { ...prev, state: 'paused', playing: false, isPlaying: false, position: incomingPos } : null);
+      } else if (data.action === 'seek') {
+        setSession(prev => prev ? { ...prev, position: incomingPos } : null);
+      }
+
+      // Sync YouTube Iframe
+      if (iframeRef.current) {
+        if (data.action === 'play') {
+          sendYouTubeCommandRef.current('seekTo', [incomingPos, true]);
+          sendYouTubeCommandRef.current('playVideo');
+        } else if (data.action === 'pause') {
+          sendYouTubeCommandRef.current('pauseVideo');
+        } else if (data.action === 'seek') {
+          sendYouTubeCommandRef.current('seekTo', [incomingPos, true]);
+        }
+      }
+
+      // Sync HTML5 Direct Video
+      if (videoRef.current) {
+        isRemoteSyncingRef.current = true;
+        videoRef.current.currentTime = incomingPos;
+        if (data.action === 'play') {
+          videoRef.current.play().then(() => {
+            setAutoplayBlocked(false);
+          }).catch((err: any) => {
+            if (err?.name === 'NotAllowedError' || String(err).includes('autoplay')) {
+              setAutoplayBlocked(true);
+            }
+          });
+        } else if (data.action === 'pause') {
+          videoRef.current.pause();
+        }
+        setTimeout(() => {
+          isRemoteSyncingRef.current = false;
+        }, 400);
+      }
+    };
+
+    const handleEnded = (data: { conversationId: string }) => {
+      if (data.conversationId === conversationId) {
+        setSession(null);
+        onCloseRef.current();
+      }
+    };
+
+    // Reconnect handler: Re-request state whenever socket reconnects
+    const handleConnect = () => {
+      socket.emit('together:get-state', { conversationId });
+    };
+
+    socket.on('together:started', handleState);
+    socket.on('together:state', handleState);
+    socket.on('together:action', handleAction);
+    socket.on('together:ended', handleEnded);
+    socket.on('connect', handleConnect);
+
+    // Re-sync playback when user returns to this browser tab
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        socket.emit('together:get-state', { conversationId });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      socket.off('together:started', handleState);
+      socket.off('together:state', handleState);
+      socket.off('together:action', handleAction);
+      socket.off('together:ended', handleEnded);
+      socket.off('connect', handleConnect);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [socket, conversationId]);
+
+  // Seamless Drift Detection & Playback-Rate Micro-Alignment
+  useEffect(() => {
+    if (!isPlaying || !session) return;
+
+    const driftInterval = setInterval(() => {
+      // If the current user was the last person to interact, don't nudge their player
+      if (session.lastActionUid === user?.uid) return;
+
+      const expectedPos = getCurrentPositionRef.current();
+      let actualPos = 0;
+
+      if (session.mediaType === 'direct' && videoRef.current) {
+        actualPos = videoRef.current.currentTime || 0;
+      } else if (session.mediaType === 'youtube') {
+        actualPos = currentPosRef.current;
+      }
+
+      if (actualPos > 0 && expectedPos > 0) {
+        const drift = actualPos - expectedPos; // positive = ahead, negative = behind
+        const absDrift = Math.abs(drift);
+
+        if (session.mediaType === 'direct' && videoRef.current) {
+          if (absDrift < 0.5) {
+            // In comfortable sync; maintain normal 1.0x playback rate
+            if (videoRef.current.playbackRate !== 1.0) {
+              videoRef.current.playbackRate = 1.0;
+            }
+          } else if (absDrift <= 1.8) {
+            // Seamless micro-catchup via playback rate without audio stutter or seeking
+            if (drift < -0.5) {
+              videoRef.current.playbackRate = 1.05;
+            } else if (drift > 0.5) {
+              videoRef.current.playbackRate = 0.95;
+            }
+          } else {
+            // Substantial drift (> 1.8s) - perform clean seek
+            videoRef.current.playbackRate = 1.0;
+            isRemoteSyncingRef.current = true;
+            videoRef.current.currentTime = expectedPos;
+            setTimeout(() => {
+              isRemoteSyncingRef.current = false;
+            }, 500);
+          }
+        } else if (session.mediaType === 'youtube' && iframeRef.current) {
+          // For YouTube, only seek if drift is noticeably large (> 2.0s) to prevent buffering loops
+          if (absDrift > 2.0) {
+            isRemoteSyncingRef.current = true;
+            sendYouTubeCommandRef.current('seekTo', [expectedPos, true]);
+            currentPosRef.current = expectedPos;
+            setTimeout(() => {
+              isRemoteSyncingRef.current = false;
+            }, 600);
+          }
+        }
+      }
+    }, 2500);
+
+    return () => clearInterval(driftInterval);
+  }, [isPlaying, session, user?.uid]);
+
+  // Default position for minimized card (docked to bottom-right or bottom-left)
+  const getDefaultPosition = useCallback((side: 'left' | 'right' = 'right') => {
+    const width = 340;
+    const height = 230;
+    const padding = 16;
+    const bottomOffset = 84;
+
+    const x = side === 'left' ? padding : Math.max(padding, window.innerWidth - width - padding);
+    const y = Math.max(padding, window.innerHeight - height - bottomOffset);
+    return { x, y };
+  }, []);
+
+  const handleToggleMinimize = () => {
+    setIsMinimized(prev => {
+      const next = !prev;
+      if (next && !position) {
+        setPosition(getDefaultPosition(snappedSide));
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSide = () => {
+    const nextSide = snappedSide === 'right' ? 'left' : 'right';
+    setSnappedSide(nextSide);
+    if (isMinimized) {
+      setPosition(getDefaultPosition(nextSide));
+    }
+  };
+
+  // Draggable Mini-Player pointer handlers
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (!isMinimized || !containerRef.current) return;
+    if ((e.target as HTMLElement).closest('.together-dock-controls, .together-sync-action-bar, input, button')) return;
+
+    e.preventDefault();
+    setIsDragging(true);
+
+    const currentX = position?.x ?? getDefaultPosition(snappedSide).x;
+    const currentY = position?.y ?? getDefaultPosition(snappedSide).y;
+
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      posX: currentX,
+      posY: currentY
+    };
+
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging) return;
+
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+
+    const newX = dragStartRef.current.posX + dx;
+    const newY = dragStartRef.current.posY + dy;
+
+    const minX = 8;
+    const maxX = Math.max(minX, window.innerWidth - 340 - 8);
+    const minY = 8;
+    const maxY = Math.max(minY, window.innerHeight - 230 - 8);
+
+    setPosition({
+      x: Math.min(Math.max(minX, newX), maxX),
+      y: Math.min(Math.max(minY, newY), maxY)
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!isDragging) return;
+    setIsDragging(false);
+
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch { }
+
+    if (position) {
+      const midX = window.innerWidth / 2;
+      const targetSide = position.x + 170 < midX ? 'left' : 'right';
+      setSnappedSide(targetSide);
+    }
+  };
 
   const handleResizeStart = (e: React.PointerEvent, direction: 'bottom' | 'corner') => {
     if (isMinimized || !containerRef.current) return;
@@ -135,7 +676,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       isResizingRef.current = false;
       try {
         targetEl.releasePointerCapture(upEvent.pointerId);
-      } catch {}
+      } catch { }
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);
@@ -149,7 +690,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
         setCustomSize(updated);
         try {
           localStorage.setItem('wibby_together_size', JSON.stringify(updated));
-        } catch {}
+        } catch { }
       }
     };
 
@@ -158,515 +699,17 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     window.addEventListener('pointercancel', onPointerUp);
   };
 
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const isLocalActionRef = useRef(false);
-  const isRemoteSyncingRef = useRef(false);
-
-  // Position & playback clock tracking
-  const currentPosRef = useRef<number>(0);
-  const playStartTimestampRef = useRef<number | null>(null);
-
-  const dragStartRef = useRef<{
-    startX: number;
-    startY: number;
-    initialX: number;
-    initialY: number;
-    moved: boolean;
-  }>({
-    startX: 0,
-    startY: 0,
-    initialX: 0,
-    initialY: 0,
-    moved: false
-  });
-
-  const sendYouTubeCommand = useCallback((func: 'playVideo' | 'pauseVideo' | 'seekTo' | 'setVolume' | 'mute' | 'unMute', args: any[] = []) => {
-    if (iframeRef.current && iframeRef.current.contentWindow) {
-      iframeRef.current.contentWindow.postMessage(
-        JSON.stringify({
-          event: 'command',
-          func,
-          args
-        }),
-        '*'
-      );
-    }
-  }, []);
-
-  const applyLocalVolume = useCallback((vol: number, muted: boolean) => {
-    if (videoRef.current) {
-      videoRef.current.volume = vol;
-      videoRef.current.muted = muted;
-    }
-    if (iframeRef.current) {
-      if (muted) {
-        sendYouTubeCommand('mute');
-      } else {
-        sendYouTubeCommand('unMute');
-        sendYouTubeCommand('setVolume', [Math.round(vol * 100)]);
-      }
-    }
-  }, [sendYouTubeCommand]);
-
-  useEffect(() => {
-    applyLocalVolume(localVolume, isMuted);
-  }, [localVolume, isMuted, applyLocalVolume, session?.mediaUrl]);
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVol = parseFloat(e.target.value);
-    setLocalVolume(newVol);
-    if (newVol > 0 && isMuted) {
-      setIsMuted(false);
-      try { localStorage.setItem('wibby_together_muted', 'false'); } catch {}
-    }
-    try { localStorage.setItem('wibby_together_volume', String(newVol)); } catch {}
-    applyLocalVolume(newVol, false);
-  };
-
-  const handleToggleMute = () => {
-    const newMuted = !isMuted;
-    setIsMuted(newMuted);
-    try { localStorage.setItem('wibby_together_muted', String(newMuted)); } catch {}
-    applyLocalVolume(localVolume, newMuted);
-  };
-
-  const isPlaying = Boolean(session?.state === 'playing' || session?.playing || session?.isPlaying);
-
-  const getCurrentPosition = useCallback((): number => {
-    if (session?.mediaType === 'direct' && videoRef.current) {
-      return videoRef.current.currentTime || 0;
-    }
-    let pos = currentPosRef.current;
-    if (isPlaying && playStartTimestampRef.current) {
-      const elapsedSecs = (Date.now() - playStartTimestampRef.current) / 1000;
-      if (elapsedSecs > 0) {
-        pos += elapsedSecs;
-      }
-    }
-    return Math.max(0, pos);
-  }, [session?.mediaType, isPlaying]);
-
-  // Update scrubber position periodically during playback
-  useEffect(() => {
-    const updatePos = () => {
-      setPlaybackPos(getCurrentPosition());
-    };
-    updatePos();
-    if (!isPlaying) return;
-    const interval = setInterval(updatePos, 500);
-    return () => clearInterval(interval);
-  }, [isPlaying, getCurrentPosition]);
-
-  // Listen to YouTube player messages for live time update and duration
-  useEffect(() => {
-    const handleWindowMessage = (event: MessageEvent) => {
-      try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (data?.event === 'infoDelivery' && data?.info) {
-          if (typeof data.info.currentTime === 'number' && data.info.currentTime > 0) {
-            currentPosRef.current = data.info.currentTime;
-            if (playStartTimestampRef.current) {
-              playStartTimestampRef.current = Date.now();
-            }
-          }
-          if (typeof data.info.duration === 'number' && data.info.duration > 0) {
-            setDuration(data.info.duration);
-          }
-        }
-      } catch {
-        // Not a JSON message or non-YouTube postMessage
-      }
-    };
-
-    window.addEventListener('message', handleWindowMessage);
-    return () => {
-      window.removeEventListener('message', handleWindowMessage);
-    };
-  }, []);
-
-  // Tell YouTube iframe to listen for API commands and synchronize initial position
-  useEffect(() => {
-    if (session?.mediaType === 'youtube' && iframeRef.current) {
-      const timer = setTimeout(() => {
-        if (iframeRef.current?.contentWindow) {
-          iframeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*');
-          const pos = getCurrentPosition();
-          if (pos > 0) {
-            sendYouTubeCommand('seekTo', [pos, true]);
-          }
-          if (isPlaying) {
-            sendYouTubeCommand('playVideo');
-          }
-          applyLocalVolume(localVolume, isMuted);
-        }
-      }, 700);
-      return () => clearTimeout(timer);
-    }
-  }, [session?.mediaUrl, session?.mediaType, applyLocalVolume, localVolume, isMuted, getCurrentPosition, isPlaying, sendYouTubeCommand]);
-
-  // Request initial authoritative session state and register socket listeners
-  useEffect(() => {
-    if (!socket || !conversationId) return;
-
-    socket.emit('together:get-state', { conversationId });
-
-    const handleState = (data: TogetherSession) => {
-      if (data.conversationId === conversationId) {
-        setSession(data);
-        const isPlayingState = data.state === 'playing' || data.playing || data.isPlaying;
-        setSyncStatus(isPlayingState ? `Watching in sync with ${partnerName}` : `Paused with ${partnerName}`);
-
-        // If this state update was triggered by OUR OWN action, DO NOT SEEK OUR OWN PLAYER!
-        if (data.lastActionUid === user?.uid || isLocalActionRef.current) {
-          return;
-        }
-
-        let authoritativePos = typeof data.position === 'number' && !isNaN(data.position) ? data.position : (typeof data.currentTime === 'number' && !isNaN(data.currentTime) ? data.currentTime : 0);
-        if (isPlayingState && data.updatedAt) {
-          const elapsed = (Date.now() - new Date(data.updatedAt).getTime()) / 1000;
-          if (elapsed > 0 && elapsed < 86400) {
-            authoritativePos += elapsed;
-          }
-        }
-        currentPosRef.current = authoritativePos;
-        setPlaybackPos(authoritativePos);
-        if (isPlayingState) {
-          playStartTimestampRef.current = Date.now();
-        } else {
-          playStartTimestampRef.current = null;
-        }
-
-        isRemoteSyncingRef.current = true;
-        // Apply authoritative position to active player immediately (late-join & reconnect)
-        const isYt = (data.mediaUrl && (data.mediaUrl.includes('youtube') || data.mediaUrl.includes('youtu.be'))) || data.mediaType === 'youtube';
-        if (isYt && iframeRef.current) {
-          if (Math.abs(currentPosRef.current - authoritativePos) > 0.6) {
-            sendYouTubeCommand('seekTo', [authoritativePos, true]);
-          }
-          if (isPlayingState) {
-            sendYouTubeCommand('playVideo');
-          } else {
-            sendYouTubeCommand('pauseVideo');
-          }
-        } else if (videoRef.current) {
-          const currentT = videoRef.current.currentTime || 0;
-          if (Math.abs(currentT - authoritativePos) > 0.4) {
-            videoRef.current.currentTime = authoritativePos;
-          }
-          if (isPlayingState) {
-            videoRef.current.play().catch(() => {});
-          } else {
-            videoRef.current.pause();
-          }
-        }
-        setTimeout(() => {
-          isRemoteSyncingRef.current = false;
-        }, 500);
-      }
-    };
-
-    const handleAction = (data: { action: 'play' | 'pause' | 'seek'; currentTime?: number; position?: number; senderUid: string; sentAt?: number }) => {
-      if (data.senderUid === user?.uid) {
-        return; // Ignore echo of our own action
-      }
-
-      setSyncStatus(`${partnerName} ${data.action === 'play' ? 'played' : data.action === 'pause' ? 'paused' : 'seeked'}`);
-
-      const incomingPos = typeof data.currentTime === 'number' && !isNaN(data.currentTime) ? data.currentTime : (typeof data.position === 'number' && !isNaN(data.position) ? data.position : currentPosRef.current);
-      
-      let targetPos = incomingPos;
-      if (data.action === 'play' && data.sentAt) {
-        const transitSec = Math.max(0, Math.min(1.0, (Date.now() - data.sentAt) / 1000));
-        targetPos += transitSec;
-      }
-
-      currentPosRef.current = targetPos;
-      setPlaybackPos(targetPos);
-
-      if (data.action === 'play') {
-        playStartTimestampRef.current = Date.now();
-      } else {
-        playStartTimestampRef.current = null;
-      }
-
-      isRemoteSyncingRef.current = true;
-
-      // Sync YouTube Iframe
-      if (iframeRef.current) {
-        if (data.action === 'play') {
-          sendYouTubeCommand('seekTo', [targetPos, true]);
-          sendYouTubeCommand('playVideo');
-        } else if (data.action === 'pause') {
-          sendYouTubeCommand('pauseVideo');
-          sendYouTubeCommand('seekTo', [targetPos, true]);
-        } else if (data.action === 'seek') {
-          sendYouTubeCommand('seekTo', [targetPos, true]);
-        }
-      }
-
-      // Sync HTML5 Direct Video
-      if (videoRef.current) {
-        videoRef.current.currentTime = targetPos;
-        if (data.action === 'play') {
-          videoRef.current.play().catch(() => {});
-        } else if (data.action === 'pause') {
-          videoRef.current.pause();
-        }
-      }
-
-      setTimeout(() => {
-        isRemoteSyncingRef.current = false;
-      }, 500);
-    };
-
-    const handleEnded = (data: { conversationId: string }) => {
-      if (data.conversationId === conversationId) {
-        setSession(null);
-        onClose();
-      }
-    };
-
-    socket.on('together:started', handleState);
-    socket.on('together:state', handleState);
-    socket.on('together:action', handleAction);
-    socket.on('together:ended', handleEnded);
-
-    // Re-sync YouTube playback when user switches back to this tab
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && iframeRef.current) {
-        setTimeout(() => {
-          const pos = getCurrentPosition();
-          sendYouTubeCommand('seekTo', [pos, true]);
-          if (isPlaying) {
-            sendYouTubeCommand('playVideo');
-          }
-        }, 400);
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      socket.off('together:started', handleState);
-      socket.off('together:state', handleState);
-      socket.off('together:action', handleAction);
-      socket.off('together:ended', handleEnded);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [socket, conversationId, partnerName, onClose, user?.uid, sendYouTubeCommand, getCurrentPosition, isPlaying]);
-
-  // Active Drift Detection & Continuous Sync (Smooth, non-skipping rate alignment)
-  useEffect(() => {
-    if (!isPlaying || !session) return;
-
-    const driftInterval = setInterval(() => {
-      // Only the FOLLOWER aligns to the host/session
-      const isHost = session.hostUserId === user?.uid || session.lastActionUid === user?.uid;
-      if (isHost) return;
-
-      let expectedPos = typeof session.position === 'number' && !isNaN(session.position) ? session.position : (session.currentTime || 0);
-      if (session.updatedAt) {
-        const elapsed = (Date.now() - new Date(session.updatedAt).getTime()) / 1000;
-        if (elapsed > 0 && elapsed < 86400) {
-          expectedPos += elapsed;
-        }
-      }
-
-      let actualPos = 0;
-      if (session.mediaType === 'direct' && videoRef.current) {
-        actualPos = videoRef.current.currentTime || 0;
-      } else if (session.mediaType === 'youtube') {
-        actualPos = currentPosRef.current;
-      }
-
-      if (actualPos > 0 && expectedPos > 0) {
-        const drift = actualPos - expectedPos; // positive = ahead, negative = behind
-        const absDrift = Math.abs(drift);
-
-        if (session.mediaType === 'direct' && videoRef.current) {
-          if (absDrift < 0.5) {
-            // In comfortable sync; ensure normal 1.0x playback rate
-            if (videoRef.current.playbackRate !== 1.0) {
-              videoRef.current.playbackRate = 1.0;
-            }
-          } else if (absDrift <= 1.8) {
-            // Seamless micro-catchup via playback rate without seeking or audio stutter
-            if (drift < -0.5) {
-              videoRef.current.playbackRate = 1.04;
-            } else if (drift > 0.5) {
-              videoRef.current.playbackRate = 0.96;
-            }
-          } else {
-            // Substantial drift (> 1.8s) - perform clean seek
-            videoRef.current.playbackRate = 1.0;
-            isRemoteSyncingRef.current = true;
-            videoRef.current.currentTime = expectedPos;
-            setTimeout(() => {
-              isRemoteSyncingRef.current = false;
-            }, 500);
-          }
-        } else if (session.mediaType === 'youtube' && iframeRef.current) {
-          // For YouTube, only seek if drift is noticeably large (> 1.8s)
-          // to prevent buffering skips
-          if (absDrift > 1.8) {
-            isRemoteSyncingRef.current = true;
-            sendYouTubeCommand('seekTo', [expectedPos, true]);
-            currentPosRef.current = expectedPos;
-            setTimeout(() => {
-              isRemoteSyncingRef.current = false;
-            }, 600);
-          }
-        }
-      }
-    }, 2500);
-
-    return () => clearInterval(driftInterval);
-  }, [isPlaying, session, user?.uid, sendYouTubeCommand, getCurrentPosition]);
-
-  // Default position for minimized card (docked to bottom-right or bottom-left)
-  const getDefaultPosition = useCallback((side: 'left' | 'right' = 'right') => {
-    if (typeof window === 'undefined') return { x: 20, y: 120 };
-    const cardW = Math.min(290, window.innerWidth - 32);
-    const cardH = session ? 230 : 54;
-    const padding = 16;
-    const bottomComposerSpace = 92;
-
-    const x = side === 'left' ? padding : window.innerWidth - cardW - padding;
-    const y = Math.max(padding + 60, window.innerHeight - cardH - bottomComposerSpace);
-    return { x, y };
-  }, [session]);
-
-  const handleToggleMinimize = () => {
-    setIsMinimized(prev => {
-      const next = !prev;
-      if (next && !position) {
-        setPosition(getDefaultPosition(snappedSide));
-      }
-      return next;
-    });
-  };
-
-  const handleToggleSide = () => {
-    setSnappedSide(prev => {
-      const nextSide = prev === 'right' ? 'left' : 'right';
-      const elW = containerRef.current?.offsetWidth || 290;
-      const padding = 16;
-      const nextX = nextSide === 'left' ? padding : window.innerWidth - elW - padding;
-      setPosition(p => ({
-        x: nextX,
-        y: p ? p.y : (window.innerHeight - 280)
-      }));
-      return nextSide;
-    });
-  };
-
-  // Draggable Pointer Events
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if (!isMinimized) return;
-    if ((e.target as HTMLElement).closest('button, input, a')) return;
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
-
-    const el = containerRef.current;
-    if (!el) return;
-
-    const rect = el.getBoundingClientRect();
-    const curX = position ? position.x : rect.left;
-    const curY = position ? position.y : rect.top;
-
-    dragStartRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      initialX: curX,
-      initialY: curY,
-      moved: false
-    };
-
-    setIsDragging(true);
-    el.setPointerCapture(e.pointerId);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging || !isMinimized) return;
-
-    const dx = e.clientX - dragStartRef.current.startX;
-    const dy = e.clientY - dragStartRef.current.startY;
-
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-      dragStartRef.current.moved = true;
-    }
-
-    const el = containerRef.current;
-    const currentW = el?.offsetWidth || 290;
-    const currentH = el?.offsetHeight || 200;
-
-    const padding = 12;
-    const maxX = window.innerWidth - currentW - padding;
-    const maxY = window.innerHeight - currentH - padding;
-
-    const newX = Math.max(padding, Math.min(maxX, dragStartRef.current.initialX + dx));
-    const newY = Math.max(padding + 50, Math.min(maxY, dragStartRef.current.initialY + dy));
-
-    setPosition({ x: newX, y: newY });
-  };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (!isDragging || !isMinimized) return;
-    setIsDragging(false);
-
-    const el = containerRef.current;
-    if (el && el.hasPointerCapture(e.pointerId)) {
-      el.releasePointerCapture(e.pointerId);
-    }
-
-    // Snap to left or right side smoothly
-    if (position) {
-      const elW = el?.offsetWidth || 290;
-      const centerX = position.x + elW / 2;
-      const screenCenterX = window.innerWidth / 2;
-      const snapLeft = centerX < screenCenterX;
-      const padding = 16;
-      const snappedX = snapLeft ? padding : window.innerWidth - elW - padding;
-      setSnappedSide(snapLeft ? 'left' : 'right');
-      setPosition(prev => prev ? { x: snappedX, y: prev.y } : null);
-    }
-  };
-
-  // Adjust on window resize
-  useEffect(() => {
-    if (!isMinimized) return;
-    const handleResize = () => {
-      if (position && containerRef.current) {
-        const elW = containerRef.current.offsetWidth || 290;
-        const elH = containerRef.current.offsetHeight || 200;
-        const padding = 16;
-        const maxX = window.innerWidth - elW - padding;
-        const maxY = window.innerHeight - elH - padding;
-        const newX = snappedSide === 'left' ? padding : maxX;
-        const newY = Math.max(padding + 50, Math.min(maxY, position.y));
-        setPosition({ x: newX, y: newY });
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isMinimized, position, snappedSide]);
-
   const handleStartSession = (e: React.FormEvent) => {
     e.preventDefault();
     if (!urlInput.trim() || !socket) return;
 
-    const { url, type } = parseMediaUrl(urlInput);
-
-    currentPosRef.current = 0;
-    playStartTimestampRef.current = Date.now();
-
+    const parsed = parseMediaUrl(urlInput);
     socket.emit('together:start', {
       conversationId,
-      mediaUrl: url,
-      mediaType: type,
-      title: 'Synchronized Watch Party'
+      mediaUrl: parsed.url,
+      mediaType: parsed.type,
+      title: 'Watch Together'
     });
-
     setUrlInput('');
   };
 
@@ -674,27 +717,15 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     e.preventDefault();
     if (!changeUrlInput.trim() || !socket) return;
 
-    const { url, type } = parseMediaUrl(changeUrlInput);
-
-    currentPosRef.current = 0;
-    playStartTimestampRef.current = Date.now();
-
+    const parsed = parseMediaUrl(changeUrlInput);
     socket.emit('together:change-media', {
       conversationId,
-      mediaUrl: url,
-      mediaType: type,
-      title: 'Synchronized Watch Party'
+      mediaUrl: parsed.url,
+      mediaType: parsed.type,
+      title: 'Watch Together'
     });
-
     setChangeUrlInput('');
     setShowChangeMedia(false);
-  };
-
-  const handleEndSession = () => {
-    if (socket) {
-      socket.emit('together:end', { conversationId });
-    }
-    onClose();
   };
 
   const handleTogglePlay = () => {
@@ -702,17 +733,17 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     const nextAction = isPlaying ? 'pause' : 'play';
     const currentPos = getCurrentPosition();
 
-    if (nextAction === 'pause') {
-      currentPosRef.current = currentPos;
-      playStartTimestampRef.current = null;
-    } else {
-      currentPosRef.current = currentPos;
+    isLocalActionRef.current = true;
+    currentPosRef.current = currentPos;
+
+    if (nextAction === 'play') {
       playStartTimestampRef.current = Date.now();
+    } else {
+      playStartTimestampRef.current = null;
     }
 
     if (session.mediaType === 'youtube') {
       if (nextAction === 'play') {
-        sendYouTubeCommand('seekTo', [currentPos, true]);
         sendYouTubeCommand('playVideo');
       } else {
         sendYouTubeCommand('pauseVideo');
@@ -720,13 +751,18 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     } else if (videoRef.current) {
       videoRef.current.currentTime = currentPos;
       if (nextAction === 'play') {
-        videoRef.current.play().catch(() => {});
+        videoRef.current.play().then(() => {
+          setAutoplayBlocked(false);
+        }).catch((err: any) => {
+          if (err?.name === 'NotAllowedError' || String(err).includes('autoplay')) {
+            setAutoplayBlocked(true);
+          }
+        });
       } else {
         videoRef.current.pause();
       }
     }
 
-    isLocalActionRef.current = true;
     socket.emit('together:control', {
       conversationId,
       action: nextAction,
@@ -734,6 +770,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       currentTime: currentPos,
       sentAt: Date.now()
     });
+
     setTimeout(() => {
       isLocalActionRef.current = false;
     }, 400);
@@ -742,11 +779,12 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   const handleSeekRelative = (seconds: number) => {
     if (!socket || !session) return;
     const currentPos = getCurrentPosition();
-    const maxLimit = duration > 0 ? duration : Infinity;
-    const newPos = Math.max(0, Math.min(maxLimit, currentPos + seconds));
+    const newPos = Math.max(0, currentPos + seconds);
 
+    isLocalActionRef.current = true;
     currentPosRef.current = newPos;
     setPlaybackPos(newPos);
+
     if (isPlaying) {
       playStartTimestampRef.current = Date.now();
     }
@@ -757,7 +795,6 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       videoRef.current.currentTime = newPos;
     }
 
-    isLocalActionRef.current = true;
     socket.emit('together:control', {
       conversationId,
       action: 'seek',
@@ -765,18 +802,21 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       currentTime: newPos,
       sentAt: Date.now()
     });
+
     setTimeout(() => {
       isLocalActionRef.current = false;
     }, 400);
   };
 
+  // Commit arbitrary seek (called on pointer-up or keyboard committed change)
   const handleArbitrarySeek = (targetSec: number) => {
     if (!socket || !session) return;
-    const maxLimit = duration > 0 ? duration : Infinity;
-    const clamped = Math.max(0, Math.min(maxLimit, targetSec));
+    const clamped = Math.max(0, duration > 0 ? Math.min(targetSec, duration) : targetSec);
 
+    isLocalActionRef.current = true;
     currentPosRef.current = clamped;
     setPlaybackPos(clamped);
+
     if (isPlaying) {
       playStartTimestampRef.current = Date.now();
     }
@@ -787,7 +827,6 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       videoRef.current.currentTime = clamped;
     }
 
-    isLocalActionRef.current = true;
     socket.emit('together:control', {
       conversationId,
       action: 'seek',
@@ -795,39 +834,52 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       currentTime: clamped,
       sentAt: Date.now()
     });
+
     setTimeout(() => {
       isLocalActionRef.current = false;
     }, 400);
   };
 
-  const hostUid = session?.hostUserId || session?.hostUid;
-  const isHost = hostUid === user?.uid;
+  const handleEndSession = () => {
+    if (socket) {
+      socket.emit('together:end', { conversationId });
+    }
+    setSession(null);
+    onClose();
+  };
+
+  const handleDismissAutoplayBlock = () => {
+    setAutoplayBlocked(false);
+    if (videoRef.current) {
+      videoRef.current.play().catch(() => { });
+    }
+  };
 
   return (
     <div
       ref={containerRef}
-      className={inline ? 'together-inline-container' : `together-dock ${isMinimized ? 'minimized' : 'standard'} ${isDragging ? 'dragging' : ''} ${snappedSide}`}
+      className={`together-dock ${inline ? 'together-inline-container' : isMinimized ? 'minimized' : 'standard'} ${isDragging ? 'is-dragging' : ''}`}
       style={
         inline
           ? { width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }
           : isMinimized && position
-          ? { left: `${position.x}px`, top: `${position.y}px` }
-          : !isMinimized && (customSize.height || customSize.width)
-          ? {
-              height: customSize.height ? `${customSize.height}px` : undefined,
-              maxWidth: customSize.width ? `${customSize.width}px` : undefined
-            }
-          : undefined
+            ? { left: `${position.x}px`, top: `${position.y}px` }
+            : !isMinimized && (customSize.height || customSize.width)
+              ? {
+                height: customSize.height ? `${customSize.height}px` : undefined,
+                maxWidth: customSize.width ? `${customSize.width}px` : undefined
+              }
+              : undefined
       }
       onPointerDown={isMinimized ? handlePointerDown : undefined}
       onPointerMove={isMinimized ? handlePointerMove : undefined}
       onPointerUp={isMinimized ? handlePointerUp : undefined}
       onPointerCancel={isMinimized ? handlePointerUp : undefined}
     >
-      {/* Header Bar */}
+      {/* Header bar (only in floating dock mode, hidden in inline mode) */}
       {!inline && (
-        <div className={`together-dock-header ${isMinimized ? 'minimized-header' : ''}`}>
-          <div className="together-dock-title-wrap">
+        <div className="together-dock-header">
+          <div className="together-dock-title">
             {isMinimized && (
               <span className="together-drag-grip" title="Drag to move or dock to left/right">
                 ⠿
@@ -911,12 +963,11 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                   autoFocus
                 />
                 <button type="submit" className="together-start-btn" disabled={!changeUrlInput.trim()}>
-                  Update Media
+                  Change
                 </button>
               </form>
             )}
 
-            {/* Video Frame: EXACT 16:9 Aspect Ratio in Both Full and Minimized Modes */}
             <div className={`together-player-frame-wrap ${isMinimized ? 'mini-frame' : 'full-frame'}`}>
               {session.mediaType === 'direct' ? (
                 <video
@@ -932,6 +983,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                     }
                   }}
                   onPlay={() => {
+                    // Prevent ping-pong feedback loops: ignore native events triggered by remote sync
                     if (isRemoteSyncingRef.current || isLocalActionRef.current) return;
                     if (socket) {
                       const pos = videoRef.current?.currentTime || 0;
@@ -951,6 +1003,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                     }
                   }}
                   onPause={() => {
+                    // Prevent ping-pong feedback loops: ignore native events triggered by remote sync
                     if (isRemoteSyncingRef.current || isLocalActionRef.current) return;
                     if (socket) {
                       const pos = videoRef.current?.currentTime || 0;
@@ -970,6 +1023,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                     }
                   }}
                   onSeeked={() => {
+                    // Prevent ping-pong feedback loops: ignore native events triggered by remote sync
                     if (isRemoteSyncingRef.current || isLocalActionRef.current) return;
                     if (socket) {
                       const pos = videoRef.current?.currentTime || 0;
@@ -998,12 +1052,25 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                   allowFullScreen
                 />
               )}
+
+              {/* Autoplay blocked overlay banner */}
+              {autoplayBlocked && (
+                <div
+                  className="together-autoplay-blocked"
+                  onClick={handleDismissAutoplayBlock}
+                  title="Click to enable audio & playback"
+                >
+                  <button type="button" className="together-resume-btn">
+                    ▶ Tap to resume synchronized playback
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Timeline Scrubber for Arbitrary Seek */}
+            {/* Timeline Scrubber for Arbitrary Seek — Only commits on release to prevent flooding */}
             {!isMinimized && duration > 0 && (
-              <div className="together-timeline-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'var(--wibby-surface, rgba(0,0,0,0.35))', borderTop: '1px solid var(--wibby-border, rgba(255,255,255,0.08))' }}>
-                <span style={{ fontSize: '11px', color: 'var(--wibby-text-secondary, #94a3b8)', minWidth: '42px', fontFamily: 'monospace' }}>
+              <div className="together-timeline-bar">
+                <span className="together-timeline-time">
                   {formatSeconds(playbackPos)}
                 </span>
                 <input
@@ -1011,17 +1078,27 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                   min="0"
                   max={duration}
                   step="0.5"
+                  className="together-timeline-slider"
                   value={Math.min(duration, playbackPos)}
+                  onPointerDown={() => {
+                    isScrubbingRef.current = true;
+                  }}
                   onChange={(e) => {
                     const target = parseFloat(e.target.value);
+                    scrubTargetPosRef.current = target;
                     setPlaybackPos(target);
-                    handleArbitrarySeek(target);
                   }}
-                  style={{ flex: 1, accentColor: 'var(--wibby-accent, #6366f1)', cursor: 'pointer', height: '4px' }}
+                  onPointerUp={() => {
+                    isScrubbingRef.current = false;
+                    handleArbitrarySeek(scrubTargetPosRef.current);
+                  }}
+                  onKeyUp={(e) => {
+                    handleArbitrarySeek(parseFloat(e.currentTarget.value));
+                  }}
                   aria-label="Timeline seek"
                   title="Drag or click to seek for both users"
                 />
-                <span style={{ fontSize: '11px', color: 'var(--wibby-text-secondary, #94a3b8)', minWidth: '42px', textAlign: 'right', fontFamily: 'monospace' }}>
+                <span className="together-timeline-time" style={{ textAlign: 'right' }}>
                   {formatSeconds(duration)}
                 </span>
               </div>
@@ -1042,9 +1119,9 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                   type="button"
                   className="together-sync-play-btn"
                   onClick={handleTogglePlay}
-                  title="Play / Pause for both users"
+                  title={isPlaying ? 'Pause for both users' : 'Play for both users'}
                 >
-                  {isPlaying ? '⏸ Pause Both' : '▶ Play Both'}
+                  {isPlaying ? '⏸ Pause' : '▶ Play'}
                 </button>
                 <button
                   type="button"
@@ -1055,14 +1132,13 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                   +10s ⏩
                 </button>
 
-                {/* Local Volume Control (Issue 5 - Local Only) */}
-                <div className="together-volume-control" title="Local Watch Together volume">
+                {/* Local Volume Control (Saved locally, never synced) */}
+                <div className="together-volume-control" title="Local volume for your device">
                   <button
                     type="button"
                     className="together-volume-btn"
                     onClick={handleToggleMute}
                     aria-label={isMuted ? 'Unmute' : 'Mute'}
-                    title={isMuted ? 'Unmute' : 'Mute'}
                   >
                     {isMuted || localVolume === 0 ? '🔇' : localVolume < 0.5 ? '🔉' : '🔊'}
                   </button>
@@ -1071,52 +1147,27 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                     min="0"
                     max="1"
                     step="0.05"
-                    value={isMuted ? 0 : localVolume}
-                    onChange={handleVolumeChange}
                     className="together-volume-slider"
-                    aria-label="Local playback volume"
+                    value={isMuted ? 0 : localVolume}
+                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                    aria-label="Volume slider"
                   />
-                  <span className="together-volume-label">{Math.round((isMuted ? 0 : localVolume) * 100)}%</span>
+                  <span className="together-volume-label">
+                    {isMuted ? '0%' : `${Math.round(localVolume * 100)}%`}
+                  </span>
                 </div>
-
-                <span className="together-host-tag">
-                  {isHost ? '🎮 Synced Host' : `🎮 Synced with ${partnerName}`}
-                </span>
               </div>
             ) : (
-              <div className="together-mini-action-bar">
+              <div className="together-sync-action-bar minimized-bar">
                 <button
                   type="button"
-                  className="together-seek-btn mini"
-                  onClick={() => handleSeekRelative(-10)}
-                  title="Rewind 10s"
-                >
-                  ⏪
-                </button>
-                <button
-                  type="button"
-                  className="together-sync-play-btn mini"
-                  onClick={handleTogglePlay}
-                  title={isPlaying ? 'Pause Both' : 'Play Both'}
+                  className="together-sync-play-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTogglePlay();
+                  }}
                 >
                   {isPlaying ? '⏸' : '▶'}
-                </button>
-                <button
-                  type="button"
-                  className="together-seek-btn mini"
-                  onClick={() => handleSeekRelative(10)}
-                  title="Forward 10s"
-                >
-                  ⏩
-                </button>
-                <button
-                  type="button"
-                  className="together-seek-btn mini"
-                  onClick={handleToggleMute}
-                  title={isMuted ? 'Unmute local volume' : 'Mute local volume'}
-                  aria-label={isMuted ? 'Unmute local volume' : 'Mute local volume'}
-                >
-                  {isMuted || localVolume === 0 ? '🔇' : '🔊'}
                 </button>
               </div>
             )}
@@ -1127,7 +1178,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
               <input
                 type="url"
                 className="together-url-input"
-                placeholder="Paste YouTube or video link..."
+                placeholder="Paste YouTube or video link (mp4, webm)..."
                 value={urlInput}
                 onChange={e => setUrlInput(e.target.value)}
                 autoFocus
@@ -1149,8 +1200,8 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
         )}
       </div>
 
-      {/* User-Resizable Handle Bar (Issue 4) */}
-      {!isMinimized && (
+      {/* User-Resizable Handle Bar */}
+      {!isMinimized && !inline && (
         <div className="together-resize-bar">
           <div
             className="together-resize-edge"

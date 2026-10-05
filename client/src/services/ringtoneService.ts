@@ -78,6 +78,8 @@ async function deleteStoredCustomRingtone(userId: string): Promise<void> {
   } catch {}
 }
 
+type RingtoneStateListener = (info: { hasCustom: boolean; name: string | null }) => void;
+
 class RingtoneService {
   private audioCtx: AudioContext | null = null;
   private isPlaying = false;
@@ -94,6 +96,23 @@ class RingtoneService {
   private autoplayBlocked = false;
 
   private currentUserId: string | null = null;
+  private stateListeners: RingtoneStateListener[] = [];
+
+  /**
+   * Subscribe to ringtone state changes (custom ringtone loaded, saved, or reset).
+   * Returns an unsubscribe function.
+   */
+  onStateChange(listener: RingtoneStateListener): () => void {
+    this.stateListeners.push(listener);
+    return () => {
+      this.stateListeners = this.stateListeners.filter(l => l !== listener);
+    };
+  }
+
+  private notifyStateListeners() {
+    const info = this.getCustomRingtoneInfo();
+    this.stateListeners.forEach(l => l(info));
+  }
 
   constructor() {
     this.initAudioElement();
@@ -123,6 +142,8 @@ class RingtoneService {
         this.audioElement.src = this.customBlobUrl;
         this.audioElement.load();
       }
+      // Notify subscribers (e.g. SettingsModal) that the custom ringtone is now loaded
+      this.notifyStateListeners();
     }
   }
 
@@ -200,6 +221,7 @@ class RingtoneService {
       this.audioElement.load();
     }
 
+    this.notifyStateListeners();
     return { success: true, name: file.name };
   }
 
@@ -216,6 +238,7 @@ class RingtoneService {
       this.audioElement.src = '/audio/wibby-ringtone.mp3';
       this.audioElement.load();
     }
+    this.notifyStateListeners();
   }
 
   startPreview(onEnded?: () => void) {

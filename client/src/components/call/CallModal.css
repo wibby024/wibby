@@ -42,8 +42,13 @@
 }
 
 @keyframes callFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .call-card {
@@ -107,6 +112,7 @@
     opacity: 0;
     transform: scale(0.92) translateY(12px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -169,6 +175,7 @@
     transform: scale(0.85);
     opacity: 0.9;
   }
+
   100% {
     transform: scale(1.6);
     opacity: 0;
@@ -274,6 +281,7 @@
     transform: scale(0.9);
     opacity: 0.9;
   }
+
   100% {
     transform: scale(1.6);
     opacity: 0;
@@ -482,6 +490,7 @@
     opacity: 0;
     transform: translate(-50%, 14px) scale(0.96);
   }
+
   to {
     opacity: 1;
     transform: translate(-50%, 0) scale(1);
@@ -579,7 +588,8 @@
   height: 100%;
   max-width: 100%;
   max-height: 100%;
-  object-fit: contain; /* Remote: preserve full laptop/camera frame */
+  object-fit: contain;
+  /* Remote: preserve full laptop/camera frame */
   background: #000;
   display: block;
 }
@@ -598,12 +608,14 @@
   .call-video-stage.view-mode-grid {
     padding: calc(56px + env(safe-area-inset-top, 0px)) 10px calc(76px + env(safe-area-inset-bottom, 0px)) 10px;
   }
+
   .call-video-stage.view-mode-grid:not(.has-focused-participant) .call-stage-presentation-frame {
     width: 100% !important;
     max-width: 100% !important;
     height: 100%;
     gap: 8px;
   }
+
   .call-video-stage.view-mode-grid .call-video-panel {
     border-radius: 12px;
     max-height: calc(50% - 4px);
@@ -672,7 +684,8 @@
   height: 100%;
   max-width: 100%;
   max-height: 100%;
-  object-fit: contain; /* Remote: preserve full laptop/camera frame */
+  object-fit: contain;
+  /* Remote: preserve full laptop/camera frame */
   background: #000;
   display: block;
 }
@@ -691,12 +704,14 @@
   .call-video-stage.view-mode-stacked {
     padding: calc(56px + env(safe-area-inset-top, 0px)) 10px calc(76px + env(safe-area-inset-bottom, 0px)) 10px;
   }
+
   .call-video-stage.view-mode-stacked:not(.has-focused-participant) .call-stage-presentation-frame {
     width: 100% !important;
     max-width: 100% !important;
     height: 100%;
     gap: 8px;
   }
+
   .call-video-stage.view-mode-stacked .call-video-panel {
     border-radius: 12px;
     max-height: calc(50% - 4px);
@@ -899,7 +914,8 @@
 }
 
 .call-screenshare-sidebar .call-sidebar-user-tile.local video {
-  transform: scaleX(-1); /* Local selfie camera remains mirrored */
+  transform: scaleX(-1);
+  /* Local selfie camera remains mirrored */
   -webkit-transform: scaleX(-1);
 }
 
@@ -1003,6 +1019,7 @@
   .call-video-stage.view-mode-screenshare {
     padding: calc(56px + env(safe-area-inset-top, 0px)) 0px calc(76px + env(safe-area-inset-bottom, 0px)) 0px;
   }
+
   /* Mobile: hero fills 100%, tiles float bottom-right */
   .call-video-stage.view-mode-screenshare .call-stage-presentation-frame {
     flex-direction: column;
@@ -1010,6 +1027,7 @@
     height: 100%;
     gap: 0;
   }
+
   .call-screenshare-main {
     flex: 1 1 100%;
     width: 100%;
@@ -1018,6 +1036,7 @@
     border: none;
     box-shadow: none;
   }
+
   /* Float tiles bottom-right on mobile */
   .call-screenshare-sidebar {
     position: absolute;
@@ -1031,6 +1050,7 @@
     max-height: unset;
     pointer-events: auto;
   }
+
   .call-screenshare-sidebar .call-sidebar-user-tile {
     width: clamp(80px, 22vw, 110px);
     aspect-ratio: 16 / 9;
@@ -1153,6 +1173,7 @@
 .call-panel-focus-hint.exit {
   opacity: 0.85;
 }
+
 .call-video-panel:hover .call-panel-focus-hint.exit {
   opacity: 1;
 }
@@ -1210,7 +1231,8 @@
   height: 100%;
   max-width: 100%;
   max-height: 100%;
-  object-fit: contain; /* Complete uncropped native frame */
+  object-fit: contain;
+  /* Complete uncropped native frame */
   z-index: 3;
   display: block;
   will-change: transform;
@@ -1219,7 +1241,8 @@
 }
 
 .call-video-fg-live.local-main {
-  transform: scaleX(-1) translateZ(0); /* Mirrored selfie */
+  transform: scaleX(-1) translateZ(0);
+  /* Mirrored selfie */
   -webkit-transform: scaleX(-1) translateZ(0);
 }
 
@@ -1277,7 +1300,8 @@ video.is-screen-share {
 .call-video-panel.local-panel.is-pip-window .call-video-fg-live.local-main {
   width: 100%;
   height: 100%;
-  object-fit: cover; /* Crisp edge-to-edge video inside popup window */
+  object-fit: cover;
+  /* Crisp edge-to-edge video inside popup window */
   filter: none;
 }
 
@@ -1494,8 +1518,13 @@ video.is-screen-share {
 }
 
 @keyframes speakingWave {
-  0% { transform: scaleY(0.4); }
-  100% { transform: scaleY(1.2); }
+  0% {
+    transform: scaleY(0.4);
+  }
+
+  100% {
+    transform: scaleY(1.2);
+  }
 }
 
 /* ============================================================
@@ -1592,12 +1621,27 @@ video.is-screen-share {
   animation: pulseDot 1.4s infinite;
   opacity: 0.3;
 }
-.call-status-dots-anim span:nth-child(2) { animation-delay: 0.2s; }
-.call-status-dots-anim span:nth-child(3) { animation-delay: 0.4s; }
+
+.call-status-dots-anim span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.call-status-dots-anim span:nth-child(3) {
+  animation-delay: 0.4s;
+}
 
 @keyframes pulseDot {
-  0%, 100% { opacity: 0.3; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.3); }
+
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
 }
 
 .call-status-card-subtitle {
@@ -1796,6 +1840,7 @@ video.is-screen-share {
   .call-layout-btn span {
     display: none;
   }
+
   .call-layout-btn {
     padding: 6px 8px;
   }
@@ -1917,8 +1962,15 @@ video.is-screen-share {
 }
 
 @keyframes screen-share-pulse {
-  0%, 100% { box-shadow: 0 4px 18px rgba(6, 182, 212, 0.45); }
-  50%       { box-shadow: 0 4px 28px rgba(6, 182, 212, 0.75); }
+
+  0%,
+  100% {
+    box-shadow: 0 4px 18px rgba(6, 182, 212, 0.45);
+  }
+
+  50% {
+    box-shadow: 0 4px 28px rgba(6, 182, 212, 0.75);
+  }
 }
 
 /* Reconnection Notification Banners */
@@ -1972,8 +2024,13 @@ video.is-screen-share {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .call-snapshot-toast {
@@ -2119,6 +2176,7 @@ video.is-screen-share {
     opacity: 0;
     transform: translateY(-12px) scale(0.96);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -2158,8 +2216,15 @@ video.is-screen-share {
 }
 
 @keyframes diagPulse {
-  from { opacity: 0.6; transform: scale(0.85); }
-  to { opacity: 1; transform: scale(1.15); }
+  from {
+    opacity: 0.6;
+    transform: scale(0.85);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.15);
+  }
 }
 
 .call-diag-close-btn {
@@ -2375,6 +2440,7 @@ video.is-screen-share {
    ============================================================ */
 
 @media (max-width: 768px) {
+
   /* Video Call Overlay & Stage */
   .call-video-overlay {
     width: 100vw;
@@ -2416,7 +2482,8 @@ video.is-screen-share {
   }
 
   .call-video-top-bar .call-layout-switcher {
-    display: none; /* Layout switcher is already accessible in the bottom controls pill */
+    display: none;
+    /* Layout switcher is already accessible in the bottom controls pill */
   }
 
   .call-video-top-actions {
@@ -2678,7 +2745,8 @@ video.is-screen-share {
   }
 
   .call-video-controls-bar .call-btn-label {
-    display: none; /* Hide labels on mobile to keep a sleek, compact floating action bar */
+    display: none;
+    /* Hide labels on mobile to keep a sleek, compact floating action bar */
   }
 }
 
@@ -2913,9 +2981,11 @@ video.is-screen-share {
   .call-screenshare-sidebar {
     width: clamp(72px, 28vw, 110px) !important;
   }
+
   .call-screenshare-sidebar .call-sidebar-user-tile {
     border-radius: 8px;
   }
+
   .call-screenshare-badge-bar span:not(.call-screenshare-hd-pill) {
     max-width: 90px;
     overflow: hidden;
@@ -2929,24 +2999,29 @@ video.is-screen-share {
   .call-video-stage.view-mode-stacked {
     padding: calc(44px + env(safe-area-inset-top, 0px)) 8px calc(60px + env(safe-area-inset-bottom, 0px)) 8px;
   }
+
   .call-video-stage.view-mode-screenshare {
     padding: calc(44px + env(safe-area-inset-top, 0px)) 8px calc(60px + env(safe-area-inset-bottom, 0px)) 8px;
   }
+
   .call-video-controls-bar {
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     padding: 6px 12px;
     gap: 8px;
   }
+
   .call-video-controls-bar .call-btn {
     width: 38px !important;
     height: 38px !important;
     min-width: 38px !important;
     min-height: 38px !important;
   }
+
   .call-video-controls-bar .call-btn svg {
     width: 16px !important;
     height: 16px !important;
   }
+
   .call-video-controls-bar .call-btn-label {
     display: none !important;
   }
@@ -3104,7 +3179,7 @@ video.is-screen-share {
   transform: translateY(-1px);
 }
 
-/* Movie Mode Sidebar: Stacked Users (Top and Bottom) + Pop-up Chat Action */
+/* Movie Mode Sidebar: Stacked Users (Top) + Integrated Chat (Bottom) */
 .call-moviemode-sidebar {
   width: clamp(280px, 28vw, 420px);
   flex-shrink: 0;
@@ -3120,13 +3195,13 @@ video.is-screen-share {
 .call-moviemode-users-strip {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .call-moviemode-user-tile {
   width: 100%;
-  height: clamp(120px, 18vh, 180px);
+  height: 110px;
   border-radius: 12px;
   background: #0e0d16;
   border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.16));
@@ -3161,182 +3236,54 @@ video.is-screen-share {
   z-index: 5;
 }
 
-/* Sidebar Chat Action Card */
-.call-moviemode-sidebar-chat-action {
-  margin-top: 4px;
-}
-
-.call-moviemode-open-chat-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: rgba(99, 102, 241, 0.14);
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.call-moviemode-open-chat-btn:hover {
-  background: rgba(99, 102, 241, 0.25);
-  border-color: rgba(99, 102, 241, 0.6);
-  transform: translateY(-1px);
-}
-
-.call-moviemode-open-chat-btn.is-open {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
-  color: var(--wibby-text-muted, #94a3b8);
-}
-
-.call-moviemode-chat-btn-badge {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: rgba(99, 102, 241, 0.3);
-  color: #a5b4fc;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* ==========================================================================
-   Movie Mode Pop-Up Chat Window
-   ========================================================================== */
-
-.call-moviemode-chat-popup-window {
-  position: absolute;
-  bottom: 24px;
-  right: calc(clamp(280px, 28vw, 420px) + 24px);
-  width: clamp(320px, 28vw, 420px);
-  height: clamp(380px, 55vh, 560px);
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 120px);
-  border-radius: 16px;
-  background: var(--wibby-surface, rgba(15, 23, 42, 0.96));
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.16));
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1);
+.call-moviemode-chat-container {
+  flex: 1 1 0;
+  min-height: 180px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  z-index: 100;
-  animation: movieChatPopupIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 14px;
+  background: var(--wibby-surface, rgba(15, 23, 42, 0.95));
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.12));
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
 }
 
-@keyframes movieChatPopupIn {
-  from {
-    opacity: 0;
-    transform: translateY(16px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.call-moviemode-chat-popup-header {
+.call-moviemode-chat-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--wibby-header, rgba(255, 255, 255, 0.06));
-  border-bottom: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.1));
+  padding: 8px 12px;
+  background: var(--wibby-header, rgba(255, 255, 255, 0.05));
+  border-bottom: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.08));
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wibby-text, #fff);
   flex-shrink: 0;
 }
 
-.call-moviemode-chat-popup-title-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.call-moviemode-chat-popup-icon {
-  font-size: 15px;
-}
-
-.call-moviemode-chat-popup-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--wibby-text, #fff);
-  letter-spacing: -0.2px;
-}
-
-.call-moviemode-chat-popup-tag {
-  font-size: 12px;
-  color: var(--wibby-text-muted, #94a3b8);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.call-moviemode-chat-popup-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.call-moviemode-chat-popup-ctrl-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--wibby-text, #fff);
-  border-radius: 8px;
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.15s ease;
-}
-
-.call-moviemode-chat-popup-ctrl-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-  transform: scale(1.05);
-}
-
-.call-moviemode-chat-popup-body {
+.call-moviemode-chat-body {
   flex: 1 1 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
 }
 
 @media (max-width: 900px) and (min-width: 640px) {
   .call-moviemode-sidebar {
     width: clamp(250px, 32vw, 340px);
   }
-  .call-moviemode-user-tile {
-    height: 110px;
-  }
-  .call-moviemode-chat-popup-window {
-    right: calc(clamp(250px, 32vw, 340px) + 16px);
-  }
-}
 
-@media (max-width: 639px) {
-  .call-moviemode-chat-popup-window {
-    left: 12px;
-    right: 12px;
-    bottom: 84px;
-    width: calc(100vw - 24px);
-    height: 52vh;
+  .call-moviemode-user-tile {
+    height: 85px;
   }
 }
 
 /* Reference Layout Docking:
    Call controls positioned at bottom center of the PRIMARY LEFT area */
 @media (min-width: 640px) {
+
   .call-video-overlay.is-screenshare-mode .call-video-controls-bar,
   .call-video-overlay.is-moviemode-mode .call-video-controls-bar {
     left: calc((100% - clamp(280px, 28vw, 420px) - 32px) / 2 + 16px);
@@ -3344,4 +3291,3 @@ video.is-screen-share {
     bottom: 24px;
   }
 }
-

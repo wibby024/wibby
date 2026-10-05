@@ -125,9 +125,9 @@ export interface TogetherSession {
   isPlaying?: boolean;
   currentTime?: number;
   updatedAt?: string;
-  version?: number;
-  lastActionUid?: string;
   sentAt?: number;
+  lastActionUid?: string;
+  version?: number;
 }
 
 export type ThemeFamily =
@@ -141,7 +141,7 @@ export type ThemeFamily =
   | 'sage'
   | 'monochrome';
 
-export type ChatThemePreset = 
+export type ChatThemePreset =
   | ThemeFamily
   | 'ig-classic'
   | 'ig-cyberpunk'
@@ -151,11 +151,11 @@ export type ChatThemePreset =
   | 'ig-love'
   | 'ig-midnight'
   | 'ig-monochrome'
-  | 'classic-purple' 
-  | 'midnight-velvet' 
-  | 'sunset-glow' 
-  | 'emerald-forest' 
-  | 'rose-quartz' 
+  | 'classic-purple'
+  | 'midnight-velvet'
+  | 'sunset-glow'
+  | 'emerald-forest'
+  | 'rose-quartz'
   | 'slate-minimal'
   | 'wibby-whatsapp'
   | 'wibby-instagram';

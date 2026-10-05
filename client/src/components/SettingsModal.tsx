@@ -131,6 +131,15 @@ export default function SettingsModal({
   const [ringtoneLoading, setRingtoneLoading] = useState(false);
   const ringtoneFileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Keep ringtone info in sync whenever the service asynchronously loads a custom
+  // ringtone from IndexedDB (e.g. after redeployment / page refresh).
+  useEffect(() => {
+    const unsubscribe = ringtoneService.onStateChange((info) => {
+      setCustomRingtoneInfo(info);
+    });
+    return unsubscribe;
+  }, []);
+
   useEffect(() => {
     if (!isOpen) {
       ringtoneService.stopPreview();
