@@ -594,9 +594,9 @@
   display: block;
 }
 
-/* Local selfie video in grid mode: cover fills the panel naturally */
+/* Local selfie video in grid mode: contain preserves full camera framing without pixel blowup */
 .call-video-stage.view-mode-grid .call-video-panel.local-panel .call-video-fg-live.local-main {
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .call-video-stage.view-mode-grid .call-video-bg-live,
@@ -690,9 +690,9 @@
   display: block;
 }
 
-/* Local selfie video in stacked mode: cover fills the panel naturally */
+/* Local selfie video in stacked mode: contain preserves full camera framing without pixel blowup */
 .call-video-stage.view-mode-stacked .call-video-panel.local-panel .call-video-fg-live.local-main {
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .call-video-stage.view-mode-stacked .call-video-bg-live,
@@ -2960,9 +2960,9 @@ video.is-screen-share {
   display: block !important;
 }
 
-/* Local selfie in stacked tiles: cover fills the self-view panel */
+/* Local selfie in stacked tiles: contain preserves full camera framing without pixel blowup */
 .call-video-stage.view-mode-stacked .local-panel .call-video-fg-live.local-main {
-  object-fit: cover !important;
+  object-fit: contain !important;
 }
 
 /* Screenshare hero always uses contain — never cover */

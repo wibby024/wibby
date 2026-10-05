@@ -132,11 +132,38 @@ function WibbyAppWrapper() {
     localStorage.setItem('wibby-chat-theme', chatThemePreset);
   }, [chatThemePreset]);
 
-  // Initialize notification and ringtone service
+  // Initialize notification and ringtone service with account sync
   useEffect(() => {
     if (user) {
       notificationService.init();
       ringtoneService.setUserId(user.uid);
+
+      // Account-wide preferences sync
+      (async () => {
+        try {
+          const token = await user.getIdToken();
+          await ringtoneService.syncWithAccount(token, user.uid);
+
+          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+          const prefRes = await fetch(`${apiUrl}/api/users/preferences`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (prefRes.ok) {
+            const prefData = await prefRes.json();
+            const prefs = prefData?.preferences;
+            if (prefs) {
+              if (prefs.themeMode && (prefs.themeMode === 'light' || prefs.themeMode === 'dark')) {
+                setTheme(prefs.themeMode);
+              }
+              if (prefs.themeFamily) {
+                setChatThemePreset(prefs.themeFamily as ChatThemePreset);
+              }
+            }
+          }
+        } catch (syncErr) {
+          console.warn('[WIBBY PREFERENCES] Sync error:', syncErr);
+        }
+      })();
     }
   }, [user]);
 
@@ -158,6 +185,20 @@ function WibbyAppWrapper() {
       localStorage.setItem('wibby-theme', next);
       if (user?.uid) {
         localStorage.setItem(`wibby-theme-${user.uid}`, next);
+        (async () => {
+          try {
+            const token = await user.getIdToken();
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+            fetch(`${apiUrl}/api/users/preferences`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`
+              },
+              body: JSON.stringify({ themeMode: next })
+            }).catch(() => {});
+          } catch {}
+        })();
       }
       return next;
     });
@@ -436,8 +477,22 @@ function WibbyAppWrapper() {
     localStorage.setItem('wibby-chat-theme', preset);
     if (user?.uid) {
       localStorage.setItem(`wibby-chat-theme-${user.uid}`, preset);
+      (async () => {
+        try {
+          const token = await user.getIdToken();
+          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+          fetch(`${apiUrl}/api/users/preferences`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ themeFamily: preset })
+          }).catch(() => {});
+        } catch {}
+      })();
     }
-  }, [user?.uid]);
+  }, [user]);
 
   const [chatClearCount, setChatClearCount] = useState(0);
 

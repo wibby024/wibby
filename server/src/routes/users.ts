@@ -652,4 +652,167 @@ router.get('/:uid/keys', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+const ringtoneUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 8 * 1024 * 1024, // 8MB limit
+    files: 1
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/m4a', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/aac'];
+    if (allowed.includes(file.mimetype) || file.originalname.match(/\.(mp3|m4a|ogg|wav|webm|aac|mp4)$/i)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid audio format. Allowed: MP3, M4A, OGG, WAV, WEBM, AAC'));
+    }
+  }
+});
+
+const preferencesSchema = z.object({
+  themeMode: z.enum(['light', 'dark']).optional(),
+  themeFamily: z.string().min(1).max(50).optional(),
+  ringtone: z.object({
+    id: z.string().min(1).max(50),
+    name: z.string().max(100).optional(),
+    version: z.number().optional(),
+    customAudioUrl: z.string().optional()
+  }).optional()
+});
+
+/**
+ * GET /api/users/preferences
+ * Fetch account-wide preferences (Theme & Ringtone)
+ */
+router.get('/preferences', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const db = getDb();
+    const userDoc = await db.collection('users').findOne({ firebaseUid: user.uid });
+
+    const defaultPreferences = {
+      themeMode: 'dark',
+      themeFamily: 'classic',
+      ringtone: {
+        id: 'default',
+        name: 'Wibby Classic',
+        version: 1
+      }
+    };
+
+    const preferences = userDoc?.preferences ? { ...defaultPreferences, ...userDoc.preferences } : defaultPreferences;
+    res.json({ preferences });
+  } catch (err) {
+    console.error('[WIBBY PREFERENCES] Fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch user preferences' });
+  }
+});
+
+/**
+ * PATCH /api/users/preferences
+ * Update account-wide preferences (Theme & Ringtone)
+ */
+router.patch('/preferences', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const parsed = preferencesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid preferences payload', details: parsed.error.issues });
+    }
+
+    const db = getDb();
+    const updateFields: Record<string, any> = { updatedAt: new Date() };
+
+    if (parsed.data.themeMode) {
+      updateFields['preferences.themeMode'] = parsed.data.themeMode;
+    }
+    if (parsed.data.themeFamily) {
+      updateFields['preferences.themeFamily'] = parsed.data.themeFamily;
+    }
+    if (parsed.data.ringtone) {
+      updateFields['preferences.ringtone'] = parsed.data.ringtone;
+    }
+
+    await db.collection('users').updateOne(
+      { firebaseUid: user.uid },
+      { $set: updateFields },
+      { upsert: true }
+    );
+
+    const updated = await db.collection('users').findOne({ firebaseUid: user.uid });
+    res.json({ success: true, preferences: updated?.preferences });
+  } catch (err) {
+    console.error('[WIBBY PREFERENCES] Update error:', err);
+    res.status(500).json({ error: 'Failed to update preferences' });
+  }
+});
+
+/**
+ * POST /api/users/ringtone
+ * Upload custom ringtone file (Persisted to GridFS in MongoDB Atlas)
+ */
+router.post('/ringtone', requireAuth, ringtoneUpload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file uploaded' });
+    }
+
+    const storage = getStorageProvider();
+    const key = `ringtones/${user.uid}`;
+    const cleanName = req.file.originalname.replace(/\.[^/.]+$/, '').slice(0, 50) || 'Custom Ringtone';
+
+    await storage.upload(req.file.buffer, key, req.file.mimetype, {
+      originalName: req.file.originalname,
+      userId: user.uid
+    });
+
+    const ringtoneMeta = {
+      id: 'custom',
+      name: cleanName,
+      version: Date.now(),
+      customAudioUrl: '/api/users/ringtone-audio'
+    };
+
+    const db = getDb();
+    await db.collection('users').updateOne(
+      { firebaseUid: user.uid },
+      {
+        $set: {
+          'preferences.ringtone': ringtoneMeta,
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true }
+    );
+
+    res.json({ success: true, ringtone: ringtoneMeta });
+  } catch (err: any) {
+    console.error('[WIBBY RINGTONE] Upload error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to upload custom ringtone' });
+  }
+});
+
+/**
+ * GET /api/users/ringtone-audio
+ * Stream custom ringtone audio safely for authenticated user
+ */
+router.get('/ringtone-audio', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const storage = getStorageProvider();
+    const key = `ringtones/${user.uid}`;
+
+    const streamResult = await storage.getStream(key);
+    res.setHeader('Content-Type', streamResult.mimeType || 'audio/mpeg');
+    if (streamResult.size) {
+      res.setHeader('Content-Length', streamResult.size);
+    }
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    streamResult.stream.pipe(res);
+  } catch (err: any) {
+    console.warn('[WIBBY RINGTONE] Audio not found or streaming error:', err?.message);
+    res.status(404).json({ error: 'Custom ringtone audio not found' });
+  }
+});
+
 export default router;

@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import type { ChatThemePreset } from '../types/chat';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { notificationService, NOTIFICATION_TONES, type NotificationTone } from '../services/notificationService';
-import { ringtoneService } from '../services/ringtoneService';
+import { ringtoneService, WIBBY_RINGTONE_PRESETS } from '../services/ringtoneService';
 import {
   IconSettings,
   IconClose,
@@ -124,15 +124,15 @@ export default function SettingsModal({
     }
   };
 
-  // Ringtone State (Issue 13)
+  // Ringtone State (Issue 13 & Account-Wide Sync)
   const [customRingtoneInfo, setCustomRingtoneInfo] = useState(() => ringtoneService.getCustomRingtoneInfo());
   const [ringtonePreviewing, setRingtonePreviewing] = useState(false);
+  const [previewingPresetId, setPreviewingPresetId] = useState<string | null>(null);
   const [ringtoneError, setRingtoneError] = useState<string | null>(null);
   const [ringtoneLoading, setRingtoneLoading] = useState(false);
   const ringtoneFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Keep ringtone info in sync whenever the service asynchronously loads a custom
-  // ringtone from IndexedDB (e.g. after redeployment / page refresh).
+  // Keep ringtone info in sync whenever the service updates
   useEffect(() => {
     const unsubscribe = ringtoneService.onStateChange((info) => {
       setCustomRingtoneInfo(info);
@@ -144,10 +144,25 @@ export default function SettingsModal({
     if (!isOpen) {
       ringtoneService.stopPreview();
       setRingtonePreviewing(false);
+      setPreviewingPresetId(null);
     } else {
       setCustomRingtoneInfo(ringtoneService.getCustomRingtoneInfo());
     }
   }, [isOpen]);
+
+  const handleSelectPreset = async (presetId: string, presetName: string) => {
+    setRingtoneLoading(true);
+    setRingtoneError(null);
+    try {
+      const token = await user?.getIdToken();
+      await ringtoneService.selectPreset(presetId, presetName, token);
+      setCustomRingtoneInfo(ringtoneService.getCustomRingtoneInfo());
+    } catch (err: any) {
+      setRingtoneError(err?.message || 'Failed to select ringtone');
+    } finally {
+      setRingtoneLoading(false);
+    }
+  };
 
   const handleRingtoneUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -155,8 +170,9 @@ export default function SettingsModal({
     setRingtoneLoading(true);
     setRingtoneError(null);
     try {
-      const res = await ringtoneService.saveCustomRingtone(file);
-      setCustomRingtoneInfo({ hasCustom: true, name: res.name });
+      const token = await user?.getIdToken();
+      await ringtoneService.saveCustomRingtone(file, token);
+      setCustomRingtoneInfo(ringtoneService.getCustomRingtoneInfo());
     } catch (err: any) {
       setRingtoneError(err?.message || 'Failed to upload custom ringtone');
     } finally {
@@ -165,14 +181,18 @@ export default function SettingsModal({
     }
   };
 
-  const handleToggleRingtonePreview = () => {
-    if (ringtonePreviewing) {
+  const handleToggleRingtonePreview = (presetId?: string) => {
+    const target = presetId || customRingtoneInfo.activeId;
+    if (ringtonePreviewing && previewingPresetId === target) {
       ringtoneService.stopPreview();
       setRingtonePreviewing(false);
+      setPreviewingPresetId(null);
     } else {
       setRingtonePreviewing(true);
-      ringtoneService.startPreview(() => {
+      setPreviewingPresetId(target);
+      ringtoneService.startPreview(target, () => {
         setRingtonePreviewing(false);
+        setPreviewingPresetId(null);
       });
     }
   };
@@ -181,9 +201,11 @@ export default function SettingsModal({
     setRingtoneLoading(true);
     setRingtoneError(null);
     try {
-      await ringtoneService.resetToDefault();
-      setCustomRingtoneInfo({ hasCustom: false, name: null });
+      const token = await user?.getIdToken();
+      await ringtoneService.resetToDefault(token);
+      setCustomRingtoneInfo(ringtoneService.getCustomRingtoneInfo());
       setRingtonePreviewing(false);
+      setPreviewingPresetId(null);
     } catch (err: any) {
       setRingtoneError(err?.message || 'Failed to reset ringtone');
     } finally {
@@ -813,59 +835,72 @@ export default function SettingsModal({
                   )}
                 </div>
 
-                {/* Incoming Call Ringtone Section (Issue 13) */}
+                {/* Incoming Call Ringtone Section (Account-Wide Sync & Presets) */}
                 <div className="settings-group-card">
-                  <label className="settings-group-title">Incoming Call Ringtone</label>
-                  <p className="privacy-desc" style={{ marginBottom: 12 }}>
-                    Choose the ringtone that sounds when your partner calls you.
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                    <label className="settings-group-title" style={{ margin: 0 }}>Incoming Call Ringtone</label>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--wibby-accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      ☁️ Account-Wide Sync
+                    </span>
+                  </div>
+                  <p className="privacy-desc" style={{ marginTop: 6, marginBottom: 12 }}>
+                    Your ringtone preference is saved to your Wibby account and automatically applies to all your devices.
                   </p>
 
                   <div className="settings-ringtone-options" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div
-                      className={`settings-tone-card ${!customRingtoneInfo.hasCustom ? 'active' : ''}`}
-                      onClick={handleResetRingtone}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <div className="settings-tone-card-top">
-                        <span className="settings-tone-icon">🔔</span>
-                        <div className="settings-tone-info">
-                          <span className="settings-tone-name">Default Wibby Ringtone</span>
-                          <p className="settings-tone-desc">Original harmonic acoustic incoming call chime</p>
-                        </div>
-                        <div className={`settings-tone-radio ${!customRingtoneInfo.hasCustom ? 'checked' : ''}`}>
-                          {!customRingtoneInfo.hasCustom && <span className="settings-tone-radio-dot" />}
-                        </div>
-                      </div>
-                    </div>
+                    {WIBBY_RINGTONE_PRESETS.map((preset) => {
+                      const isCustom = preset.id === 'custom';
+                      const isActive = customRingtoneInfo.activeId === preset.id;
+                      const isThisPreviewing = ringtonePreviewing && previewingPresetId === preset.id;
+                      const displayName = isCustom
+                        ? (customRingtoneInfo.hasCustom ? `Custom: ${customRingtoneInfo.customName || 'Uploaded Audio'}` : 'Upload Custom Ringtone')
+                        : preset.name;
 
-                    <div
-                      className={`settings-tone-card ${customRingtoneInfo.hasCustom ? 'active' : ''}`}
-                      onClick={() => {
-                        if (!customRingtoneInfo.hasCustom) {
-                          ringtoneFileInputRef.current?.click();
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <div className="settings-tone-card-top">
-                        <span className="settings-tone-icon">🎵</span>
-                        <div className="settings-tone-info">
-                          <span className="settings-tone-name">
-                            {customRingtoneInfo.hasCustom
-                              ? `Custom: ${customRingtoneInfo.name}`
-                              : 'Upload Custom Ringtone'}
-                          </span>
-                          <p className="settings-tone-desc">
-                            Supports MP3, playable MP4, WAV, M4A, OGG (Max 8MB)
-                          </p>
+                      return (
+                        <div
+                          key={preset.id}
+                          className={`settings-tone-card ${isActive ? 'active' : ''}`}
+                          onClick={() => {
+                            if (isCustom) {
+                              if (!customRingtoneInfo.hasCustom) {
+                                ringtoneFileInputRef.current?.click();
+                              } else {
+                                handleSelectPreset('custom', customRingtoneInfo.customName || 'Custom Ringtone');
+                              }
+                            } else {
+                              handleSelectPreset(preset.id, preset.name);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <div className="settings-tone-card-top">
+                            <span className="settings-tone-icon">{preset.icon}</span>
+                            <div className="settings-tone-info">
+                              <span className="settings-tone-name">{displayName}</span>
+                              <p className="settings-tone-desc">{preset.description}</p>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <button
+                                type="button"
+                                className="settings-tone-preview-btn"
+                                style={{ padding: '4px 10px', fontSize: '0.75rem', height: 28 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleRingtonePreview(preset.id);
+                                }}
+                                disabled={ringtoneLoading}
+                              >
+                                {isThisPreviewing ? '⏹ Stop' : '▶ Play'}
+                              </button>
+                              <div className={`settings-tone-radio ${isActive ? 'checked' : ''}`}>
+                                {isActive && <span className="settings-tone-radio-dot" />}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <div className={`settings-tone-radio ${customRingtoneInfo.hasCustom ? 'checked' : ''}`}>
-                          {customRingtoneInfo.hasCustom && <span className="settings-tone-radio-dot" />}
-                        </div>
-                      </div>
-                    </div>
+                      );
+                    })}
                   </div>
 
                   <input
@@ -883,15 +918,6 @@ export default function SettingsModal({
                   )}
 
                   <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      className="settings-tone-preview-btn"
-                      onClick={handleToggleRingtonePreview}
-                      disabled={ringtoneLoading}
-                    >
-                      {ringtonePreviewing ? '⏹ Stop Ringtone' : '▶ Preview Ringtone'}
-                    </button>
-
                     <button
                       type="button"
                       className="settings-tone-preview-btn"

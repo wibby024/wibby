@@ -1,14 +1,38 @@
 /**
  * Dedicated Modern Incoming Call Ringtone Service for Wibby.
  * 
- * Features:
- * - Plays original modern, warm Wibby incoming call ringtone (/audio/wibby-ringtone.mp3).
- * - High-fidelity Web Audio API melodic synthesizer fallback (D-maj9 / B-min11 chime motif).
+ * Account-Wide Architecture:
+ * - Server/database (MongoDB Atlas) is the authoritative source of truth for ringtone preferences.
+ * - IndexedDB serves as a high-performance local audio cache across page reloads.
+ * - Supports presets ('Wibby Classic', 'Wibby Neon', 'Wibby Gentle', 'Wibby Chime') and 'Custom Upload'.
+ * - Custom uploads are safely streamed from /api/users/ringtone-audio and cached locally.
  * - Controlled single-instance lifecycle: zero overlapping audio instances, zero leaks.
- * - Immediate, reliable stop on accept, reject, caller cancel, or component unmount.
- * - Resilient autoplay unlock on first user interaction if browser policy blocks initial audio.
- * - Clean zero-crossing loop boundary: no clicks, pops, or audible glitches.
+ * - Clean Web Audio synthesis for custom presets and fallback on autoplay blockage.
  */
+
+export interface RingtonePreset {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+}
+
+export const WIBBY_RINGTONE_PRESETS: RingtonePreset[] = [
+  { id: 'default', name: 'Wibby Classic', description: 'Original harmonic acoustic incoming call chime', icon: '🔔' },
+  { id: 'wibby-neon', name: 'Wibby Neon', description: 'Upbeat electric synth chime motif', icon: '⚡' },
+  { id: 'wibby-gentle', name: 'Wibby Gentle', description: 'Warm ambient rhodes melody', icon: '🌿' },
+  { id: 'wibby-chime', name: 'Wibby Chime', description: 'Crystalline celeste bell motif', icon: '✨' },
+  { id: 'custom', name: 'Custom Upload', description: 'Your personal uploaded audio file', icon: '🎵' }
+];
+
+export interface RingtoneStateInfo {
+  activeId: string;
+  activeName: string;
+  hasCustom: boolean;
+  name: string | null;
+  customName: string | null;
+  isAccountSynced: boolean;
+}
 
 interface SynthesizedVoice {
   start: number;
@@ -78,7 +102,7 @@ async function deleteStoredCustomRingtone(userId: string): Promise<void> {
   } catch {}
 }
 
-type RingtoneStateListener = (info: { hasCustom: boolean; name: string | null }) => void;
+type RingtoneStateListener = (info: RingtoneStateInfo) => void;
 
 class RingtoneService {
   private audioCtx: AudioContext | null = null;
@@ -96,23 +120,11 @@ class RingtoneService {
   private autoplayBlocked = false;
 
   private currentUserId: string | null = null;
+  private authToken: string | null = null;
+  private currentPresetId: string = 'default';
+  private currentPresetName: string = 'Wibby Classic';
+  private isAccountSynced = false;
   private stateListeners: RingtoneStateListener[] = [];
-
-  /**
-   * Subscribe to ringtone state changes (custom ringtone loaded, saved, or reset).
-   * Returns an unsubscribe function.
-   */
-  onStateChange(listener: RingtoneStateListener): () => void {
-    this.stateListeners.push(listener);
-    return () => {
-      this.stateListeners = this.stateListeners.filter(l => l !== listener);
-    };
-  }
-
-  private notifyStateListeners() {
-    const info = this.getCustomRingtoneInfo();
-    this.stateListeners.forEach(l => l(info));
-  }
 
   constructor() {
     this.initAudioElement();
@@ -122,14 +134,82 @@ class RingtoneService {
     }
   }
 
+  onStateChange(listener: RingtoneStateListener): () => void {
+    this.stateListeners.push(listener);
+    return () => {
+      this.stateListeners = this.stateListeners.filter(l => l !== listener);
+    };
+  }
+
+  private notifyStateListeners() {
+    const info = this.getCustomRingtoneInfo();
+    this.stateListeners.forEach(l => {
+      try { l(info); } catch {}
+    });
+  }
+
   async setUserId(userId: string) {
     if (this.currentUserId !== userId) {
       this.currentUserId = userId;
-      await this.loadCustomRingtone();
+      await this.loadLocalCustomRingtone();
     }
   }
 
-  private async loadCustomRingtone() {
+  /**
+   * Authoritative account sync on login/app mount.
+   * Fetches preference from backend MongoDB, downloads custom ringtone if needed, and caches locally.
+   */
+  async syncWithAccount(token: string, userId: string) {
+    this.currentUserId = userId;
+    this.authToken = token;
+
+    try {
+      const res = await fetch('/api/users/preferences', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const r = data?.preferences?.ringtone;
+        if (r && r.id) {
+          this.currentPresetId = r.id;
+          this.currentPresetName = r.name || 'Wibby Classic';
+
+          if (r.id === 'custom') {
+            const cached = await getStoredCustomRingtone(userId);
+            if (cached && cached.blob) {
+              if (this.customBlobUrl) URL.revokeObjectURL(this.customBlobUrl);
+              this.customBlobUrl = URL.createObjectURL(cached.blob);
+              this.customRingtoneName = cached.name || r.name || 'Custom Ringtone';
+            } else {
+              // Download from server GridFS
+              try {
+                const audioRes = await fetch('/api/users/ringtone-audio', {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                if (audioRes.ok) {
+                  const blob = await audioRes.blob();
+                  await saveStoredCustomRingtone(blob, r.name || 'Custom Ringtone', userId);
+                  if (this.customBlobUrl) URL.revokeObjectURL(this.customBlobUrl);
+                  this.customBlobUrl = URL.createObjectURL(blob);
+                  this.customRingtoneName = r.name || 'Custom Ringtone';
+                }
+              } catch (downloadErr) {
+                console.warn('[RINGTONE] Could not download remote custom ringtone:', downloadErr);
+              }
+            }
+          }
+        }
+      }
+      this.isAccountSynced = true;
+    } catch (err) {
+      console.warn('[RINGTONE] Account sync error, using local fallback:', err);
+    }
+
+    this.updateActiveAudioSource();
+    this.notifyStateListeners();
+  }
+
+  private async loadLocalCustomRingtone() {
     if (!this.currentUserId) return;
     const stored = await getStoredCustomRingtone(this.currentUserId);
     if (stored && stored.blob) {
@@ -138,23 +218,65 @@ class RingtoneService {
       }
       this.customBlobUrl = URL.createObjectURL(stored.blob);
       this.customRingtoneName = stored.name;
-      if (this.audioElement) {
-        this.audioElement.src = this.customBlobUrl;
-        this.audioElement.load();
-      }
-      // Notify subscribers (e.g. SettingsModal) that the custom ringtone is now loaded
+      this.updateActiveAudioSource();
       this.notifyStateListeners();
     }
   }
 
-  getCustomRingtoneInfo(): { hasCustom: boolean; name: string | null } {
+  private updateActiveAudioSource() {
+    if (!this.audioElement) return;
+    if (this.currentPresetId === 'custom' && this.customBlobUrl) {
+      this.audioElement.src = this.customBlobUrl;
+    } else {
+      this.audioElement.src = '/audio/wibby-ringtone.mp3';
+    }
+    this.audioElement.load();
+  }
+
+  getCustomRingtoneInfo(): RingtoneStateInfo {
     return {
+      activeId: this.currentPresetId,
+      activeName: this.currentPresetName,
       hasCustom: !!this.customBlobUrl,
-      name: this.customRingtoneName
+      name: this.currentPresetId === 'custom' ? this.customRingtoneName : this.currentPresetName,
+      customName: this.customRingtoneName,
+      isAccountSynced: this.isAccountSynced
     };
   }
 
-  async saveCustomRingtone(file: File): Promise<{ success: boolean; name: string }> {
+  async selectPreset(presetId: string, presetName?: string, token?: string): Promise<void> {
+    const found = WIBBY_RINGTONE_PRESETS.find(p => p.id === presetId);
+    this.currentPresetId = presetId;
+    this.currentPresetName = presetName || found?.name || 'Wibby Classic';
+
+    this.updateActiveAudioSource();
+    this.notifyStateListeners();
+
+    const effectiveToken = token || this.authToken;
+    if (effectiveToken) {
+      try {
+        await fetch('/api/users/preferences', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${effectiveToken}`
+          },
+          body: JSON.stringify({
+            ringtone: {
+              id: this.currentPresetId,
+              name: this.currentPresetName,
+              version: Date.now()
+            }
+          })
+        });
+        this.isAccountSynced = true;
+      } catch (err) {
+        console.warn('[RINGTONE] Failed to persist ringtone preset to account:', err);
+      }
+    }
+  }
+
+  async saveCustomRingtone(file: File, token?: string): Promise<{ success: boolean; name: string }> {
     if (!this.currentUserId) throw new Error('User not identified');
 
     // 1. Size limit: 8MB
@@ -173,7 +295,6 @@ class RingtoneService {
       throw new Error(`Audio format '${file.type || ext}' cannot be decoded by your browser.`);
     }
 
-    // Validate that browser can actually decode it
     const testUrl = URL.createObjectURL(file);
     try {
       await new Promise<void>((resolve, reject) => {
@@ -207,7 +328,27 @@ class RingtoneService {
       URL.revokeObjectURL(testUrl);
     }
 
-    // 3. Persist to IndexedDB
+    // 3. Persist to server (MongoDB Atlas GridFS) if authenticated
+    const effectiveToken = token || this.authToken;
+    if (effectiveToken) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const uploadRes = await fetch('/api/users/ringtone', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${effectiveToken}` },
+          body: formData
+        });
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json().catch(() => ({}));
+          console.warn('[RINGTONE] Server upload warning:', errData.error);
+        }
+      } catch (uploadErr) {
+        console.warn('[RINGTONE] Server upload failed, persisting locally:', uploadErr);
+      }
+    }
+
+    // 4. Cache in IndexedDB
     await saveStoredCustomRingtone(file, file.name, this.currentUserId);
 
     if (this.customBlobUrl) {
@@ -215,39 +356,53 @@ class RingtoneService {
     }
     this.customBlobUrl = URL.createObjectURL(file);
     this.customRingtoneName = file.name;
+    this.currentPresetId = 'custom';
+    this.currentPresetName = file.name;
 
-    if (this.audioElement) {
-      this.audioElement.src = this.customBlobUrl;
-      this.audioElement.load();
-    }
-
+    this.updateActiveAudioSource();
     this.notifyStateListeners();
     return { success: true, name: file.name };
   }
 
-  async resetToDefault(): Promise<void> {
-    if (!this.currentUserId) return;
-    this.stop();
-    await deleteStoredCustomRingtone(this.currentUserId);
+  async resetToDefault(token?: string): Promise<void> {
+    if (this.currentUserId) {
+      await deleteStoredCustomRingtone(this.currentUserId);
+    }
     if (this.customBlobUrl) {
       URL.revokeObjectURL(this.customBlobUrl);
       this.customBlobUrl = null;
     }
     this.customRingtoneName = null;
-    if (this.audioElement) {
-      this.audioElement.src = '/audio/wibby-ringtone.mp3';
-      this.audioElement.load();
-    }
-    this.notifyStateListeners();
+    await this.selectPreset('default', 'Wibby Classic', token);
   }
 
-  startPreview(onEnded?: () => void) {
+  startPreview(presetId?: string, onEnded?: () => void) {
     this.stop();
     this.isPreviewing = true;
+    const targetPreset = presetId || this.currentPresetId;
+
+    if (targetPreset === 'wibby-neon' || targetPreset === 'wibby-gentle' || targetPreset === 'wibby-chime') {
+      this.playModernSynthesisBurst(targetPreset);
+      // Auto-end preview after 4 seconds
+      setTimeout(() => {
+        if (this.isPreviewing) {
+          this.stopPreview();
+          onEnded?.();
+        }
+      }, 4000);
+      return;
+    }
+
     if (!this.previewElement) {
       this.previewElement = new Audio();
     }
-    this.previewElement.src = this.customBlobUrl || '/audio/wibby-ringtone.mp3';
+
+    if (targetPreset === 'custom' && this.customBlobUrl) {
+      this.previewElement.src = this.customBlobUrl;
+    } else {
+      this.previewElement.src = '/audio/wibby-ringtone.mp3';
+    }
+
     this.previewElement.currentTime = 0;
     this.previewElement.volume = 0.70;
     this.previewElement.onended = () => {
@@ -267,6 +422,7 @@ class RingtoneService {
         this.previewElement.currentTime = 0;
       } catch {}
     }
+    this.cleanupWebAudioNodes();
     this.isPreviewing = false;
   }
 
@@ -311,18 +467,16 @@ class RingtoneService {
 
     const unlockHandler = () => {
       if (this.isPlaying && this.autoplayBlocked) {
-        // Attempt unlock on HTML5 audio element
         if (this.audioElement) {
           this.audioElement.play().then(() => {
             this.autoplayBlocked = false;
           }).catch((err) => {
             if (err?.name === 'AbortError') return;
-            // If still blocked, attempt Web Audio context resume
             const ctx = this.getAudioContext();
             if (ctx && ctx.state === 'suspended') {
               ctx.resume().then(() => {
                 this.autoplayBlocked = false;
-                this.playModernSynthesisBurst();
+                this.playModernSynthesisBurst(this.currentPresetId);
               }).catch(() => {});
             }
           });
@@ -343,12 +497,10 @@ class RingtoneService {
   }
 
   /**
-   * High-fidelity Web Audio fallback synthesizing Wibby's signature modern chime motif.
-   * Key: E Major 9 / C# minor 9.
-   * Warm ambient pads + crystalline bell chimes.
+   * Synthesize presets and fallback audio using Web Audio API.
    */
-  private playModernSynthesisBurst() {
-    if (!this.isPlaying) return;
+  private playModernSynthesisBurst(preset: string = 'default') {
+    if (!this.isPlaying && !this.isPreviewing) return;
 
     const ctx = this.getAudioContext();
     if (!ctx) return;
@@ -362,45 +514,71 @@ class RingtoneService {
     }
 
     const now = ctx.currentTime;
-    const CYCLE_DURATION_MS = 3200;
+    let CYCLE_DURATION_MS = 3200;
+    let voices: SynthesizedVoice[] = [];
 
-    const voices: SynthesizedVoice[] = [
-      // Pulse 1: The Calling Wave (Emaj9)
-      // Warm Sub/Pad Bed (E3 + B3 + F#4)
-      { start: 0.04, duration: 1.35, freq: 164.81, gain: 0.12, decayRate: 1.8 },
-      { start: 0.04, duration: 1.35, freq: 246.94, gain: 0.09, decayRate: 2.0 },
-      { start: 0.04, duration: 1.35, freq: 369.99, gain: 0.07, decayRate: 2.2 },
-
-      // Melodic Chimes (B4 -> E5 -> G#5 -> F#5)
-      { start: 0.06, duration: 0.40, freq: 493.88, gain: 0.32, decayRate: 4.8 },
-      { start: 0.24, duration: 0.40, freq: 659.25, gain: 0.35, decayRate: 4.5 },
-      { start: 0.44, duration: 0.48, freq: 830.61, gain: 0.38, decayRate: 4.2 },
-      { start: 0.68, duration: 0.85, freq: 739.99, gain: 0.42, decayRate: 3.2 },
-
-      // Pulse 2: The Warm Answer (C#m9 resolution)
-      // Warm Sub/Pad Bed (C#3 + G#3 + D#4)
-      { start: 1.22, duration: 1.45, freq: 138.59, gain: 0.11, decayRate: 1.6 },
-      { start: 1.22, duration: 1.45, freq: 207.65, gain: 0.08, decayRate: 1.8 },
-      { start: 1.22, duration: 1.45, freq: 311.13, gain: 0.06, decayRate: 2.0 },
-
-      // Melodic Chimes (D#5 -> B4 -> G#4 -> E4)
-      { start: 1.24, duration: 0.38, freq: 622.25, gain: 0.34, decayRate: 4.6 },
-      { start: 1.44, duration: 0.38, freq: 493.88, gain: 0.30, decayRate: 4.8 },
-      { start: 1.66, duration: 0.45, freq: 415.30, gain: 0.28, decayRate: 4.2 },
-      { start: 1.92, duration: 0.95, freq: 329.63, gain: 0.36, decayRate: 2.8 },
-    ];
+    if (preset === 'wibby-neon') {
+      CYCLE_DURATION_MS = 2800;
+      voices = [
+        // Upbeat electronic chime motif (A4 -> C#5 -> E5 -> A5 -> B5)
+        { start: 0.04, duration: 1.2, freq: 110, gain: 0.14, decayRate: 2.0 },
+        { start: 0.05, duration: 0.35, freq: 440, gain: 0.32, decayRate: 4.8 },
+        { start: 0.20, duration: 0.35, freq: 554.37, gain: 0.34, decayRate: 4.8 },
+        { start: 0.38, duration: 0.40, freq: 659.25, gain: 0.36, decayRate: 4.5 },
+        { start: 0.58, duration: 0.55, freq: 880, gain: 0.40, decayRate: 3.8 },
+        { start: 0.90, duration: 0.35, freq: 554.37, gain: 0.32, decayRate: 4.8 },
+        { start: 1.08, duration: 0.35, freq: 659.25, gain: 0.34, decayRate: 4.8 },
+        { start: 1.25, duration: 0.75, freq: 987.77, gain: 0.42, decayRate: 3.2 }
+      ];
+    } else if (preset === 'wibby-gentle') {
+      CYCLE_DURATION_MS = 3400;
+      voices = [
+        // Warm ambient rhodes chords (Emaj9 / Bmin)
+        { start: 0.04, duration: 1.8, freq: 164.81, gain: 0.12, decayRate: 1.5 },
+        { start: 0.04, duration: 1.8, freq: 246.94, gain: 0.09, decayRate: 1.6 },
+        { start: 0.10, duration: 0.60, freq: 329.63, gain: 0.26, decayRate: 2.8 },
+        { start: 0.42, duration: 0.60, freq: 493.88, gain: 0.28, decayRate: 2.8 },
+        { start: 0.85, duration: 0.90, freq: 659.25, gain: 0.32, decayRate: 2.5 }
+      ];
+    } else if (preset === 'wibby-chime') {
+      CYCLE_DURATION_MS = 3000;
+      voices = [
+        // Crystalline bell celeste motif (F#5, A#5, C#6, F#6)
+        { start: 0.05, duration: 0.50, freq: 739.99, gain: 0.32, decayRate: 4.2 },
+        { start: 0.25, duration: 0.50, freq: 932.33, gain: 0.34, decayRate: 4.2 },
+        { start: 0.48, duration: 0.65, freq: 1108.73, gain: 0.36, decayRate: 3.8 },
+        { start: 0.85, duration: 1.10, freq: 1479.98, gain: 0.38, decayRate: 2.8 }
+      ];
+    } else {
+      // Default signature Wibby motif (E Major 9 / C# minor 9)
+      CYCLE_DURATION_MS = 3200;
+      voices = [
+        { start: 0.04, duration: 1.35, freq: 164.81, gain: 0.12, decayRate: 1.8 },
+        { start: 0.04, duration: 1.35, freq: 246.94, gain: 0.09, decayRate: 2.0 },
+        { start: 0.04, duration: 1.35, freq: 369.99, gain: 0.07, decayRate: 2.2 },
+        { start: 0.06, duration: 0.40, freq: 493.88, gain: 0.32, decayRate: 4.8 },
+        { start: 0.24, duration: 0.40, freq: 659.25, gain: 0.35, decayRate: 4.5 },
+        { start: 0.44, duration: 0.48, freq: 830.61, gain: 0.38, decayRate: 4.2 },
+        { start: 0.68, duration: 0.85, freq: 739.99, gain: 0.42, decayRate: 3.2 },
+        { start: 1.22, duration: 1.45, freq: 138.59, gain: 0.11, decayRate: 1.6 },
+        { start: 1.22, duration: 1.45, freq: 207.65, gain: 0.08, decayRate: 1.8 },
+        { start: 1.22, duration: 1.45, freq: 311.13, gain: 0.06, decayRate: 2.0 },
+        { start: 1.24, duration: 0.38, freq: 622.25, gain: 0.34, decayRate: 4.6 },
+        { start: 1.44, duration: 0.38, freq: 493.88, gain: 0.30, decayRate: 4.8 },
+        { start: 1.66, duration: 0.45, freq: 415.30, gain: 0.28, decayRate: 4.2 },
+        { start: 1.92, duration: 0.95, freq: 329.63, gain: 0.36, decayRate: 2.8 }
+      ];
+    }
 
     voices.forEach(voice => {
       const start = now + voice.start;
       const end = start + voice.duration;
 
-      // Primary oscillator (sine)
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(voice.freq, start);
 
-      // Raised cosine attack (12ms) to prevent clicks
       gain.gain.setValueAtTime(0, start);
       gain.gain.linearRampToValueAtTime(voice.gain, start + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.001, end - 0.02);
@@ -415,7 +593,7 @@ class RingtoneService {
       this.activeOscillators.push(osc);
       this.activeGainNodes.push(gain);
 
-      // Sparkle overtone (4.2x frequency, soft metallic chime)
+      // Sparkle chime overtone
       if (voice.freq >= 300) {
         const osc2 = ctx.createOscillator();
         const gain2 = ctx.createGain();
@@ -434,13 +612,14 @@ class RingtoneService {
       }
     });
 
-    // Schedule next cycle if still ringing and using fallback
-    this.ringCycleTimer = setTimeout(() => {
-      if (this.isPlaying) {
-        this.cleanupWebAudioNodes();
-        this.playModernSynthesisBurst();
-      }
-    }, CYCLE_DURATION_MS);
+    if (this.isPlaying) {
+      this.ringCycleTimer = setTimeout(() => {
+        if (this.isPlaying) {
+          this.cleanupWebAudioNodes();
+          this.playModernSynthesisBurst(preset);
+        }
+      }, CYCLE_DURATION_MS);
+    }
   }
 
   private cleanupWebAudioNodes() {
@@ -459,12 +638,7 @@ class RingtoneService {
     this.activeGainNodes = [];
   }
 
-  /**
-   * Start the incoming call ringtone.
-   * Uses single-instance audio playback with Web Audio synthesis fallback.
-   */
   start(callId: string = 'call_incoming') {
-    // Prevent re-triggering if already actively playing for the same call
     if (this.isPlaying && this.currentCallId === callId) return;
 
     this.stop();
@@ -472,34 +646,34 @@ class RingtoneService {
     this.isPlaying = true;
     this.autoplayBlocked = false;
 
-    // Primary: play high-quality audio element asset
+    // If preset is synthesizer-based
+    if (this.currentPresetId === 'wibby-neon' || this.currentPresetId === 'wibby-gentle' || this.currentPresetId === 'wibby-chime') {
+      this.playModernSynthesisBurst(this.currentPresetId);
+      return;
+    }
+
+    // Primary: play high-quality audio element asset (custom or default)
     if (this.audioElement) {
       this.audioElement.currentTime = 0;
       const playPromise = this.audioElement.play();
       if (playPromise !== undefined) {
         playPromise.catch((err: any) => {
-          if (err.name === 'AbortError') {
-            // Intentionally aborted by pause() on fast stop/accept/reject
-            return;
-          }
+          if (err.name === 'AbortError') return;
           if (err.name === 'NotAllowedError') {
             console.warn('[RINGTONE] Autoplay policy blocked audio playback; awaiting user interaction.');
             this.autoplayBlocked = true;
             this.attachGestureUnlock();
           } else {
-            console.warn('[RINGTONE] Audio element playback failed, falling back to Web Audio synthesis:', err.message);
-            this.playModernSynthesisBurst();
+            console.warn('[RINGTONE] Audio playback failed, falling back to Web Audio synthesis:', err.message);
+            this.playModernSynthesisBurst('default');
           }
         });
       }
     } else {
-      this.playModernSynthesisBurst();
+      this.playModernSynthesisBurst('default');
     }
   }
 
-  /**
-   * Immediately and cleanly stop all ringtone audio.
-   */
   stop(callId?: string) {
     if (!this.isPlaying && this.activeOscillators.length === 0 && !this.audioElement) return;
 
@@ -513,7 +687,6 @@ class RingtoneService {
       this.ringCycleTimer = null;
     }
 
-    // Stop audio element cleanly
     if (this.audioElement) {
       try {
         this.audioElement.pause();
@@ -521,15 +694,10 @@ class RingtoneService {
       } catch {}
     }
 
-    // Stop and disconnect Web Audio nodes
     this.cleanupWebAudioNodes();
-
     console.log(`[RINGTONE] Ringtone stopped cleanly for callId=${callId || 'all'}`);
   }
 
-  /**
-   * Complete destruction of resources on app / context unmount.
-   */
   destroy() {
     this.stop();
     if (this.audioCtx && this.audioCtx.state !== 'closed') {

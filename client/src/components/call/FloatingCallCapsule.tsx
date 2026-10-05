@@ -30,9 +30,7 @@ export default function FloatingCallCapsule() {
   } = useCall();
 
   const miniRemoteVideoRef = useRef<HTMLVideoElement | null>(null);
-  const miniRemoteBgVideoRef = useRef<HTMLVideoElement | null>(null);
   const miniLocalVideoRef = useRef<HTMLVideoElement | null>(null);
-  const miniLocalBgVideoRef = useRef<HTMLVideoElement | null>(null);
   const windowRef = useRef<HTMLDivElement | null>(null);
 
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -84,28 +82,18 @@ export default function FloatingCallCapsule() {
   // Bind video streams into mini video elements
   useEffect(() => {
     if (isVideo) {
-      if (miniRemoteBgVideoRef.current) {
-        rtcService.bindRemoteVideoElement(miniRemoteBgVideoRef.current);
-      }
       if (miniRemoteVideoRef.current) {
         rtcService.bindRemoteVideoElement(miniRemoteVideoRef.current);
-      }
-      if (miniLocalBgVideoRef.current) {
-        rtcService.bindLocalVideoElement(miniLocalBgVideoRef.current);
       }
       if (miniLocalVideoRef.current) {
         rtcService.bindLocalVideoElement(miniLocalVideoRef.current);
       }
     }
     const remoteEl = miniRemoteVideoRef.current;
-    const remoteBgEl = miniRemoteBgVideoRef.current;
     const localEl = miniLocalVideoRef.current;
-    const localBgEl = miniLocalBgVideoRef.current;
     return () => {
       if (remoteEl) rtcService.unbindRemoteVideoElement(remoteEl);
-      if (remoteBgEl) rtcService.unbindRemoteVideoElement(remoteBgEl);
       if (localEl) rtcService.unbindLocalVideoElement(localEl);
-      if (localBgEl) rtcService.unbindLocalVideoElement(localBgEl);
     };
   }, [isVideo, callState]);
 
@@ -314,17 +302,7 @@ export default function FloatingCallCapsule() {
             aspectRatio: `${remoteDimensions.width} / ${remoteDimensions.height}`
           }}
         >
-          {/* Layer 1: Remote Background Fill (Same Live MediaStream, object-fit: cover, NO BLUR) */}
-          <video
-            ref={miniRemoteBgVideoRef}
-            className={`mini-video-element remote-bg ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
-            autoPlay
-            playsInline
-            muted
-            aria-hidden="true"
-          />
-
-          {/* Layer 2: Remote Main Video (Same Live MediaStream, object-fit: contain, complete frame) */}
+          {/* Remote Main Video (100% sharp, object-fit: contain, complete frame) */}
           <video
             ref={miniRemoteVideoRef}
             className={`mini-video-element remote ${isRemoteScreenSharing ? 'is-screen-share' : ''} ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
@@ -359,17 +337,7 @@ export default function FloatingCallCapsule() {
               aspectRatio: `${localDimensions.width} / ${localDimensions.height}`
             }}
           >
-            {/* Layer 1: Local PiP Background Fill (Same Live MediaStream, object-fit: cover, NO BLUR) */}
-            <video
-              ref={miniLocalBgVideoRef}
-              className={`mini-video-element local-bg ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
-              autoPlay
-              playsInline
-              muted
-              aria-hidden="true"
-            />
-
-            {/* Layer 2: Local PiP Main Video (Same Live MediaStream, object-fit: contain, complete frame) */}
+            {/* Local PiP Main Video (100% sharp, complete frame) */}
             <video
               ref={miniLocalVideoRef}
               className={`mini-video-element local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isScreenSharing ? 'is-screen-share' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}

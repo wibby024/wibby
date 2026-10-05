@@ -73,9 +73,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   focusedParticipant,
   setFocusedParticipant,
   remoteVideoRef,
-  remoteBgVideoRef,
   localVideoRef,
-  localBgVideoRef,
   screenVideoRef,
   remoteScreenVideoRef,
   isRemoteCameraOff,
@@ -114,9 +112,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   focusedParticipant: 'none' | 'remote' | 'local';
   setFocusedParticipant: React.Dispatch<React.SetStateAction<'none' | 'remote' | 'local'>>;
   remoteVideoRef: React.RefObject<HTMLVideoElement | null>;
-  remoteBgVideoRef: React.RefObject<HTMLVideoElement | null>;
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
-  localBgVideoRef: React.RefObject<HTMLVideoElement | null>;
   screenVideoRef?: React.RefObject<HTMLVideoElement | null>;
   remoteScreenVideoRef?: React.RefObject<HTMLVideoElement | null>;
   isRemoteCameraOff: boolean;
@@ -313,10 +309,6 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
 
     return (
       <div className={`call-video-stage view-mode-screenshare ${isScreenshareFullscreen ? 'is-hero-fullscreen' : ''}`}>
-        {/* Hidden background video refs with explicit inline display: none */}
-        <video ref={remoteBgVideoRef} style={{ display: 'none' }} aria-hidden="true" muted playsInline />
-        <video ref={localBgVideoRef} style={{ display: 'none' }} aria-hidden="true" muted playsInline />
-
         <div className="call-stage-presentation-frame">
           {/* Main Hero: Shared Screen (Uncropped, Crystal 1080p, Black Background, Never Mirrored) */}
           <div className="call-screenshare-main">
@@ -494,10 +486,6 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   if (viewMode === 'moviemode') {
     return (
       <div className="call-video-stage view-mode-moviemode">
-        {/* Hidden background video refs with explicit inline display: none */}
-        <video ref={remoteBgVideoRef} style={{ display: 'none' }} aria-hidden="true" muted playsInline />
-        <video ref={localBgVideoRef} style={{ display: 'none' }} aria-hidden="true" muted playsInline />
-
         <div className="call-stage-presentation-frame">
           {/* Main Hero: Large Movie / Video Primary View */}
           <div className="call-moviemode-main">
@@ -747,20 +735,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
             <span>{viewMode === 'pip' || focusedParticipant === 'remote' ? 'Exit full screen' : 'Click for full screen'}</span>
           </div>
 
-          {/* Layer 1: Ambient live video background (Same live stream, cover, subdued, NO blur) */}
-          <video
-            ref={remoteBgVideoRef}
-            className={`call-video-bg-live ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
-            autoPlay
-            playsInline
-            muted
-            aria-hidden="true"
-          />
-
-          {/* Vignette mask to blend boundaries and prevent duplicate person effect */}
-          <div className={`call-video-vignette-overlay ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`} />
-
-          {/* Layer 2: Main Remote Video (100% sharp, uncropped, native aspect ratio) */}
+          {/* Main Remote Video (100% sharp, uncropped, native aspect ratio) */}
           <video
             ref={remoteVideoRef}
             className={`call-video-fg-live remote-main ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
@@ -849,19 +824,6 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
             </svg>
             <span>{focusedParticipant === 'local' ? 'Exit full screen' : 'Click for full screen'}</span>
           </div>
-
-          {/* In Stacked Mode: Ambient live video background (Same live stream, cover, subdued, mirrored, NO blur) */}
-          <video
-            ref={localBgVideoRef}
-            className={`call-video-bg-live local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable || isLocalPip ? 'hidden' : ''}`}
-            autoPlay
-            playsInline
-            muted
-            aria-hidden="true"
-          />
-
-          {/* Vignette mask for stacked mode */}
-          <div className={`call-video-vignette-overlay ${isCameraOff || isCameraUnavailable || isLocalPip ? 'hidden' : ''}`} />
 
           {/* Main Local Video (100% sharp, complete native frame; un-mirrored when rear camera) */}
           <video
@@ -971,9 +933,7 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const localBgVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
-  const remoteBgVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteScreenVideoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -1078,14 +1038,8 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
   // Bind video elements when in video call
   useEffect(() => {
     if (activeCall?.callType === 'video') {
-      if (localBgVideoRef.current) {
-        rtcService.bindLocalVideoElement(localBgVideoRef.current);
-      }
       if (localVideoRef.current) {
         rtcService.bindLocalVideoElement(localVideoRef.current);
-      }
-      if (remoteBgVideoRef.current) {
-        rtcService.bindRemoteVideoElement(remoteBgVideoRef.current);
       }
       if (remoteVideoRef.current) {
         rtcService.bindRemoteVideoElement(remoteVideoRef.current);
@@ -1100,16 +1054,12 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
       requestKeyframe();
     }
     const localEl = localVideoRef.current;
-    const localBgEl = localBgVideoRef.current;
     const remoteEl = remoteVideoRef.current;
-    const remoteBgEl = remoteBgVideoRef.current;
     const screenEl = screenVideoRef.current;
     const remoteScreenEl = remoteScreenVideoRef.current;
     return () => {
       if (localEl) rtcService.unbindLocalVideoElement(localEl);
-      if (localBgEl) rtcService.unbindLocalVideoElement(localBgEl);
       if (remoteEl) rtcService.unbindRemoteVideoElement(remoteEl);
-      if (remoteBgEl) rtcService.unbindRemoteVideoElement(remoteBgEl);
       if (screenEl) rtcService.unbindScreenVideoElement(screenEl);
       if (remoteScreenEl) rtcService.unbindScreenVideoElement(remoteScreenEl);
     };
@@ -1266,9 +1216,7 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
           focusedParticipant={focusedParticipant}
           setFocusedParticipant={setFocusedParticipant}
           remoteVideoRef={remoteVideoRef}
-          remoteBgVideoRef={remoteBgVideoRef}
           localVideoRef={localVideoRef}
-          localBgVideoRef={localBgVideoRef}
           screenVideoRef={screenVideoRef}
           remoteScreenVideoRef={remoteScreenVideoRef}
           isRemoteCameraOff={isRemoteCameraOff}

@@ -61,7 +61,7 @@ export const AUDIO_MEDIA_CONSTRAINTS: MediaStreamConstraints = {
 
 export const VIDEO_MEDIA_CONSTRAINTS: MediaTrackConstraints = {
   width: { ideal: 1280, max: 1920 },
-  height: { ideal: 720, max: 1080 },
+  height: { ideal: 720, max: 1920 },
   frameRate: { ideal: 30, max: 30 },
   facingMode: { ideal: 'user' }
 };
@@ -74,32 +74,32 @@ export const VIDEO_MEDIA_CONSTRAINTS: MediaTrackConstraints = {
 export const CAMERA_1080P_CONSTRAINTS: MediaTrackConstraints = {
   facingMode: { ideal: 'user' },
   width: { ideal: 1920, max: 1920 },
-  height: { ideal: 1080, max: 1080 },
+  height: { ideal: 1080, max: 1920 },
   frameRate: { ideal: 30, max: 30 }
 };
 
 export const CAMERA_720P_CONSTRAINTS: MediaTrackConstraints = {
   facingMode: { ideal: 'user' },
   width: { ideal: 1280, max: 1920 },
-  height: { ideal: 720, max: 1080 },
+  height: { ideal: 720, max: 1920 },
   frameRate: { ideal: 30, max: 30 }
 };
 
 export const DEVICE_CAMERA_CONSTRAINTS: MediaTrackConstraints = CAMERA_720P_CONSTRAINTS;
 
 export const PRODUCTION_CAMERA_CONSTRAINTS: MediaTrackConstraints[] = [
-  // 1. Primary device camera constraint: 1080p FHD target @ 30 FPS
+  // 1. Primary device camera constraint: 1080p FHD target @ 30 FPS (landscape/portrait adaptive)
   {
     facingMode: { ideal: 'user' },
     width: { ideal: 1920, max: 1920 },
-    height: { ideal: 1080, max: 1080 },
+    height: { ideal: 1080, max: 1920 },
     frameRate: { ideal: 30, max: 30 }
   },
   // 2. High-performance 720p HD target (ideal 1280x720, up to 1080p) @ 30 FPS
   {
     facingMode: { ideal: 'user' },
     width: { ideal: 1280, max: 1920 },
-    height: { ideal: 720, max: 1080 },
+    height: { ideal: 720, max: 1920 },
     frameRate: { ideal: 30, max: 30 }
   },
   // 3. Portrait 1080p target @ 30 FPS (Smartphone held vertically)
@@ -119,7 +119,7 @@ export const PRODUCTION_CAMERA_CONSTRAINTS: MediaTrackConstraints[] = [
   // 5. Universal desktop / USB webcam target without facingMode constraint (never drops resolution)
   {
     width: { ideal: 1280, max: 1920 },
-    height: { ideal: 720, max: 1080 },
+    height: { ideal: 720, max: 1920 },
     frameRate: { ideal: 30, max: 30 }
   },
   // 6. Safe baseline HD: ideal 1280x720 (minimum target for normal calls)

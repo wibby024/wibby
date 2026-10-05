@@ -404,8 +404,8 @@ export class RTCService {
     const currentFacing = this.currentFacingMode || 'user';
     const constraintsList: MediaTrackConstraints[] = preferredVideoDeviceId
       ? [
-          { deviceId: { exact: preferredVideoDeviceId }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 30 } },
-          { deviceId: { ideal: preferredVideoDeviceId }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 30 } },
+          { deviceId: { exact: preferredVideoDeviceId }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1920 }, frameRate: { ideal: 30, max: 30 } },
+          { deviceId: { ideal: preferredVideoDeviceId }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1920 }, frameRate: { ideal: 30, max: 30 } },
           { deviceId: { ideal: preferredVideoDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
         ]
       : PRODUCTION_CAMERA_CONSTRAINTS.map(c => ({
@@ -2342,8 +2342,8 @@ export class RTCService {
           (params.encodings[0] as any).minBitrate = 1_500_000;
         }
       } else {
-        // Camera video: 'balanced' ensures smooth 30 FPS motion and sharp spatial detail
-        params.degradationPreference = 'balanced';
+        // Camera video: 'maintain-resolution' ensures crisp spatial clarity and full pixel resolution
+        params.degradationPreference = 'maintain-resolution';
 
         const is4KCapture = this.currentCaptureWidth >= 3840;
         const is1080pCapture = this.currentCaptureWidth >= 1920 || this.currentCaptureHeight >= 1080;
@@ -2359,27 +2359,27 @@ export class RTCService {
           }
           params.encodings[0].maxFramerate = 30;
         } else if (currentMode === 'data-saver') {
-          // Conservative data-saver: 1.0 Mbps HD, 24 FPS
-          params.encodings[0].maxBitrate = 1_000_000;
+          // Conservative data-saver: 1.2 Mbps HD, 24 FPS
+          params.encodings[0].maxBitrate = 1_200_000;
           params.encodings[0].maxFramerate = 24;
           params.encodings[0].scaleResolutionDownBy = baseScale;
         } else if (currentMode === '720p' || (!is1080pCapture && currentMode === 'auto')) {
-          // Normal 720p HD target: 2.0–2.5 Mbps @ 30 FPS (high clarity)
-          params.encodings[0].maxBitrate = 2_200_000;
-          params.encodings[0].maxFramerate = 30;
-          params.encodings[0].scaleResolutionDownBy = baseScale;
-          if ('minBitrate' in params.encodings[0]) {
-            (params.encodings[0] as any).minBitrate = 800_000;
-          }
-        } else {
-          // 1080p FHD target: 3.2–4.5 Mbps @ 30 FPS
-          const default1080pTarget = 3_500_000;
-          const targetBps = Math.min(Math.max(Math.round(this.videoBitrateTargetMbps * 1_000_000), 2_500_000), 4_500_000);
-          params.encodings[0].maxBitrate = targetBps || default1080pTarget;
+          // Normal 720p HD target: 2.2–2.5 Mbps @ 30 FPS (high clarity)
+          params.encodings[0].maxBitrate = 2_500_000;
           params.encodings[0].maxFramerate = 30;
           params.encodings[0].scaleResolutionDownBy = baseScale;
           if ('minBitrate' in params.encodings[0]) {
             (params.encodings[0] as any).minBitrate = 1_000_000;
+          }
+        } else {
+          // 1080p FHD target: 3.5–4.5 Mbps @ 30 FPS
+          const default1080pTarget = 3_800_000;
+          const targetBps = Math.min(Math.max(Math.round(this.videoBitrateTargetMbps * 1_000_000), 2_800_000), 4_500_000);
+          params.encodings[0].maxBitrate = targetBps || default1080pTarget;
+          params.encodings[0].maxFramerate = 30;
+          params.encodings[0].scaleResolutionDownBy = baseScale;
+          if ('minBitrate' in params.encodings[0]) {
+            (params.encodings[0] as any).minBitrate = 1_500_000;
           }
         }
       }

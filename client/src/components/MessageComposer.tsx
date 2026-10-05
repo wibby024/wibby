@@ -580,6 +580,7 @@ export default function MessageComposer({
             onClose={() => setShowGifPicker(false)}
             onSelectGif={(gif: SelectedGifPayload) => {
               setShowGifPicker(false);
+              if (onCancelReplyOrEdit) onCancelReplyOrEdit();
               if (onSendSpecial) {
                 onSendSpecial({
                   type: 'gif',
