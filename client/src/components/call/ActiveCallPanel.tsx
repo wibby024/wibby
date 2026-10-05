@@ -18,8 +18,22 @@ function formatCallDuration(seconds: number): string {
 }
 
 function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' | 'direct' | 'custom' } {
-  const mediaUrl = inputUrl.trim();
+  let mediaUrl = inputUrl.trim();
   if (!mediaUrl) return { url: '', type: 'direct' };
+
+  // Support bare 11-character YouTube video ID
+  if (/^[a-zA-Z0-9_-]{11}$/.test(mediaUrl)) {
+    const origin = typeof window !== 'undefined' ? encodeURIComponent(window.location.origin) : '';
+    return {
+      url: `https://www.youtube-nocookie.com/embed/${mediaUrl}?enablejsapi=1&playsinline=1&rel=0${origin ? `&origin=${origin}` : ''}`,
+      type: 'youtube'
+    };
+  }
+
+  // Auto-prepend https:// if protocol is omitted
+  if (!mediaUrl.startsWith('http://') && !mediaUrl.startsWith('https://')) {
+    mediaUrl = `https://${mediaUrl}`;
+  }
 
   if (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be') || mediaUrl.includes('youtube-nocookie.com')) {
     let videoId = '';
@@ -33,7 +47,7 @@ function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' | 'dire
       videoId = mediaUrl.split('/v/')[1].split('?')[0].split('/')[0];
     } else {
       try {
-        const urlObj = new URL(mediaUrl.startsWith('http') ? mediaUrl : `https://${mediaUrl}`);
+        const urlObj = new URL(mediaUrl);
         videoId = urlObj.searchParams.get('v') || '';
       } catch {
         const match = mediaUrl.match(/[?&]v=([^&#]+)/);
@@ -555,13 +569,18 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                     className="call-moviemode-prompt-form"
                     onSubmit={(e) => {
                       e.preventDefault();
-                      if (movieInput?.trim() && handleStartMovie) {
-                        handleStartMovie(movieInput.trim());
+                      const target = movieInput?.trim() || 'https://www.youtube.com/watch?v=aqz-KE-bpKQ';
+                      if (handleStartMovie) {
+                        handleStartMovie(target);
                       }
                     }}
                   >
                     <input
-                      type="url"
+                      type="text"
+                      inputMode="url"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck="false"
                       className="call-moviemode-input"
                       placeholder="Paste YouTube or video link..."
                       value={movieInput || ''}
@@ -571,11 +590,43 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
                     <button
                       type="submit"
                       className="call-moviemode-submit-btn"
-                      disabled={!movieInput?.trim()}
                     >
                       Play Movie
                     </button>
                   </form>
+                  <div className="together-sample-chips" style={{ marginTop: 12, justifyContent: 'center' }}>
+                    <span className="together-sample-label">Try sample:</span>
+                    <button
+                      type="button"
+                      className="together-sample-chip"
+                      onClick={() => {
+                        setMovieInput?.('https://www.youtube.com/watch?v=aqz-KE-bpKQ');
+                        handleStartMovie?.('https://www.youtube.com/watch?v=aqz-KE-bpKQ');
+                      }}
+                    >
+                      🎬 Big Buck Bunny
+                    </button>
+                    <button
+                      type="button"
+                      className="together-sample-chip"
+                      onClick={() => {
+                        setMovieInput?.('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
+                        handleStartMovie?.('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
+                      }}
+                    >
+                      🍿 Sample MP4
+                    </button>
+                    <button
+                      type="button"
+                      className="together-sample-chip"
+                      onClick={() => {
+                        setMovieInput?.('https://www.youtube.com/watch?v=jfKfPfyJRdk');
+                        handleStartMovie?.('https://www.youtube.com/watch?v=jfKfPfyJRdk');
+                      }}
+                    >
+                      🎵 Lo-Fi Beats
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -951,19 +1002,14 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
   const [movieUrl, setMovieUrl] = useState<string>('');
 
   const [movieInput, setMovieInput] = useState<string>('');
-  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth < 640 : false);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 640);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const handleOpenMovie = () => {
+      setViewMode('moviemode');
+    };
+    window.addEventListener('wibby:open-moviemode', handleOpenMovie);
+    return () => window.removeEventListener('wibby:open-moviemode', handleOpenMovie);
   }, []);
-
-  useEffect(() => {
-    if (isMobile && viewMode === 'moviemode') {
-      setViewMode('stacked');
-    }
-  }, [isMobile, viewMode]);
 
   useEffect(() => {
     if (!socket || !activeCall?.conversationId) return;
@@ -975,9 +1021,7 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
     const handleSessionActive = (s: any) => {
       if (s && s.mediaUrl) {
         setMovieUrl(s.mediaUrl);
-        if (!isMobile) {
-          setViewMode('moviemode');
-        }
+        setViewMode('moviemode');
       }
     };
     const handleTogetherEnded = () => {
@@ -993,11 +1037,13 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
       socket.off('together:state', handleSessionActive);
       socket.off('together:ended', handleTogetherEnded);
     };
-  }, [socket, activeCall?.conversationId, isMobile]);
+  }, [socket, activeCall?.conversationId]);
 
   const handleStartMovie = (url: string) => {
     if (!socket || !activeCall?.conversationId) return;
     const parsed = parseMediaUrl(url);
+    setMovieUrl(parsed.url);
+    setViewMode('moviemode');
     socket.emit('together:start', {
       conversationId: activeCall.conversationId,
       mediaUrl: parsed.url,
@@ -1566,37 +1612,35 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
             </div>
           )}
 
-          {/* Movie Mode Button (Desktop/Tablet only, hidden on mobile) */}
-          {!isMobile && (
-            <div className="call-control-item">
-              <button
-                type="button"
-                id="movie-mode-btn"
-                className={`call-btn movie-ctrl ${viewMode === 'moviemode' ? 'active' : ''}`}
-                onClick={() => {
-                  if (viewMode === 'moviemode') {
-                    setViewMode('stacked');
-                  } else {
-                    setViewMode('moviemode');
-                  }
-                }}
-                title={viewMode === 'moviemode' ? 'Exit Movie Mode' : 'Movie Mode (Watch Together in Call)'}
-                aria-label={viewMode === 'moviemode' ? 'Exit Movie Mode' : 'Movie Mode'}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-                  <line x1="7" y1="2" x2="7" y2="22" />
-                  <line x1="17" y1="2" x2="17" y2="22" />
-                  <line x1="2" y1="12" x2="22" y2="12" />
-                  <line x1="2" y1="7" x2="7" y2="7" />
-                  <line x1="2" y1="17" x2="7" y2="17" />
-                  <line x1="17" y1="17" x2="22" y2="17" />
-                  <line x1="17" y1="7" x2="22" y2="7" />
-                </svg>
-              </button>
-              <span className="call-btn-label">{viewMode === 'moviemode' ? 'Exit Movie' : 'Movie'}</span>
-            </div>
-          )}
+          {/* Movie Mode Button (Watch Together in Call) */}
+          <div className="call-control-item">
+            <button
+              type="button"
+              id="movie-mode-btn"
+              className={`call-btn movie-ctrl ${viewMode === 'moviemode' ? 'active' : ''}`}
+              onClick={() => {
+                if (viewMode === 'moviemode') {
+                  setViewMode('stacked');
+                } else {
+                  setViewMode('moviemode');
+                }
+              }}
+              title={viewMode === 'moviemode' ? 'Exit Movie Mode' : 'Movie Mode (Watch Together in Call)'}
+              aria-label={viewMode === 'moviemode' ? 'Exit Movie Mode' : 'Movie Mode'}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                <line x1="7" y1="2" x2="7" y2="22" />
+                <line x1="17" y1="2" x2="17" y2="22" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <line x1="2" y1="7" x2="7" y2="7" />
+                <line x1="2" y1="17" x2="7" y2="17" />
+                <line x1="17" y1="17" x2="22" y2="17" />
+                <line x1="17" y1="7" x2="22" y2="7" />
+              </svg>
+            </button>
+            <span className="call-btn-label">{viewMode === 'moviemode' ? 'Exit Movie' : 'Movie'}</span>
+          </div>
 
           {/* Microphone Mute Button */}
           <div className="call-control-item">

@@ -3291,3 +3291,92 @@ video.is-screen-share {
     bottom: 24px;
   }
 }
+
+/* ============================================================
+   Movie Mode Mobile Layout (≤640px)
+   Video player on top (16:9), camera tiles in a compact horizontal strip,
+   integrated chat below, call controls bar docked at bottom
+   ============================================================ */
+@media (max-width: 640px) {
+  .call-video-stage.view-mode-moviemode .call-stage-presentation-frame {
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 8px 76px 8px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .call-moviemode-main {
+    flex: 0 0 auto;
+    width: 100%;
+    height: auto;
+    min-height: 200px;
+    aspect-ratio: 16 / 9;
+    max-height: 38vh;
+    border-radius: 14px;
+  }
+
+  .call-moviemode-sidebar {
+    width: 100%;
+    flex: 1 1 0;
+    min-height: 220px;
+    gap: 8px;
+  }
+
+  .call-moviemode-users-strip {
+    flex-direction: row;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .call-moviemode-user-tile {
+    flex: 1 1 0;
+    height: 78px;
+    border-radius: 10px;
+  }
+
+  .call-moviemode-chat-container {
+    flex: 1 1 0;
+    min-height: 140px;
+    border-radius: 12px;
+  }
+
+  .call-moviemode-prompt-card {
+    padding: 20px 14px;
+    border-radius: 16px;
+    max-width: 100%;
+  }
+
+  .call-moviemode-prompt-icon {
+    font-size: 32px;
+    margin-bottom: 6px;
+  }
+
+  .call-moviemode-prompt-title {
+    font-size: 17px;
+    margin-bottom: 4px;
+  }
+
+  .call-moviemode-prompt-desc {
+    font-size: 12px;
+    margin-bottom: 14px;
+  }
+
+  .call-moviemode-input {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .call-moviemode-submit-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .call-video-overlay.is-moviemode-mode .call-video-controls-bar {
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 12px;
+    width: calc(100% - 24px);
+    max-width: 440px;
+  }
+}

@@ -12,10 +12,10 @@ import { notificationService } from './services/notificationService'
 import { ringtoneService } from './services/ringtoneService'
 import { resolvePartnerName, resolvePartnerUsername } from './utils/partnerName'
 import type { ChatThemePreset } from './types/chat'
+import TogetherPlayer from './components/together/TogetherPlayer'
 import './App.css'
 
 // Lazy-load non-critical heavy overlays and the 10 games engine to keep initial bundle lean
-const TogetherPlayer = lazy(() => import('./components/together/TogetherPlayer'));
 const ChatInfoDrawer = lazy(() => import('./components/ChatInfoDrawer'));
 const ChatSearchModal = lazy(() => import('./components/ChatSearchModal'));
 const SettingsModal = lazy(() => import('./components/SettingsModal'));
@@ -33,7 +33,7 @@ function LoadingScreen() {
 function WibbyAppWrapper() {
   const { user, signOut } = useAuth();
   const { socket } = useSocket();
-  const { startCall, callState, activeCall } = useCall();
+  const { startCall, callState, activeCall, expandCall, isMinimized } = useCall();
   const isCallActive = Boolean(activeCall || callState === 'CONNECTING' || callState === 'CONNECTED' || callState === 'RECONNECTING');
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -314,8 +314,12 @@ function WibbyAppWrapper() {
     };
 
     const handleTogetherStarted = (data: any) => {
-      if (data.conversationId === conversationId && !isCallActive) {
-        setShowTogether(true);
+      if (data.conversationId === conversationId) {
+        if (!isCallActive) {
+          setShowTogether(true);
+        } else {
+          window.dispatchEvent(new CustomEvent('wibby:open-moviemode'));
+        }
       }
     };
 
@@ -515,6 +519,20 @@ function WibbyAppWrapper() {
     }
   };
 
+  const handleOpenTogether = useCallback(() => {
+    if (isCallActive) {
+      if (isMinimized) {
+        expandCall();
+      }
+      window.dispatchEvent(new CustomEvent('wibby:open-moviemode'));
+      if (socket && conversationId) {
+        socket.emit('together:get-state', { conversationId });
+      }
+    } else {
+      setShowTogether(prev => !prev);
+    }
+  }, [isCallActive, isMinimized, expandCall, socket, conversationId]);
+
   if (isPaired === null) {
     return <LoadingScreen />
   }
@@ -547,18 +565,17 @@ function WibbyAppWrapper() {
               conversationId={conversationId}
               onOpenSearch={() => setShowSearchModal(true)}
               onOpenInfoDrawer={() => setShowInfoDrawer(true)}
-              onOpenTogether={() => setShowTogether(prev => !prev)}
+              onOpenTogether={handleOpenTogether}
+              isTogetherOpen={showTogether}
               onOpenGame={() => setShowGameModal(true)}
               onClearChat={handleClearChat}
             />
-            {showTogether && !isCallActive && (
-              <Suspense fallback={null}>
-                <TogetherPlayer
-                  conversationId={conversationId}
-                  partnerName={partnerName}
-                  onClose={() => setShowTogether(false)}
-                />
-              </Suspense>
+            {showTogether && (!isCallActive || isMinimized) && (
+              <TogetherPlayer
+                conversationId={conversationId}
+                partnerName={partnerName}
+                onClose={() => setShowTogether(false)}
+              />
             )}
             <MessageArea
               key={`${conversationId}_${chatClearCount}`}
@@ -591,7 +608,7 @@ function WibbyAppWrapper() {
             }}
             onStartTogether={() => {
               setShowInfoDrawer(false);
-              setShowTogether(true);
+              handleOpenTogether();
             }}
             onOpenSearch={() => {
               setShowInfoDrawer(false);

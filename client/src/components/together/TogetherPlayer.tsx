@@ -30,8 +30,22 @@ interface TogetherPlayerProps {
 }
 
 export function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' | 'direct' | 'custom' } {
-  const mediaUrl = inputUrl.trim();
+  let mediaUrl = inputUrl.trim();
   if (!mediaUrl) return { url: '', type: 'direct' };
+
+  // Support bare 11-character YouTube video ID
+  if (/^[a-zA-Z0-9_-]{11}$/.test(mediaUrl)) {
+    const origin = typeof window !== 'undefined' ? encodeURIComponent(window.location.origin) : '';
+    return {
+      url: `https://www.youtube-nocookie.com/embed/${mediaUrl}?enablejsapi=1&playsinline=1&rel=0${origin ? `&origin=${origin}` : ''}`,
+      type: 'youtube'
+    };
+  }
+
+  // Auto-prepend https:// if protocol is omitted
+  if (!mediaUrl.startsWith('http://') && !mediaUrl.startsWith('https://')) {
+    mediaUrl = `https://${mediaUrl}`;
+  }
 
   if (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be') || mediaUrl.includes('youtube-nocookie.com')) {
     let videoId = '';
@@ -45,7 +59,7 @@ export function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' 
       videoId = mediaUrl.split('/v/')[1].split('?')[0].split('/')[0];
     } else {
       try {
-        const urlObj = new URL(mediaUrl.startsWith('http') ? mediaUrl : `https://${mediaUrl}`);
+        const urlObj = new URL(mediaUrl);
         videoId = urlObj.searchParams.get('v') || '';
       } catch {
         const match = mediaUrl.match(/[?&]v=([^&#]+)/);
@@ -699,31 +713,72 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     window.addEventListener('pointercancel', onPointerUp);
   };
 
-  const handleStartSession = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!urlInput.trim() || !socket) return;
+  const startWithUrl = (targetUrl: string) => {
+    const clean = targetUrl.trim();
+    if (!clean) return;
 
-    const parsed = parseMediaUrl(urlInput);
-    socket.emit('together:start', {
+    const parsed = parseMediaUrl(clean);
+    if (!parsed.url) return;
+
+    // Set immediate optimistic state for seamless feedback
+    setSession({
+      sessionId: 'local-' + Date.now(),
       conversationId,
       mediaUrl: parsed.url,
       mediaType: parsed.type,
-      title: 'Watch Together'
+      title: 'Watch Together',
+      hostUserId: user?.uid || '',
+      state: 'playing',
+      position: 0,
+      playing: true,
+      updatedAt: new Date().toISOString(),
+      version: 1
     });
+
+    if (socket) {
+      socket.emit('together:start', {
+        conversationId,
+        mediaUrl: parsed.url,
+        mediaType: parsed.type,
+        title: 'Watch Together'
+      });
+    }
+  };
+
+  const handleStartSession = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const targetUrl = urlInput.trim() || 'https://www.youtube.com/watch?v=aqz-KE-bpKQ';
+    startWithUrl(targetUrl);
     setUrlInput('');
   };
 
   const handleChangeMedia = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!changeUrlInput.trim() || !socket) return;
+    const targetUrl = changeUrlInput.trim();
+    if (!targetUrl) return;
 
-    const parsed = parseMediaUrl(changeUrlInput);
-    socket.emit('together:change-media', {
-      conversationId,
+    const parsed = parseMediaUrl(targetUrl);
+    if (!parsed.url) return;
+
+    setSession(prev => prev ? {
+      ...prev,
       mediaUrl: parsed.url,
       mediaType: parsed.type,
-      title: 'Watch Together'
-    });
+      position: 0,
+      state: 'paused',
+      playing: false,
+      updatedAt: new Date().toISOString(),
+      version: (prev.version || 0) + 1
+    } : null);
+
+    if (socket) {
+      socket.emit('together:change-media', {
+        conversationId,
+        mediaUrl: parsed.url,
+        mediaType: parsed.type,
+        title: 'Watch Together'
+      });
+    }
     setChangeUrlInput('');
     setShowChangeMedia(false);
   };
@@ -955,14 +1010,18 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
             {!isMinimized && showChangeMedia && (
               <form onSubmit={handleChangeMedia} className="together-url-form change-media-form">
                 <input
-                  type="url"
+                  type="text"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
                   className="together-url-input"
                   placeholder="Paste new YouTube or video link..."
                   value={changeUrlInput}
                   onChange={e => setChangeUrlInput(e.target.value)}
                   autoFocus
                 />
-                <button type="submit" className="together-start-btn" disabled={!changeUrlInput.trim()}>
+                <button type="submit" className="together-start-btn">
                   Change
                 </button>
               </form>
@@ -1174,19 +1233,58 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
           </div>
         ) : (
           !isMinimized ? (
-            <form onSubmit={handleStartSession} className="together-url-form">
-              <input
-                type="url"
-                className="together-url-input"
-                placeholder="Paste YouTube or video link (mp4, webm)..."
-                value={urlInput}
-                onChange={e => setUrlInput(e.target.value)}
-                autoFocus
-              />
-              <button type="submit" className="together-start-btn" disabled={!urlInput.trim()}>
-                Watch Together
-              </button>
-            </form>
+            <div className="together-start-container">
+              <form onSubmit={handleStartSession} className="together-url-form">
+                <input
+                  type="text"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  className="together-url-input"
+                  placeholder="Paste YouTube or video link (mp4, webm)..."
+                  value={urlInput}
+                  onChange={e => setUrlInput(e.target.value)}
+                  autoFocus
+                />
+                <button type="submit" className="together-start-btn">
+                  Watch Together
+                </button>
+              </form>
+              <div className="together-sample-chips">
+                <span className="together-sample-label">Try sample:</span>
+                <button
+                  type="button"
+                  className="together-sample-chip"
+                  onClick={() => {
+                    setUrlInput('https://www.youtube.com/watch?v=aqz-KE-bpKQ');
+                    startWithUrl('https://www.youtube.com/watch?v=aqz-KE-bpKQ');
+                  }}
+                >
+                  🎬 Big Buck Bunny
+                </button>
+                <button
+                  type="button"
+                  className="together-sample-chip"
+                  onClick={() => {
+                    setUrlInput('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
+                    startWithUrl('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
+                  }}
+                >
+                  🍿 Sample MP4
+                </button>
+                <button
+                  type="button"
+                  className="together-sample-chip"
+                  onClick={() => {
+                    setUrlInput('https://www.youtube.com/watch?v=jfKfPfyJRdk');
+                    startWithUrl('https://www.youtube.com/watch?v=jfKfPfyJRdk');
+                  }}
+                >
+                  🎵 Lo-Fi Beats
+                </button>
+              </div>
+            </div>
           ) : (
             <div
               className="together-mini-empty-hint"

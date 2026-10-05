@@ -176,9 +176,53 @@
   display: block;
 }
 
+.together-start-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  width: 100%;
+}
+
 .together-url-form {
   display: flex;
   gap: 0.5rem;
+  width: 100%;
+}
+
+.together-sample-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.together-sample-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--wibby-text-secondary, #94a3b8);
+  margin-right: 0.2rem;
+}
+
+.together-sample-chip {
+  background: var(--wibby-surface-hover, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.16));
+  border-radius: var(--radius-full, 9999px);
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--wibby-text, #ffffff);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.together-sample-chip:hover {
+  background: var(--wibby-surface-active, rgba(255, 255, 255, 0.16));
+  border-color: var(--wibby-primary, #6366f1);
+  transform: translateY(-1px);
 }
 
 .together-url-input {
@@ -207,6 +251,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: var(--transition-fast);
+  white-space: nowrap;
 }
 
 .together-start-btn:hover:not(:disabled) {
@@ -667,6 +712,10 @@
     border-radius: var(--radius-lg);
     flex-shrink: 1;
     min-height: 0;
+    max-height: 38vh;
+  }
+
+  .together-dock.standard:has(.together-player-frame-wrap) {
     max-height: 28vh;
   }
 
@@ -681,6 +730,22 @@
   .together-dock.minimized {
     width: calc(100vw - 32px);
     max-width: 280px;
+  }
+}
+
+@media (max-width: 640px) {
+  .together-url-form {
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .together-start-btn {
+    width: 100%;
+    padding: 0.6rem;
+  }
+
+  .together-sample-chips {
+    justify-content: flex-start;
   }
 }
 

@@ -24,6 +24,7 @@ interface ChatHeaderProps {
   onOpenSearch?: () => void;
   onOpenInfoDrawer?: () => void;
   onOpenTogether?: () => void;
+  isTogetherOpen?: boolean;
   onOpenGame?: () => void;
   onClearChat?: (clearMediaAndStarred: boolean) => void;
 }
@@ -35,6 +36,7 @@ export default function ChatHeader({
   onOpenSearch,
   onOpenInfoDrawer,
   onOpenTogether,
+  isTogetherOpen,
   onOpenGame,
   onClearChat
 }: ChatHeaderProps) {
@@ -203,10 +205,10 @@ export default function ChatHeader({
       </div>
 
       <div className="chat-header-actions">
-        {/* Watch Together (desktop only — on mobile it's in More menu) */}
+        {/* Watch Together (accessible directly on mobile and desktop) */}
         {onOpenTogether && (
           <button
-            className="header-action-btn desktop-only"
+            className={`header-action-btn ${isTogetherOpen ? 'active' : ''}`}
             onClick={onOpenTogether}
             aria-label="Watch Together"
             title="Watch Together"

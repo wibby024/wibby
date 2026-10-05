@@ -92,16 +92,16 @@ export function registerTogetherHandlers(
       if (!data?.conversationId || !data?.mediaUrl) return;
 
       const db = getDb();
-      let convObjectId: ObjectId;
-      try {
-        convObjectId = new ObjectId(data.conversationId);
-      } catch {
+      const conversation = await db.collection('conversations').findOne({
+        $or: [
+          ...(ObjectId.isValid(data.conversationId) ? [{ _id: new ObjectId(data.conversationId) }] : []),
+          { _id: data.conversationId as any }
+        ]
+      });
+      if (!conversation || !conversation.members?.includes(uid)) {
+        console.warn(`[together] User ${uid} unauthorized or conversation ${data.conversationId} not found`);
         return;
       }
-      const conversation = await db.collection('conversations').findOne({
-        _id: convObjectId
-      });
-      if (!conversation || !conversation.members.includes(uid)) return;
 
       const now = Date.now();
       const session: TogetherSessionState = {
@@ -123,9 +123,15 @@ export function registerTogetherHandlers(
       activeTogetherSessions.set(data.conversationId, session);
       saveSessionToDb(session);
 
+      // Ensure the calling socket is in the conversation room
+      socket.join(`conversation:${data.conversationId}`);
+
       const clientState = buildClientState(session);
       io.to(`conversation:${data.conversationId}`).emit('together:state', clientState);
       io.to(`conversation:${data.conversationId}`).emit('together:started', clientState);
+      // Direct emit fallback to sender socket to eliminate any room delivery race condition
+      socket.emit('together:state', clientState);
+      socket.emit('together:started', clientState);
     } catch (err) {
       console.error('together:start error:', err);
     }
@@ -176,8 +182,12 @@ export function registerTogetherHandlers(
       activeTogetherSessions.set(data.conversationId, session);
       saveSessionToDb(session);
 
+      // Ensure room membership
+      socket.join(`conversation:${data.conversationId}`);
+
       const clientState = buildClientState(session);
       io.to(`conversation:${data.conversationId}`).emit('together:state', clientState);
+      socket.emit('together:state', clientState);
     } catch (err) {
       console.error('together:change-media error:', err);
     }
@@ -227,10 +237,14 @@ export function registerTogetherHandlers(
       activeTogetherSessions.set(data.conversationId, session);
       saveSessionToDb(session);
 
+      // Ensure room membership
+      socket.join(`conversation:${data.conversationId}`);
+
       const clientState = buildClientState(session);
 
       // Broadcast authoritative state to all participants in the room
       io.to(`conversation:${data.conversationId}`).emit('together:state', clientState);
+      socket.emit('together:state', clientState);
       socket.to(`conversation:${data.conversationId}`).emit('together:action', {
         conversationId: data.conversationId,
         action: data.action,
@@ -288,9 +302,13 @@ export function registerTogetherHandlers(
       activeTogetherSessions.set(data.conversationId, session);
       saveSessionToDb(session);
 
+      // Ensure room membership
+      socket.join(`conversation:${data.conversationId}`);
+
       const clientState = buildClientState(session);
 
       io.to(`conversation:${data.conversationId}`).emit('together:state', clientState);
+      socket.emit('together:state', clientState);
       socket.to(`conversation:${data.conversationId}`).emit('together:action', {
         ...data,
         currentTime: clientState.position,
@@ -308,6 +326,9 @@ export function registerTogetherHandlers(
   socket.on('together:get-state', async (data: { conversationId: string }) => {
     try {
       if (!data?.conversationId) return;
+
+      // Ensure room membership so this client receives all future sync updates
+      socket.join(`conversation:${data.conversationId}`);
 
       let session = activeTogetherSessions.get(data.conversationId);
       if (!session) {
