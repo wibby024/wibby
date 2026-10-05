@@ -92,8 +92,14 @@ export function registerTogetherHandlers(
       if (!data?.conversationId || !data?.mediaUrl) return;
 
       const db = getDb();
+      let convObjectId: ObjectId;
+      try {
+        convObjectId = new ObjectId(data.conversationId);
+      } catch {
+        return;
+      }
       const conversation = await db.collection('conversations').findOne({
-        _id: new ObjectId(data.conversationId)
+        _id: convObjectId
       });
       if (!conversation || !conversation.members.includes(uid)) return;
 

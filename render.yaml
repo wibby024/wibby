@@ -4,13 +4,15 @@ services:
     runtime: node
     plan: free
     rootDir: server
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
       - key: CLIENT_URL
         value: https://wibby024.web.app,https://wibby024.firebaseapp.com,https://wibby.web.app
       - key: MONGODB_URI
