@@ -115,7 +115,7 @@ export interface TogetherSession {
   sessionId?: string;
   conversationId: string;
   mediaUrl: string;
-  mediaType: 'youtube' | 'direct' | 'custom';
+  mediaType: 'youtube' | 'direct' | 'custom' | 'spotify';
   title?: string;
   hostUserId?: string;
   hostUid?: string;

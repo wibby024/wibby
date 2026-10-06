@@ -29,7 +29,10 @@ interface TogetherPlayerProps {
   inline?: boolean;
 }
 
-export function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' | 'direct' | 'custom' } {
+// Module-level singleton tracking to prevent duplicate Watch Together playback engines
+let activeTogetherInstanceId: string | null = null;
+
+export function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' | 'direct' | 'custom' | 'spotify' } {
   let mediaUrl = inputUrl.trim();
   if (!mediaUrl) return { url: '', type: 'direct' };
 
@@ -40,6 +43,19 @@ export function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' 
       url: `https://www.youtube-nocookie.com/embed/${mediaUrl}?enablejsapi=1&playsinline=1&rel=0${origin ? `&origin=${origin}` : ''}`,
       type: 'youtube'
     };
+  }
+
+  // Spotify URI or Web URL support (track, album, playlist, episode, show)
+  if (mediaUrl.includes('spotify.com') || mediaUrl.startsWith('spotify:')) {
+    const spotifyMatch = mediaUrl.match(/spotify(?:\.com|\:)(?:embed\/)?\/?(track|album|playlist|episode|show)[\/:]([a-zA-Z0-9]+)/i);
+    if (spotifyMatch) {
+      const itemType = spotifyMatch[1].toLowerCase();
+      const itemId = spotifyMatch[2];
+      return {
+        url: `https://open.spotify.com/embed/${itemType}/${itemId}?utm_source=generator`,
+        type: 'spotify'
+      };
+    }
   }
 
   // Auto-prepend https:// if protocol is omitted
@@ -83,6 +99,7 @@ export function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' 
 export default function TogetherPlayer({ conversationId, partnerName, onClose, inline }: TogetherPlayerProps) {
   const { socket } = useSocket();
   const { user } = useAuth();
+  const instanceIdRef = useRef<string>('tp-' + Math.random().toString(36).substring(2, 9));
 
   const [session, setSession] = useState<TogetherSession | null>(null);
   const [urlInput, setUrlInput] = useState('');
@@ -93,11 +110,18 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   const [duration, setDuration] = useState<number>(0);
   const [playbackPos, setPlaybackPos] = useState<number>(0);
   const [autoplayBlocked, setAutoplayBlocked] = useState<boolean>(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
 
   // Draggable Mini-Player Coordinates & Snapping State
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [snappedSide, setSnappedSide] = useState<'left' | 'right'>('right');
+  const [snappedSide, setSnappedSide] = useState<'left' | 'right'>(() => {
+    try {
+      const saved = localStorage.getItem('wibby_together_side');
+      if (saved === 'left' || saved === 'right') return saved;
+    } catch {}
+    return 'right';
+  });
 
   // Local Watch Together volume control (Local Only)
   const [localVolume, setLocalVolume] = useState<number>(() => {
@@ -263,11 +287,44 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     return () => clearInterval(interval);
   }, [isPlaying, getCurrentPosition]);
 
+  // Single active player lifecycle registration and strict unmount media cleanup
+  useEffect(() => {
+    activeTogetherInstanceId = instanceIdRef.current;
+    return () => {
+      if (activeTogetherInstanceId === instanceIdRef.current) {
+        activeTogetherInstanceId = null;
+      }
+      if (videoRef.current) {
+        try {
+          videoRef.current.pause();
+          videoRef.current.removeAttribute('src');
+          videoRef.current.load();
+        } catch {}
+      }
+      if (iframeRef.current) {
+        try {
+          iframeRef.current.src = 'about:blank';
+        } catch {}
+      }
+    };
+  }, []);
+
   // YouTube Iframe communication listener
   useEffect(() => {
     const handleWindowMessage = (event: MessageEvent) => {
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        // Detect YouTube embed restrictions or player errors
+        if (data?.event === 'onError' || data?.event === 'onPlayerError') {
+          const code = data?.info;
+          if (code === 101 || code === 150) {
+            setMediaError("This video cannot be embedded in Wibby.");
+          } else if (code === 100) {
+            setMediaError("This video cannot be found or is private.");
+          } else {
+            setMediaError("This video cannot be embedded in Wibby.");
+          }
+        }
         if (data?.event === 'infoDelivery' && data?.info) {
           if (typeof data.info.currentTime === 'number' && data.info.currentTime >= 0) {
             currentPosRef.current = data.info.currentTime;
@@ -586,8 +643,10 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   const handleToggleMinimize = () => {
     setIsMinimized(prev => {
       const next = !prev;
-      if (next && !position) {
+      if (next) {
         setPosition(getDefaultPosition(snappedSide));
+      } else {
+        setPosition(null);
       }
       return next;
     });
@@ -596,6 +655,9 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   const handleToggleSide = () => {
     const nextSide = snappedSide === 'right' ? 'left' : 'right';
     setSnappedSide(nextSide);
+    try {
+      localStorage.setItem('wibby_together_side', nextSide);
+    } catch {}
     if (isMinimized) {
       setPosition(getDefaultPosition(nextSide));
     }
@@ -654,6 +716,9 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       const midX = window.innerWidth / 2;
       const targetSide = position.x + 170 < midX ? 'left' : 'right';
       setSnappedSide(targetSide);
+      try {
+        localStorage.setItem('wibby_together_side', targetSide);
+      } catch {}
     }
   };
 
@@ -721,6 +786,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
 
     const parsed = parseMediaUrl(clean);
     if (!parsed.url) return;
+    setMediaError(null);
 
     // Set immediate optimistic state for seamless feedback
     setSession({
@@ -761,6 +827,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
 
     const parsed = parseMediaUrl(targetUrl);
     if (!parsed.url) return;
+    setMediaError(null);
 
     setSession(prev => prev ? {
       ...prev,
@@ -930,7 +997,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   return (
     <div
       ref={containerRef}
-      className={`together-dock ${inline ? 'together-inline-container' : isMinimized ? 'minimized' : 'standard'} ${isDragging ? 'is-dragging' : ''}`}
+      className={`together-dock ${inline ? 'together-inline-container' : isMinimized ? `minimized dock-${snappedSide}` : 'standard'} ${isDragging ? 'is-dragging' : ''}`}
       style={
         inline
           ? { width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }
@@ -976,20 +1043,18 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
               </button>
             )}
 
-            {!isMinimized && (
-              <button
-                type="button"
-                className="together-ctrl-btn side-swap-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleToggleSide();
-                }}
-                title={snappedSide === 'right' ? 'Dock to Left Side' : 'Dock to Right Side'}
-                aria-label="Dock to opposite side"
-              >
-                {snappedSide === 'right' ? '⇤' : '⇥'}
-              </button>
-            )}
+            <button
+              type="button"
+              className="together-ctrl-btn side-swap-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleSide();
+              }}
+              title={snappedSide === 'right' ? 'Dock to Left Side' : 'Dock to Right Side'}
+              aria-label={snappedSide === 'right' ? 'Dock to left side' : 'Dock to right side'}
+            >
+              {snappedSide === 'right' ? '⇤' : '⇥'}
+            </button>
 
             <button
               type="button"
@@ -1053,6 +1118,9 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                   controls={!isMinimized}
                   playsInline
                   muted={isMuted}
+                  onError={() => {
+                    setMediaError("This media cannot be played directly in your browser.");
+                  }}
                   onLoadedMetadata={(e) => {
                     if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
                       setDuration(e.currentTarget.duration);
@@ -1118,6 +1186,15 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                     }
                   }}
                 />
+              ) : session.mediaType === 'spotify' ? (
+                <iframe
+                  ref={iframeRef}
+                  src={session.mediaUrl}
+                  className="together-iframe together-spotify-iframe"
+                  title="Spotify Media Player"
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                  loading="lazy"
+                />
               ) : (
                 <iframe
                   ref={iframeRef}
@@ -1127,6 +1204,26 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
                 />
+              )}
+
+              {/* Media embedding error overlay */}
+              {mediaError && (
+                <div className="together-media-error-overlay" role="alert">
+                  <div className="together-media-error-card">
+                    <span className="together-error-badge">⚠️ Embed Notice</span>
+                    <p className="together-error-text">{mediaError}</p>
+                    {session.mediaUrl && (
+                      <a
+                        href={session.mediaUrl.replace('https://www.youtube-nocookie.com/embed/', 'https://www.youtube.com/watch?v=').replace('?enablejsapi=1&playsinline=1&rel=0', '').replace('/embed/', '/')}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="together-external-link-btn"
+                      >
+                        Open video externally ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
               )}
 
               {/* Autoplay blocked overlay banner */}

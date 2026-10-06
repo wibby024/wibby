@@ -71,6 +71,33 @@
   align-items: flex-start;
 }
 
+/* WhatsApp-style swipe to reply indicator */
+.message-swipe-indicator {
+  position: absolute;
+  top: 50%;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--wibby-surface, #ffffff);
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.1));
+  color: var(--wibby-primary, #a855f7);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  z-index: 10;
+  transition: opacity 0.12s ease-out;
+}
+
+.message-swipe-indicator.partner-reply {
+  left: 0;
+}
+
+.message-swipe-indicator.own-reply {
+  right: 0;
+}
+
 
 
 .message-bubble {

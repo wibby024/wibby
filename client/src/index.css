@@ -61,8 +61,8 @@
   --composer-height: 72px;
 
   /* ---- Typography & Native Emoji Fonts ---- */
-  --font-emoji: "Samsung Color Emoji", "Noto Color Emoji", "Segoe UI Emoji", "Apple Color Emoji", "Android Emoji", sans-serif;
-  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, "Samsung Color Emoji", "Noto Color Emoji", "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
+  --font-emoji: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Android Emoji", emoji, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Android Emoji", emoji;
 
   /* ---- Border Radius ---- */
   --radius-xs: 6px;
@@ -994,25 +994,42 @@ ol {
 }
 
 /* ============================================
-   Native & System Emoji Rendering (Samsung/System Unicode)
+   Native & System Emoji Rendering (Platform Color Emoji)
    ============================================ */
 .emoji-btn,
 .reaction-badge,
 .reaction-btn,
 .reaction-picker-btn,
 .category-btn-icon,
-.message-text,
-.message-composer textarea,
 .reply-preview,
 .emoji-picker-container,
 .recent-emojis,
 .emoji-item,
 .emoji-picker-grid button,
 .emoji-mart,
-.quick-reaction-btn {
+.quick-reaction-btn,
+.emoji-container,
+.chat-reaction-emoji {
   font-family: var(--font-emoji);
+  font-variant-emoji: emoji;
   font-style: normal;
   text-decoration: none;
+}
+
+/* ============================================
+   Mobile Touch Target Accessibility (>= 44px)
+   ============================================ */
+@media screen and (max-width: 768px) {
+  .call-btn,
+  .composer-send-btn,
+  .composer-attach-btn,
+  .composer-voice-btn,
+  .composer-emoji-btn,
+  .action-btn,
+  .reaction-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 

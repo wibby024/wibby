@@ -554,7 +554,8 @@ function IncomingMessage({
   onImageClick,
   onDownloadFile,
   onVotePoll,
-  onOpenLink
+  onOpenLink,
+  swipeOffset
 }: { 
   msg: Message, 
   onVisible: (id: string) => void, 
@@ -566,7 +567,8 @@ function IncomingMessage({
   onImageClick: (msg: Message) => void,
   onDownloadFile: (msg: Message) => void,
   onVotePoll?: (msgId: string, optionIndex: number) => void,
-  onOpenLink?: (url: string, title?: string) => void
+  onOpenLink?: (url: string, title?: string) => void,
+  swipeOffset?: number
 }) {
   const ref = useRef<HTMLDivElement>(null);
   
@@ -589,7 +591,11 @@ function IncomingMessage({
 
   return (
     <>
-      <div className={`message-bubble ${msg.deletedAt ? 'deleted' : ''} ${isSticker ? 'is-sticker-bubble' : ''}`} ref={ref}>
+      <div 
+        className={`message-bubble ${msg.deletedAt ? 'deleted' : ''} ${isSticker ? 'is-sticker-bubble' : ''}`} 
+        ref={ref}
+        style={swipeOffset !== undefined ? { transform: `translateX(${swipeOffset}px)`, transition: swipeOffset ? 'none' : 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)' } : undefined}
+      >
         {msg.deletedAt ? (
           <div className="message-row">
             <div className="message-content deleted-text">
@@ -688,6 +694,9 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
   const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<{ id: string; text: string; sender: string } | null>(null);
   const [editingMessage, setEditingMessage] = useState<{ id: string; text: string } | null>(null);
+  const [swipingMessage, setSwipingMessage] = useState<{ id: string; offset: number } | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; id: string } | null>(null);
+  const isHorizontalSwipeRef = useRef<boolean | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [emojiPicker, setEmojiPicker] = useState<{ msgId: string, anchorRect: DOMRect, isOwn: boolean } | null>(null);
@@ -2068,6 +2077,21 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
     }
   }, [messages, closeContextMenu, showToast]);
 
+  const handleQuickEdit = useCallback(() => {
+    const now = Date.now();
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.senderId === user?.uid && !msg.deletedAt && (!msg.type || msg.type === 'text') && msg.text) {
+        const age = now - new Date(msg.createdAt).getTime();
+        if (age <= 120000) {
+          setEditingMessage({ id: msg._id, text: msg.text });
+          setReplyingTo(null);
+          return;
+        }
+      }
+    }
+  }, [messages, user?.uid]);
+
   const cancelReplyOrEdit = useCallback(() => {
     setReplyingTo(null);
     setEditingMessage(null);
@@ -2285,20 +2309,67 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
               const showDateSeparator = !prevMsg || (new Date(msg.createdAt).toDateString() !== new Date(prevMsg.createdAt).toDateString());
               const isSelected = selectedMessages.has(msg._id);
 
-              const handleTouchStart = (msgId: string) => {
+              const handleTouchStart = (msgId: string, e: React.TouchEvent) => {
                 if (isSelectMode) return;
+                const touch = e.touches[0];
+                touchStartRef.current = { x: touch.clientX, y: touch.clientY, id: msgId };
+                isHorizontalSwipeRef.current = null;
                 longPressTimer.current = setTimeout(() => {
                   setHoveredMessageId(msgId);
-                  if (window.navigator.vibrate) window.navigator.vibrate(50);
+                  if (window.navigator?.vibrate) {
+                    try { window.navigator.vibrate(50); } catch {}
+                  }
                 }, 500);
               };
 
-              const handleTouchEnd = () => {
+              const handleTouchMove = (msgId: string, isOwnMsg: boolean, e: React.TouchEvent) => {
+                if (!touchStartRef.current || touchStartRef.current.id !== msgId) return;
+                const touch = e.touches[0];
+                const diffX = touch.clientX - touchStartRef.current.x;
+                const diffY = touch.clientY - touchStartRef.current.y;
+
+                if (isHorizontalSwipeRef.current === null) {
+                  if (Math.abs(diffX) > 8 || Math.abs(diffY) > 8) {
+                    if (Math.abs(diffY) > Math.abs(diffX)) {
+                      isHorizontalSwipeRef.current = false;
+                      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+                      return;
+                    } else {
+                      isHorizontalSwipeRef.current = true;
+                      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+                    }
+                  } else {
+                    return;
+                  }
+                }
+
+                if (!isHorizontalSwipeRef.current) return;
                 if (longPressTimer.current) clearTimeout(longPressTimer.current);
+
+                let clampedOffset = 0;
+                if (!isOwnMsg) {
+                  if (diffX > 0) clampedOffset = Math.min(diffX * 0.75, 75);
+                } else {
+                  if (diffX < 0) clampedOffset = Math.max(diffX * 0.75, -75);
+                }
+                setSwipingMessage({ id: msgId, offset: clampedOffset });
               };
 
-              const handleTouchMove = () => {
+              const handleTouchEnd = (msgId: string, isOwnMsg: boolean) => {
                 if (longPressTimer.current) clearTimeout(longPressTimer.current);
+                if (touchStartRef.current?.id === msgId && isHorizontalSwipeRef.current) {
+                  const offset = swipingMessage?.id === msgId ? swipingMessage.offset : 0;
+                  const thresholdMet = !isOwnMsg ? offset >= 45 : offset <= -45;
+                  if (thresholdMet) {
+                    if (window.navigator?.vibrate) {
+                      try { window.navigator.vibrate(20); } catch {}
+                    }
+                    handleReplyClick(msgId);
+                  }
+                }
+                touchStartRef.current = null;
+                isHorizontalSwipeRef.current = null;
+                setSwipingMessage(null);
               };
 
               const messageWrapperProps = {
@@ -2313,10 +2384,10 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
                 onClick: isSelectMode ? () => toggleSelection(msg._id) : undefined,
                 onMouseEnter: () => !isSelectMode && setHoveredMessageId(msg._id),
                 onMouseLeave: () => setHoveredMessageId(null),
-                onTouchStart: () => handleTouchStart(msg._id),
-                onTouchEnd: handleTouchEnd,
-                onTouchMove: handleTouchMove,
-                onTouchCancel: handleTouchEnd,
+                onTouchStart: (e: React.TouchEvent) => handleTouchStart(msg._id, e),
+                onTouchEnd: () => handleTouchEnd(msg._id, isOwn),
+                onTouchMove: (e: React.TouchEvent) => handleTouchMove(msg._id, isOwn, e),
+                onTouchCancel: () => handleTouchEnd(msg._id, isOwn),
               };
 
               const renderActionBar = () => {
@@ -2333,16 +2404,35 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
                       setEmojiPicker({ msgId: msg._id, anchorRect: rect, isOwn });
                       setHoveredMessageId(null);
                     }}
+                    onReply={() => handleReplyClick(msg._id)}
                   />
                 );
               };
 
               const isStarred = Boolean(user?.uid && msg.starredBy?.includes(user.uid));
               const isSticker = Boolean(msg.type === 'sticker' || msg.sticker);
+              const isSwipingThis = swipingMessage?.id === msg._id;
 
               const content = isOwn ? (
                 <div key={msg._id} {...messageWrapperProps}>
-                  <div className={`message-bubble ${msg.deletedAt ? 'deleted' : ''} ${isSticker ? 'is-sticker-bubble' : ''}`}>
+                  {isSwipingThis && swipingMessage.offset < -8 && (
+                    <div 
+                      className="message-swipe-indicator own-reply"
+                      style={{
+                        opacity: Math.min(1, Math.abs(swipingMessage.offset) / 45),
+                        transform: `translateY(-50%) scale(${Math.min(1.15, 0.5 + (Math.abs(swipingMessage.offset) / 60))})`
+                      }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 17 4 12 9 7" />
+                        <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+                      </svg>
+                    </div>
+                  )}
+                  <div 
+                    className={`message-bubble ${msg.deletedAt ? 'deleted' : ''} ${isSticker ? 'is-sticker-bubble' : ''}`}
+                    style={isSwipingThis ? { transform: `translateX(${swipingMessage.offset}px)`, transition: 'none' } : undefined}
+                  >
                     {msg.deletedAt ? (
                       <div className="message-row">
                         <div className="message-content deleted-text">
@@ -2432,6 +2522,20 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
                 </div>
               ) : (
                 <div key={msg._id} {...messageWrapperProps}>
+                  {isSwipingThis && swipingMessage.offset > 8 && (
+                    <div 
+                      className="message-swipe-indicator partner-reply"
+                      style={{
+                        opacity: Math.min(1, Math.abs(swipingMessage.offset) / 45),
+                        transform: `translateY(-50%) scale(${Math.min(1.15, 0.5 + (Math.abs(swipingMessage.offset) / 60))})`
+                      }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 17 4 12 9 7" />
+                        <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+                      </svg>
+                    </div>
+                  )}
                   {renderActionBar()}
                   <IncomingMessage 
                     msg={msg} 
@@ -2445,6 +2549,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
                     onDownloadFile={handleDownloadFile}
                     onVotePoll={handleVotePoll}
                     onOpenLink={(url, title) => setLinkPlayer({ url, title })}
+                    swipeOffset={isSwipingThis ? swipingMessage.offset : undefined}
                   />
                 </div>
               );
@@ -2523,6 +2628,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
           droppedFiles={droppedFilesForComposer}
           onClearDroppedFiles={() => setDroppedFilesForComposer(null)}
           onOpenGame={onOpenGame}
+          onQuickEdit={handleQuickEdit}
         />
       )}
       

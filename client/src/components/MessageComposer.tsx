@@ -29,6 +29,7 @@ interface MessageComposerProps {
   droppedFiles?: File[] | null;
   onClearDroppedFiles?: () => void;
   onOpenGame?: () => void;
+  onQuickEdit?: () => void;
 }
 
 export default function MessageComposer({ 
@@ -43,7 +44,8 @@ export default function MessageComposer({
   onTyping,
   droppedFiles,
   onClearDroppedFiles,
-  onOpenGame
+  onOpenGame,
+  onQuickEdit
 }: MessageComposerProps) {
   const [message, setMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -232,6 +234,9 @@ export default function MessageComposer({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    } else if (e.key === 'ArrowUp' && !message && !editingMessage && onQuickEdit) {
+      e.preventDefault();
+      onQuickEdit();
     } else if (e.key === 'Escape') {
       if (showEmojiPicker) {
         setShowEmojiPicker(false);

@@ -5,7 +5,7 @@ import { useSocket } from '../../context/SocketContext';
 import { rtcService } from '../../services/rtcService';
 import { resolvePartnerName } from '../../utils/partnerName';
 import { resolveAvatarUrl } from '../../utils/avatar';
-import TogetherPlayer from '../together/TogetherPlayer';
+import TogetherPlayer, { parseMediaUrl } from '../together/TogetherPlayer';
 import MessageArea from '../MessageArea';
 import './CallModal.css';
 
@@ -15,57 +15,6 @@ function formatCallDuration(seconds: number): string {
   const paddedMins = String(mins).padStart(2, '0');
   const paddedSecs = String(secs).padStart(2, '0');
   return `${paddedMins}:${paddedSecs}`;
-}
-
-function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' | 'direct' | 'custom' } {
-  let mediaUrl = inputUrl.trim();
-  if (!mediaUrl) return { url: '', type: 'direct' };
-
-  // Support bare 11-character YouTube video ID
-  if (/^[a-zA-Z0-9_-]{11}$/.test(mediaUrl)) {
-    const origin = typeof window !== 'undefined' ? encodeURIComponent(window.location.origin) : '';
-    return {
-      url: `https://www.youtube-nocookie.com/embed/${mediaUrl}?enablejsapi=1&playsinline=1&rel=0${origin ? `&origin=${origin}` : ''}`,
-      type: 'youtube'
-    };
-  }
-
-  // Auto-prepend https:// if protocol is omitted
-  if (!mediaUrl.startsWith('http://') && !mediaUrl.startsWith('https://')) {
-    mediaUrl = `https://${mediaUrl}`;
-  }
-
-  if (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be') || mediaUrl.includes('youtube-nocookie.com')) {
-    let videoId = '';
-    if (mediaUrl.includes('youtu.be/')) {
-      videoId = mediaUrl.split('youtu.be/')[1].split('?')[0].split('/')[0];
-    } else if (mediaUrl.includes('/embed/')) {
-      videoId = mediaUrl.split('/embed/')[1].split('?')[0].split('/')[0];
-    } else if (mediaUrl.includes('/shorts/')) {
-      videoId = mediaUrl.split('/shorts/')[1].split('?')[0].split('/')[0];
-    } else if (mediaUrl.includes('/v/')) {
-      videoId = mediaUrl.split('/v/')[1].split('?')[0].split('/')[0];
-    } else {
-      try {
-        const urlObj = new URL(mediaUrl);
-        videoId = urlObj.searchParams.get('v') || '';
-      } catch {
-        const match = mediaUrl.match(/[?&]v=([^&#]+)/);
-        if (match) videoId = match[1];
-      }
-    }
-
-    if (videoId) {
-      const origin = typeof window !== 'undefined' ? encodeURIComponent(window.location.origin) : '';
-      return {
-        url: `https://www.youtube-nocookie.com/embed/${videoId}?enablejsapi=1&playsinline=1&rel=0${origin ? `&origin=${origin}` : ''}`,
-        type: 'youtube'
-      };
-    }
-    return { url: mediaUrl, type: 'youtube' };
-  }
-
-  return { url: mediaUrl, type: 'direct' };
 }
 
 const PIP_CONFIG = {
@@ -156,6 +105,7 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   isVideo?: boolean;
   isLocalMuted?: boolean;
 }) {
+  const { isMinimized } = useCall();
   const localPanelRef = useRef<HTMLDivElement | null>(null);
   const posRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
@@ -552,13 +502,16 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
               </div>
             </div>
 
-            {movieUrl ? (
+            {movieUrl && !isMinimized && viewMode === 'moviemode' ? (
               <div className="call-moviemode-player-container">
                 <TogetherPlayer
                   inline
                   conversationId={conversationId || ''}
                   partnerName={partnerName}
-                  onClose={() => setMovieUrl?.('')}
+                  onClose={() => {
+                    setMovieUrl?.('');
+                    setViewMode?.('stacked');
+                  }}
                 />
               </div>
             ) : (
@@ -812,7 +765,17 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
 
           {/* Main Remote Video (100% sharp, uncropped, native aspect ratio) */}
           <video
-            ref={remoteVideoRef}
+            ref={(el) => {
+              if (remoteVideoRef) (remoteVideoRef as any).current = el;
+              if (el) {
+                rtcService.bindRemoteVideoElement(el);
+                const stream = rtcService.getRemoteVideoStream();
+                if (stream && el.srcObject !== stream) {
+                  el.srcObject = stream;
+                }
+                el.play().catch(() => {});
+              }
+            }}
             className={`call-video-fg-live remote-main ${isRemoteCameraOff || !isConnected ? 'hidden' : ''}`}
             autoPlay
             playsInline
@@ -902,7 +865,17 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
 
           {/* Main Local Video (100% sharp, complete native frame; un-mirrored when rear camera) */}
           <video
-            ref={localVideoRef}
+            ref={(el) => {
+              if (localVideoRef) (localVideoRef as any).current = el;
+              if (el) {
+                rtcService.bindLocalVideoElement(el);
+                const stream = rtcService.getLocalStream();
+                if (stream && el.srcObject !== stream) {
+                  el.srcObject = stream;
+                }
+                el.play().catch(() => {});
+              }
+            }}
             className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${isCameraOff || isCameraUnavailable ? 'hidden' : ''}`}
             autoPlay
             playsInline
@@ -1045,7 +1018,6 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
     const handleSessionActive = (s: any) => {
       if (s && s.mediaUrl) {
         setMovieUrl(s.mediaUrl);
-        setViewMode('moviemode');
       }
     };
     const handleTogetherEnded = () => {
@@ -1062,6 +1034,16 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
       socket.off('together:ended', handleTogetherEnded);
     };
   }, [socket, activeCall?.conversationId]);
+
+  // Screen share audio availability notification listener
+  useEffect(() => {
+    const handleNotice = (e: any) => {
+      setScreenShareNotice(e.detail || "Screen audio isn't available for this share source/browser.");
+      setTimeout(() => setScreenShareNotice(null), 4000);
+    };
+    window.addEventListener('wibby:screen-audio-notice', handleNotice);
+    return () => window.removeEventListener('wibby:screen-audio-notice', handleNotice);
+  }, []);
 
   const handleStartMovie = (url: string) => {
     if (!socket || !activeCall?.conversationId) return;

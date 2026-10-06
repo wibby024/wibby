@@ -132,34 +132,66 @@ function WibbyAppWrapper() {
     localStorage.setItem('wibby-chat-theme', chatThemePreset);
   }, [chatThemePreset]);
 
+  // Optimistic instant hydration for fast perceived login (Issue 5)
+  useEffect(() => {
+    if (!user?.uid) return;
+    try {
+      const cachedPaired = localStorage.getItem(`wibby-paired-${user.uid}`);
+      if (cachedPaired !== null) {
+        setIsPaired(JSON.parse(cachedPaired));
+      }
+      const cachedPartner = localStorage.getItem(`wibby-partner-${user.uid}`);
+      if (cachedPartner) {
+        const parsed = JSON.parse(cachedPartner);
+        if (parsed) {
+          const resolvedName = resolvePartnerName(parsed, '');
+          const resolvedUser = resolvePartnerUsername(parsed, '');
+          setPartner({
+            ...parsed,
+            display_name: resolvedName,
+            displayName: resolvedName,
+            username: resolvedUser
+          });
+        }
+      }
+      const cachedConv = localStorage.getItem(`wibby-conv-${user.uid}`);
+      if (cachedConv) {
+        setConversationId(cachedConv);
+      }
+    } catch {}
+  }, [user?.uid]);
+
   // Initialize notification and ringtone service with account sync
   useEffect(() => {
     if (user) {
       notificationService.init();
       ringtoneService.setUserId(user.uid);
 
-      // Account-wide preferences sync
+      // Non-blocking parallel preferences sync
       (async () => {
         try {
           const token = await user.getIdToken();
-          await ringtoneService.syncWithAccount(token, user.uid);
-
           const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-          const prefRes = await fetch(`${apiUrl}/api/users/preferences`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (prefRes.ok) {
-            const prefData = await prefRes.json();
-            const prefs = prefData?.preferences;
-            if (prefs) {
-              if (prefs.themeMode && (prefs.themeMode === 'light' || prefs.themeMode === 'dark')) {
-                setTheme(prefs.themeMode);
+
+          await Promise.allSettled([
+            ringtoneService.syncWithAccount(token, user.uid),
+            fetch(`${apiUrl}/api/users/preferences`, {
+              headers: { Authorization: `Bearer ${token}` }
+            }).then(async (prefRes) => {
+              if (prefRes.ok) {
+                const prefData = await prefRes.json();
+                const prefs = prefData?.preferences;
+                if (prefs) {
+                  if (prefs.themeMode && (prefs.themeMode === 'light' || prefs.themeMode === 'dark')) {
+                    setTheme(prefs.themeMode);
+                  }
+                  if (prefs.themeFamily) {
+                    setChatThemePreset(prefs.themeFamily as ChatThemePreset);
+                  }
+                }
               }
-              if (prefs.themeFamily) {
-                setChatThemePreset(prefs.themeFamily as ChatThemePreset);
-              }
-            }
-          }
+            })
+          ]);
         } catch (syncErr) {
           console.warn('[WIBBY PREFERENCES] Sync error:', syncErr);
         }
@@ -316,9 +348,6 @@ function WibbyAppWrapper() {
     const handleTogetherStarted = (data: any) => {
       if (data.conversationId === conversationId) {
         setShowTogether(true);
-        if (isCallActive) {
-          window.dispatchEvent(new CustomEvent('wibby:open-moviemode'));
-        }
       }
     };
 

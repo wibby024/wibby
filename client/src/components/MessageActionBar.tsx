@@ -6,9 +6,10 @@ interface MessageActionBarProps {
   onReact: (emoji: string) => void;
   onContextMenu: (e: React.MouseEvent | React.TouchEvent) => void;
   onEmojiPicker: (e: React.MouseEvent) => void;
+  onReply?: () => void;
 }
 
-export default function MessageActionBar({ isOwn, onReact, onContextMenu, onEmojiPicker }: MessageActionBarProps) {
+export default function MessageActionBar({ isOwn, onReact, onContextMenu, onEmojiPicker, onReply }: MessageActionBarProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [style, setStyle] = useState<React.CSSProperties>({ opacity: 0 });
 
@@ -78,6 +79,19 @@ export default function MessageActionBar({ isOwn, onReact, onContextMenu, onEmoj
         <button className="action-btn plus-btn" onClick={onEmojiPicker} aria-label="Open emoji picker">＋</button>
       </div>
       <div className="action-bar-divider" />
+      {onReply && (
+        <button 
+          className="action-btn reply-btn" 
+          onClick={onReply} 
+          aria-label="Reply" 
+          title="Reply"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 17 4 12 9 7" />
+            <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+          </svg>
+        </button>
+      )}
       <button className="action-btn context-menu-btn" onClick={onContextMenu} aria-label="More message actions">⋯</button>
     </div>
   );

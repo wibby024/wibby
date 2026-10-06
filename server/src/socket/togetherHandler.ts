@@ -7,7 +7,7 @@ export interface TogetherSessionState {
   sessionId: string;
   conversationId: string;
   mediaUrl: string;
-  mediaType: 'youtube' | 'direct' | 'custom';
+  mediaType: 'youtube' | 'direct' | 'custom' | 'spotify';
   title?: string;
   hostUserId: string;
   state: 'playing' | 'paused' | 'stopped';
@@ -85,7 +85,7 @@ export function registerTogetherHandlers(
   socket.on('together:start', async (data: {
     conversationId: string;
     mediaUrl: string;
-    mediaType?: 'youtube' | 'direct' | 'custom';
+    mediaType?: 'youtube' | 'direct' | 'custom' | 'spotify';
     title?: string;
   }) => {
     try {
@@ -141,7 +141,7 @@ export function registerTogetherHandlers(
   socket.on('together:change-media', async (data: {
     conversationId: string;
     mediaUrl: string;
-    mediaType?: 'youtube' | 'direct' | 'custom';
+    mediaType?: 'youtube' | 'direct' | 'custom' | 'spotify';
     title?: string;
   }) => {
     try {

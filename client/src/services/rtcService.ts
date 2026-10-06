@@ -2050,7 +2050,6 @@ export class RTCService {
       screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
         video: {
           cursor: 'always',
-          displaySurface: 'monitor',
           width: { ideal: 1920, max: 3840 },
           height: { ideal: 1080, max: 2160 },
           frameRate: { ideal: 30, max: 60 }
@@ -2060,7 +2059,10 @@ export class RTCService {
           noiseSuppression: false,
           autoGainControl: false,
           channelCount: 2
-        }
+        },
+        systemAudio: 'include',
+        selfBrowserSurface: 'exclude',
+        surfaceSwitching: 'include'
       } as any);
     } catch (err: any) {
       const name = err?.name;
@@ -2069,14 +2071,24 @@ export class RTCService {
         return 'cancelled';
       }
       try {
-        console.log('[WIBBY SCREEN] Retrying getDisplayMedia with fallback constraints...');
+        console.log('[WIBBY SCREEN] Retrying getDisplayMedia with simple audio/video constraints...');
         screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
-          video: { cursor: 'always' },
+          video: true,
           audio: true
         } as any);
-      } catch (fallbackErr) {
-        console.error('[WIBBY SCREEN] getDisplayMedia fallback failed:', fallbackErr);
-        return 'error';
+      } catch (fallbackWithAudioErr: any) {
+        if (fallbackWithAudioErr?.name === 'NotAllowedError' || fallbackWithAudioErr?.name === 'AbortError') {
+          return 'cancelled';
+        }
+        try {
+          console.log('[WIBBY SCREEN] Retrying getDisplayMedia with video only...');
+          screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
+            video: true
+          } as any);
+        } catch (videoOnlyErr) {
+          console.error('[WIBBY SCREEN] getDisplayMedia completely failed:', videoOnlyErr);
+          return 'error';
+        }
       }
     }
 
@@ -2097,6 +2109,12 @@ export class RTCService {
       videoTrack: screenVideoTrack.label,
       audioTrack: displayAudioTrack?.label ?? 'none (browser did not provide display audio)'
     });
+
+    if (!displayAudioTrack && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('wibby:screen-audio-notice', {
+        detail: "Screen audio isn't available for this share source/browser."
+      }));
+    }
 
     this.screenStream = screenStream;
 
@@ -3377,7 +3395,16 @@ export class RTCService {
           const videoEl = this.remoteVideoElement || (this.remoteVideoElements.size > 0 ? this.remoteVideoElements.values().next().value : null);
           const liveVideoTrack = this.remoteVideoStream.getVideoTracks().find(t => t.readyState === 'live');
 
-          if (videoEl && liveVideoTrack && !this.isCameraOff) {
+          if (videoEl && liveVideoTrack) {
+            // Guarantee srcObject is bound to remote stream and not stalled
+            if (videoEl.srcObject !== this.remoteVideoStream) {
+              console.warn('[WIBBY WEBRTC WATCHDOG] remote video srcObject was missing/mismatched. Re-binding stream.');
+              videoEl.srcObject = this.remoteVideoStream;
+              videoEl.play().catch(() => {});
+            } else if (videoEl.paused) {
+              videoEl.play().catch(() => {});
+            }
+
             const curTime = videoEl.currentTime;
             const nowTs = Date.now();
 

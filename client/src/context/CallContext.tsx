@@ -236,6 +236,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noAnswerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isStartingCallRef = useRef(false);
   const inviteCountRef = useRef<Record<string, number>>({});
   const callRecoverableReceivedRef = useRef(false);
@@ -393,6 +394,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const resetCallState = useCallback((delayMs: number = 0) => {
+    if (resetTimeoutRef.current) {
+      clearTimeout(resetTimeoutRef.current);
+      resetTimeoutRef.current = null;
+    }
     clearTimer();
     clearNoAnswerTimeout();
     ringtoneService.stop();
@@ -424,9 +429,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem('wibby_active_call_id');
 
     if (delayMs > 0) {
-      setTimeout(() => {
+      resetTimeoutRef.current = setTimeout(() => {
         setActiveCall(null);
         setCallState('IDLE');
+        resetTimeoutRef.current = null;
       }, delayMs);
     } else {
       setActiveCall(null);
@@ -540,6 +546,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     }
 
     socket.emit('call:check-recoverable');
+    if (activeCallRef.current?.callId) {
+      socket.emit('call:verify-active', { callId: activeCallRef.current.callId });
+    }
 
     const handleRecoverable = (data: {
       callId: string;
@@ -877,6 +886,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   // Clean up on component unmount
   useEffect(() => {
     return () => {
+      if (resetTimeoutRef.current) {
+        clearTimeout(resetTimeoutRef.current);
+        resetTimeoutRef.current = null;
+      }
       clearTimer();
       clearError();
       ringtoneService.destroy();
