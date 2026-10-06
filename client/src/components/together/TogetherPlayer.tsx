@@ -27,6 +27,10 @@ interface TogetherPlayerProps {
   partnerName: string;
   onClose: () => void;
   inline?: boolean;
+  isCallMinimized?: boolean;
+  onExpandCall?: () => void;
+  onMinimizeCall?: () => void;
+  onToggleFullscreen?: () => void;
 }
 
 // Module-level singleton tracking to prevent duplicate Watch Together playback engines
@@ -96,7 +100,16 @@ export function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' 
   return { url: mediaUrl, type: 'direct' };
 }
 
-export default function TogetherPlayer({ conversationId, partnerName, onClose, inline }: TogetherPlayerProps) {
+export default function TogetherPlayer({
+  conversationId,
+  partnerName,
+  onClose,
+  inline,
+  isCallMinimized,
+  onExpandCall,
+  onMinimizeCall,
+  onToggleFullscreen
+}: TogetherPlayerProps) {
   const { socket } = useSocket();
   const { user } = useAuth();
   const instanceIdRef = useRef<string>('tp-' + Math.random().toString(36).substring(2, 9));
@@ -104,6 +117,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   const [session, setSession] = useState<TogetherSession | null>(null);
   const [urlInput, setUrlInput] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
+  const effectiveMinimized = inline ? Boolean(isCallMinimized) : isMinimized;
   const [showChangeMedia, setShowChangeMedia] = useState(false);
   const [changeUrlInput, setChangeUrlInput] = useState('');
   const [syncStatus, setSyncStatus] = useState('Sync ready');
@@ -184,6 +198,45 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   onCloseRef.current = onClose;
   const userUidRef = useRef(user?.uid);
   userUidRef.current = user?.uid;
+  const durationRef = useRef<number>(0);
+  durationRef.current = duration;
+
+  // Unified anti-loop stop handler when playback reaches the end
+  const handleVideoEnded = useCallback(() => {
+    if (isRemoteSyncingRef.current) return;
+    const endPos = durationRef.current > 0 ? durationRef.current : (videoRef.current?.currentTime || currentPosRef.current);
+    currentPosRef.current = endPos;
+    setPlaybackPos(endPos);
+    playStartTimestampRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.pause();
+      try {
+        videoRef.current.currentTime = endPos;
+      } catch {}
+    }
+    setSession(prev => prev ? {
+      ...prev,
+      state: 'paused',
+      playing: false,
+      isPlaying: false,
+      position: endPos
+    } : null);
+    setSyncStatus('Ended');
+
+    if (socket && conversationId) {
+      isLocalActionRef.current = true;
+      socket.emit('together:control', {
+        conversationId,
+        action: 'pause',
+        position: endPos,
+        currentTime: endPos,
+        sentAt: Date.now()
+      });
+      setTimeout(() => {
+        isLocalActionRef.current = false;
+      }, 500);
+    }
+  }, [socket, conversationId]);
 
   // Helper to format playback seconds as mm:ss
   const formatSeconds = (secs: number): string => {
@@ -325,6 +378,38 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
             setMediaError("This video cannot be embedded in Wibby.");
           }
         }
+
+        // Detect YouTube Ended State (0 = YT.PlayerState.ENDED): stop, remain at final frame, do NOT loop
+        const isYtEnded = (data?.event === 'onStateChange' && data?.info === 0) ||
+                          (data?.info && typeof data.info.playerState === 'number' && data.info.playerState === 0);
+        if (isYtEnded) {
+          playStartTimestampRef.current = null;
+          const endPos = durationRef.current > 0 ? durationRef.current : currentPosRef.current;
+          currentPosRef.current = endPos;
+          setPlaybackPos(endPos);
+          setSession(prev => prev ? {
+            ...prev,
+            state: 'paused',
+            playing: false,
+            isPlaying: false,
+            position: endPos
+          } : null);
+          setSyncStatus('Ended');
+          if (socket && conversationId && !isRemoteSyncingRef.current) {
+            isLocalActionRef.current = true;
+            socket.emit('together:control', {
+              conversationId,
+              action: 'pause',
+              position: endPos,
+              currentTime: endPos,
+              sentAt: Date.now()
+            });
+            setTimeout(() => {
+              isLocalActionRef.current = false;
+            }, 500);
+          }
+        }
+
         if (data?.event === 'infoDelivery' && data?.info) {
           if (typeof data.info.currentTime === 'number' && data.info.currentTime >= 0) {
             currentPosRef.current = data.info.currentTime;
@@ -345,7 +430,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     return () => {
       window.removeEventListener('message', handleWindowMessage);
     };
-  }, []);
+  }, [socket, conversationId]);
 
   // Handshake with YouTube iframe on media load
   useEffect(() => {
@@ -640,7 +725,15 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     return { x, y };
   }, []);
 
-  const handleToggleMinimize = () => {
+  const handleToggleMinimize = useCallback(() => {
+    if (inline) {
+      if (effectiveMinimized && onExpandCall) {
+        onExpandCall();
+      } else if (!effectiveMinimized && onMinimizeCall) {
+        onMinimizeCall();
+      }
+      return;
+    }
     setIsMinimized(prev => {
       const next = !prev;
       if (next) {
@@ -650,7 +743,29 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       }
       return next;
     });
-  };
+  }, [inline, effectiveMinimized, onExpandCall, onMinimizeCall, getDefaultPosition, snappedSide]);
+
+  // Keep position initialized when minimizing
+  useEffect(() => {
+    if (effectiveMinimized) {
+      setPosition(prev => prev || getDefaultPosition(snappedSide));
+    } else {
+      setPosition(null);
+    }
+  }, [effectiveMinimized, snappedSide, getDefaultPosition]);
+
+  const handleToggleFullscreen = useCallback(() => {
+    if (onToggleFullscreen) {
+      onToggleFullscreen();
+      return;
+    }
+    if (!containerRef.current) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => { });
+    } else {
+      containerRef.current.requestFullscreen().catch(() => { });
+    }
+  }, [onToggleFullscreen]);
 
   const handleToggleSide = () => {
     const nextSide = snappedSide === 'right' ? 'left' : 'right';
@@ -658,14 +773,14 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
     try {
       localStorage.setItem('wibby_together_side', nextSide);
     } catch {}
-    if (isMinimized) {
+    if (effectiveMinimized) {
       setPosition(getDefaultPosition(nextSide));
     }
   };
 
   // Draggable Mini-Player pointer handlers
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (!isMinimized || !containerRef.current) return;
+    if (!effectiveMinimized || !containerRef.current) return;
     if ((e.target as HTMLElement).closest('.together-dock-controls, .together-sync-action-bar, input, button')) return;
 
     e.preventDefault();
@@ -997,41 +1112,41 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
   return (
     <div
       ref={containerRef}
-      className={`together-dock ${inline ? 'together-inline-container' : isMinimized ? `minimized dock-${snappedSide}` : 'standard'} ${isDragging ? 'is-dragging' : ''}`}
+      className={`together-dock ${inline ? 'together-inline-container' : ''} ${effectiveMinimized ? `minimized dock-${snappedSide}` : inline ? 'inline-expanded' : 'standard'} ${isDragging ? 'is-dragging' : ''}`}
       style={
-        inline
-          ? { width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }
-          : isMinimized && position
-            ? { left: `${position.x}px`, top: `${position.y}px` }
-            : !isMinimized && (customSize.height || customSize.width)
+        effectiveMinimized && position
+          ? { left: `${position.x}px`, top: `${position.y}px` }
+          : inline && !effectiveMinimized
+            ? { width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }
+            : !effectiveMinimized && (customSize.height || customSize.width)
               ? {
                 height: customSize.height ? `${customSize.height}px` : undefined,
                 maxWidth: customSize.width ? `${customSize.width}px` : undefined
               }
               : undefined
       }
-      onPointerDown={isMinimized ? handlePointerDown : undefined}
-      onPointerMove={isMinimized ? handlePointerMove : undefined}
-      onPointerUp={isMinimized ? handlePointerUp : undefined}
-      onPointerCancel={isMinimized ? handlePointerUp : undefined}
+      onPointerDown={effectiveMinimized ? handlePointerDown : undefined}
+      onPointerMove={effectiveMinimized ? handlePointerMove : undefined}
+      onPointerUp={effectiveMinimized ? handlePointerUp : undefined}
+      onPointerCancel={effectiveMinimized ? handlePointerUp : undefined}
     >
-      {/* Header bar (only in floating dock mode, hidden in inline mode) */}
-      {!inline && (
-        <div className="together-dock-header">
+      {/* Header bar (Shown in standalone mode OR whenever minimized) */}
+      {(!inline || effectiveMinimized) && (
+        <div className={`together-dock-header ${effectiveMinimized ? 'minimized-header' : ''}`}>
           <div className="together-dock-title">
-            {isMinimized && (
+            {effectiveMinimized && (
               <span className="together-drag-grip" title="Drag to move or dock to left/right">
                 ⠿
               </span>
             )}
-            <span className="together-badge">🍿 {isMinimized ? 'Together' : 'Watch Together'}</span>
+            <span className="together-badge">🍿 {effectiveMinimized ? 'Together' : 'Watch Together'}</span>
             <span className="together-sync-status">
-              {isMinimized ? (session ? (isPlaying ? '▶ Playing' : '⏸ Paused') : 'Link mode') : syncStatus}
+              {effectiveMinimized ? (session ? (isPlaying ? '▶ Playing' : '⏸ Paused') : 'Link mode') : syncStatus}
             </span>
           </div>
 
           <div className="together-dock-controls">
-            {!isMinimized && session && (
+            {!effectiveMinimized && session && (
               <button
                 type="button"
                 className="together-ctrl-btn"
@@ -1063,10 +1178,10 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                 e.stopPropagation();
                 handleToggleMinimize();
               }}
-              title={isMinimized ? 'Expand Video Player' : 'Minimize to side (Draggable)'}
-              aria-label={isMinimized ? 'Expand player' : 'Minimize player'}
+              title={effectiveMinimized ? 'Expand Video Player' : 'Minimize to side (Draggable)'}
+              aria-label={effectiveMinimized ? 'Expand player' : 'Minimize player'}
             >
-              {isMinimized ? '🗖' : '🗕'}
+              {effectiveMinimized ? '🗖' : '🗕'}
             </button>
 
             <button
@@ -1086,10 +1201,10 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       )}
 
       {/* Body */}
-      <div className={`together-dock-body ${isMinimized ? 'minimized-body' : ''}`}>
+      <div className={`together-dock-body ${effectiveMinimized ? 'minimized-body' : ''}`}>
         {session ? (
           <div className="together-player-content-wrap">
-            {!isMinimized && showChangeMedia && (
+            {!effectiveMinimized && showChangeMedia && (
               <form onSubmit={handleChangeMedia} className="together-url-form change-media-form">
                 <input
                   type="text"
@@ -1109,13 +1224,14 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
               </form>
             )}
 
-            <div className={`together-player-frame-wrap ${isMinimized ? 'mini-frame' : 'full-frame'}`}>
+            <div className={`together-player-frame-wrap ${effectiveMinimized ? 'mini-frame' : 'full-frame'}`}>
               {session.mediaType === 'direct' ? (
                 <video
                   ref={videoRef}
                   src={session.mediaUrl}
                   className="together-video-player"
-                  controls={!isMinimized}
+                  controls={false}
+                  loop={false}
                   playsInline
                   muted={isMuted}
                   onError={() => {
@@ -1125,7 +1241,13 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                     if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
                       setDuration(e.currentTarget.duration);
                     }
+                    if (currentPosRef.current > 0 && e.currentTarget.currentTime === 0) {
+                      try {
+                        e.currentTarget.currentTime = currentPosRef.current;
+                      } catch {}
+                    }
                   }}
+                  onEnded={handleVideoEnded}
                   onPlay={() => {
                     // Prevent ping-pong feedback loops: ignore native events triggered by remote sync
                     if (isRemoteSyncingRef.current || isLocalActionRef.current) return;
@@ -1241,7 +1363,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
             </div>
 
             {/* Timeline Scrubber for Arbitrary Seek — Only commits on release to prevent flooding */}
-            {!isMinimized && duration > 0 && (
+            {!effectiveMinimized && duration > 0 && (
               <div className="together-timeline-bar">
                 <span className="together-timeline-time">
                   {formatSeconds(playbackPos)}
@@ -1278,7 +1400,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
             )}
 
             {/* Action Bar */}
-            {!isMinimized ? (
+            {!effectiveMinimized ? (
               <div className="together-sync-action-bar">
                 <button
                   type="button"
@@ -1329,6 +1451,27 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                     {isMuted ? '0%' : `${Math.round(localVolume * 100)}%`}
                   </span>
                 </div>
+
+                <div className="together-actions-extra">
+                  <button
+                    type="button"
+                    className="together-action-btn together-fullscreen-btn"
+                    onClick={handleToggleFullscreen}
+                    title="Toggle Fullscreen"
+                    aria-label="Toggle Fullscreen"
+                  >
+                    ⛶
+                  </button>
+                  <button
+                    type="button"
+                    className="together-action-btn together-minimize-action-btn"
+                    onClick={handleToggleMinimize}
+                    title="Minimize Player"
+                    aria-label="Minimize player"
+                  >
+                    🗕
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="together-sync-action-bar minimized-bar">
@@ -1339,6 +1482,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
                     e.stopPropagation();
                     handleTogglePlay();
                   }}
+                  title={isPlaying ? 'Pause' : 'Play'}
                 >
                   {isPlaying ? '⏸' : '▶'}
                 </button>
@@ -1346,7 +1490,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
             )}
           </div>
         ) : (
-          !isMinimized ? (
+          !effectiveMinimized ? (
             <div className="together-start-container">
               <form onSubmit={handleStartSession} className="together-url-form">
                 <input
@@ -1402,7 +1546,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
           ) : (
             <div
               className="together-mini-empty-hint"
-              onClick={() => setIsMinimized(false)}
+              onClick={() => handleToggleMinimize()}
               title="Click to enter video URL"
             >
               <span>Paste video link to watch together</span>
@@ -1413,7 +1557,7 @@ export default function TogetherPlayer({ conversationId, partnerName, onClose, i
       </div>
 
       {/* User-Resizable Handle Bar */}
-      {!isMinimized && !inline && (
+      {!effectiveMinimized && !inline && (
         <div className="together-resize-bar">
           <div
             className="together-resize-edge"

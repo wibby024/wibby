@@ -447,6 +447,33 @@
   flex: 1.2;
 }
 
+.together-actions-extra {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.together-action-btn {
+  padding: 0.35rem 0.55rem;
+  background: var(--wibby-surface-hover, rgba(255, 255, 255, 0.08));
+  color: var(--wibby-text, #fff);
+  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.together-action-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
 .together-mini-action-bar {
   display: flex;
   align-items: center;
@@ -562,7 +589,7 @@
 /* ============================================
    Inline Container (used when embedded in Movie Mode)
    ============================================ */
-.together-dock.together-inline-container {
+.together-dock.together-inline-container:not(.minimized) {
   position: static !important;
   width: 100% !important;
   height: 100% !important;
@@ -577,6 +604,44 @@
   margin: 0 !important;
   overflow: hidden !important;
   isolation: isolate;
+}
+
+.together-dock.together-inline-container.minimized {
+  position: fixed !important;
+  bottom: 24px !important;
+  width: 380px !important;
+  height: 260px !important;
+  max-width: calc(100vw - 32px) !important;
+  max-height: calc(100vh - 48px) !important;
+  z-index: 10005 !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75) !important;
+  pointer-events: auto !important;
+  background: #0d0e15 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.together-dock.together-inline-container.minimized.dock-left {
+  left: 24px !important;
+  right: auto !important;
+}
+
+.together-dock.together-inline-container.minimized.dock-right {
+  right: 24px !important;
+  left: auto !important;
+}
+
+.together-dock.together-inline-container.minimized .together-dock-header {
+  display: flex !important;
+  height: 38px !important;
+  padding: 0 10px !important;
+  background: rgba(18, 17, 28, 0.95) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  align-items: center !important;
+  justify-content: space-between !important;
 }
 
 .together-inline-container .together-dock-body {

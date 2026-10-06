@@ -614,7 +614,7 @@ function WibbyAppWrapper() {
               onOpenGame={() => setShowGameModal(true)}
               onClearChat={handleClearChat}
             />
-            {showTogether && (!isCallActive || isMinimized) && (
+            {showTogether && !isCallActive && (
               <TogetherPlayer
                 conversationId={conversationId}
                 partnerName={partnerName}

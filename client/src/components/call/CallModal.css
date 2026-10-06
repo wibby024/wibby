@@ -10,6 +10,11 @@
 }
 
 .call-active-panel-container.is-minimized-dormant {
+  display: contents;
+}
+
+/* For regular non-moviemode calls, hide the full overlay off-screen while keeping WebRTC media elements mounted */
+.call-active-panel-container.is-minimized-dormant .call-overlay:not(.is-moviemode-mode) {
   display: block;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -21,6 +26,42 @@
   height: 1px !important;
   overflow: hidden !important;
   z-index: -9999 !important;
+}
+
+/* For Movie Mode when minimized: hide call overlay backdrop & call chrome, but keep TogetherPlayer visible and interactive in docked form */
+.call-active-panel-container.is-minimized-dormant .call-overlay.is-moviemode-mode {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  pointer-events: none !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 10005 !important;
+}
+
+.call-active-panel-container.is-minimized-dormant .call-overlay.is-moviemode-mode .call-moviemode-header,
+.call-active-panel-container.is-minimized-dormant .call-overlay.is-moviemode-mode .call-moviemode-sidebar,
+.call-active-panel-container.is-minimized-dormant .call-overlay.is-moviemode-mode .call-moviemode-empty-state,
+.call-active-panel-container.is-minimized-dormant .call-overlay.is-moviemode-mode .call-video-controls-bar {
+  display: none !important;
+}
+
+.call-active-panel-container.is-minimized-dormant .call-overlay.is-moviemode-mode .call-video-stage.view-mode-moviemode {
+  padding: 0 !important;
+  display: contents !important;
+}
+
+.call-active-panel-container.is-minimized-dormant .call-overlay.is-moviemode-mode .call-stage-presentation-frame,
+.call-active-panel-container.is-minimized-dormant .call-overlay.is-moviemode-mode .call-moviemode-main,
+.call-active-panel-container.is-minimized-dormant .call-overlay.is-moviemode-mode .call-moviemode-player-container {
+  display: contents !important;
+  background: transparent !important;
+  border: none !important;
 }
 
 .call-overlay {
@@ -3056,6 +3097,106 @@ video.is-screen-share {
      CALL CONTROLS AT BOTTOM OF PRIMARY AREA
    ========================================================================== */
 
+/* Movie Mode Header */
+.call-moviemode-header {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 20px;
+  right: 20px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: rgba(15, 17, 26, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  z-index: 50;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.call-moviemode-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.call-moviemode-icon {
+  font-size: 18px;
+}
+
+.call-moviemode-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.call-moviemode-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  margin-left: 4px;
+}
+
+.call-moviemode-status-dot.pulsing {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+  animation: moviePulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes moviePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.call-moviemode-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.call-moviemode-header-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.call-moviemode-header-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.call-moviemode-header-btn.exit {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.28);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.call-moviemode-header-btn.exit:hover {
+  background: rgba(239, 68, 68, 0.24);
+  color: #fca5a5;
+}
+
 /* Movie Mode Container */
 .call-video-stage.view-mode-moviemode {
   display: flex;
@@ -3063,7 +3204,7 @@ video.is-screen-share {
   height: 100%;
   position: relative;
   overflow: hidden;
-  padding: calc(60px + env(safe-area-inset-top, 0px)) 16px calc(90px + env(safe-area-inset-bottom, 0px)) 16px;
+  padding: calc(68px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)) 16px;
   box-sizing: border-box;
 }
 
@@ -3077,9 +3218,9 @@ video.is-screen-share {
   box-sizing: border-box;
 }
 
-/* Movie Mode Primary Area */
+/* Movie Mode Primary Area: 70-75% Hero Area */
 .call-moviemode-main {
-  flex: 1 1 0;
+  flex: 73 1 0;
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -3088,11 +3229,9 @@ video.is-screen-share {
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
 }
 
 .call-moviemode-player-container {
@@ -3103,6 +3242,7 @@ video.is-screen-share {
   justify-content: center;
   background: #000;
   position: relative;
+  overflow: hidden;
 }
 
 .call-moviemode-iframe,
@@ -3114,95 +3254,146 @@ video.is-screen-share {
   background: #000;
 }
 
-.call-moviemode-prompt {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* In-Frame Empty State Inside Movie Area */
+.call-moviemode-empty-state {
   width: 100%;
   height: 100%;
-  padding: 24px;
-  box-sizing: border-box;
-}
-
-.call-moviemode-prompt-card {
-  max-width: 440px;
-  width: 100%;
-  background: rgba(18, 17, 28, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: 32px 24px;
+  box-sizing: border-box;
+  background: radial-gradient(circle at center, #181926 0%, #0a0b10 100%);
   text-align: center;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(16px);
 }
 
-.call-moviemode-prompt-icon {
-  font-size: 40px;
+.call-moviemode-empty-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #c084fc;
+  background: rgba(192, 132, 252, 0.12);
+  border: 1px solid rgba(192, 132, 252, 0.28);
+  padding: 4px 14px;
+  border-radius: 9999px;
   margin-bottom: 12px;
 }
 
-.call-moviemode-prompt-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #fff;
+.call-moviemode-empty-title {
+  font-size: clamp(20px, 3vw, 26px);
+  font-weight: 800;
+  color: #ffffff;
   margin: 0 0 8px 0;
+  letter-spacing: -0.02em;
 }
 
-.call-moviemode-prompt-desc {
+.call-moviemode-empty-subtitle {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.65);
+  margin: 0 0 24px 0;
+  max-width: 480px;
   line-height: 1.5;
-  margin: 0 0 20px 0;
 }
 
-.call-moviemode-prompt-form {
+.call-moviemode-empty-form {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  width: 100%;
+  max-width: 520px;
+  gap: 8px;
+  margin-bottom: 18px;
 }
 
-.call-moviemode-input {
-  width: 100%;
-  padding: 12px 16px;
+.call-moviemode-empty-input {
+  flex: 1;
+  padding: 12px 18px;
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 12px;
-  color: #fff;
+  color: #ffffff;
   font-size: 14px;
   outline: none;
-  box-sizing: border-box;
-  transition: border-color 0.2s;
+  transition: all 0.2s ease;
 }
 
-.call-moviemode-input:focus {
-  border-color: #a78bfa;
+.call-moviemode-empty-input:focus {
+  border-color: #a855f7;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
 }
 
-.call-moviemode-submit-btn {
-  padding: 12px 20px;
-  background: linear-gradient(135deg, #7c3aed, #6d28d9);
-  color: #fff;
+.call-moviemode-empty-play-btn {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #9333ea, #7928ca);
+  color: #ffffff;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(147, 51, 234, 0.4);
 }
 
-.call-moviemode-submit-btn:disabled {
+.call-moviemode-empty-play-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(147, 51, 234, 0.55);
+}
+
+.call-moviemode-empty-play-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.call-moviemode-submit-btn:not(:disabled):hover {
-  opacity: 0.95;
-  transform: translateY(-1px);
+.call-moviemode-samples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 20px;
 }
 
-/* Movie Mode Sidebar: Stacked Users (Top) + Integrated Chat (Bottom) */
+.call-moviemode-samples-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.call-moviemode-sample-chip {
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.call-moviemode-sample-chip:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.call-moviemode-empty-hints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Movie Mode Sidebar: 25-30% Right Area */
 .call-moviemode-sidebar {
-  width: clamp(280px, 28vw, 420px);
+  flex: 27 1 0;
+  min-width: 280px;
+  max-width: 420px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -3216,17 +3407,19 @@ video.is-screen-share {
 .call-moviemode-users-strip {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   flex-shrink: 0;
 }
 
+/* Participant Video Tile: Substantially Taller */
 .call-moviemode-user-tile {
   width: 100%;
-  height: 110px;
-  border-radius: 12px;
+  height: clamp(165px, 22vh, 230px);
+  min-height: 145px;
+  border-radius: 14px;
   background: #0e0d16;
-  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.16));
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -3237,26 +3430,62 @@ video.is-screen-share {
 .call-moviemode-user-tile video {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover !important;
   display: block;
 }
 
 .call-moviemode-tile-badge {
   position: absolute;
-  top: 6px;
+  top: 8px;
   left: 8px;
   font-size: 11px;
   font-weight: 600;
-  padding: 2px 8px;
+  padding: 3px 9px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.7);
   color: #fff;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   pointer-events: none;
   z-index: 5;
 }
 
+.call-moviemode-tile-actions {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 6;
+}
+
+.call-moviemode-tile-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: all 0.15s ease;
+}
+
+.call-moviemode-tile-btn.off {
+  background: rgba(239, 68, 68, 0.85);
+  border-color: rgba(239, 68, 68, 1);
+}
+
+.call-moviemode-tile-btn:hover {
+  transform: scale(1.08);
+}
+
+/* Movie Chat: Secondary to movie, independent scroll */
 .call-moviemode-chat-container {
   flex: 1 1 0;
   min-height: 180px;
@@ -3291,38 +3520,51 @@ video.is-screen-share {
   height: 100%;
 }
 
-@media (max-width: 900px) and (min-width: 640px) {
+/* In Movie Mode, hide regular call toolbar to keep controls dedicated to watching */
+.call-video-overlay.is-moviemode-mode .call-video-controls-bar {
+  display: none !important;
+}
+
+@media (max-width: 900px) and (min-width: 641px) {
   .call-moviemode-sidebar {
     width: clamp(250px, 32vw, 340px);
   }
 
   .call-moviemode-user-tile {
-    height: 85px;
-  }
-}
-
-/* Reference Layout Docking:
-   Call controls positioned at bottom center of the PRIMARY LEFT area */
-@media (min-width: 640px) {
-
-  .call-video-overlay.is-screenshare-mode .call-video-controls-bar,
-  .call-video-overlay.is-moviemode-mode .call-video-controls-bar {
-    left: calc((100% - clamp(280px, 28vw, 420px) - 32px) / 2 + 16px);
-    transform: translateX(-50%);
-    bottom: 24px;
+    height: 140px;
+    min-height: 130px;
   }
 }
 
 /* ============================================================
    Movie Mode Mobile Layout (≤640px)
    Video player on top (16:9), camera tiles in a compact horizontal strip,
-   integrated chat below, call controls bar docked at bottom
+   integrated chat below
    ============================================================ */
 @media (max-width: 640px) {
+  .call-moviemode-header {
+    left: 8px;
+    right: 8px;
+    height: 42px;
+    padding: 0 10px;
+  }
+
+  .call-moviemode-title {
+    font-size: 13px;
+  }
+
+  .call-moviemode-header-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .call-video-stage.view-mode-moviemode {
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 8px calc(12px + env(safe-area-inset-bottom, 0px)) 8px;
+  }
+
   .call-video-stage.view-mode-moviemode .call-stage-presentation-frame {
     flex-direction: column;
     gap: 8px;
-    padding: 8px 8px 76px 8px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -3333,14 +3575,15 @@ video.is-screen-share {
     height: auto;
     min-height: 200px;
     aspect-ratio: 16 / 9;
-    max-height: 38vh;
-    border-radius: 14px;
+    max-height: 36vh;
+    border-radius: 12px;
   }
 
   .call-moviemode-sidebar {
     width: 100%;
+    max-width: 100%;
     flex: 1 1 0;
-    min-height: 220px;
+    min-height: 240px;
     gap: 8px;
   }
 
@@ -3352,52 +3595,33 @@ video.is-screen-share {
 
   .call-moviemode-user-tile {
     flex: 1 1 0;
-    height: 78px;
+    height: 105px;
+    min-height: 95px;
     border-radius: 10px;
   }
 
   .call-moviemode-chat-container {
     flex: 1 1 0;
-    min-height: 140px;
+    min-height: 160px;
     border-radius: 12px;
   }
 
-  .call-moviemode-prompt-card {
-    padding: 20px 14px;
-    border-radius: 16px;
-    max-width: 100%;
+  .call-moviemode-empty-title {
+    font-size: 18px;
   }
 
-  .call-moviemode-prompt-icon {
-    font-size: 32px;
-    margin-bottom: 6px;
-  }
-
-  .call-moviemode-prompt-title {
-    font-size: 17px;
-    margin-bottom: 4px;
-  }
-
-  .call-moviemode-prompt-desc {
+  .call-moviemode-empty-subtitle {
     font-size: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
   }
 
-  .call-moviemode-input {
-    padding: 10px 14px;
-    font-size: 13px;
+  .call-moviemode-empty-form {
+    flex-direction: column;
+    gap: 8px;
   }
 
-  .call-moviemode-submit-btn {
-    padding: 10px 16px;
-    font-size: 13px;
-  }
-
-  .call-video-overlay.is-moviemode-mode .call-video-controls-bar {
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 12px;
-    width: calc(100% - 24px);
-    max-width: 440px;
+  .call-moviemode-empty-play-btn {
+    width: 100%;
+    padding: 10px;
   }
 }
