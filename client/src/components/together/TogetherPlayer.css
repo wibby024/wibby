@@ -170,8 +170,42 @@
   font-size: 0.95rem;
 }
 
+.together-ctrl-btn.restore-btn {
+  color: #fff;
+  background: rgba(124, 58, 237, 0.25);
+  border: 1px solid rgba(124, 58, 237, 0.5);
+}
+
+.together-ctrl-btn.restore-btn:hover {
+  background: rgba(124, 58, 237, 0.5);
+  color: #fff;
+}
+
 .together-ctrl-btn.close-btn:hover {
   color: var(--wibby-danger);
+}
+
+.together-restore-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--wibby-button, var(--wibby-primary, #7c3aed));
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md, 8px);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: auto;
+  transition: var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.35);
+}
+
+.together-restore-pill-btn:hover {
+  background: var(--wibby-button-hover, #6d28d9);
+  color: #fff;
+  transform: translateY(-1px);
 }
 
 /* Body */

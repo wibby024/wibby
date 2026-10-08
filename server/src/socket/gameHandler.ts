@@ -233,6 +233,80 @@ export function registerGameHandlers(
         return;
       }
 
+      // Special case: Type Race is real-time simultaneous competition (no turns)
+      if (game.gameType === 'typerace') {
+        const { action } = data.move || {};
+
+        if (action === 'ready') {
+          if (!game.stateData.ready) game.stateData.ready = {};
+          game.stateData.ready[uid] = true;
+
+          const p1 = game.playerOrder[0];
+          const p2 = game.playerOrder[1];
+
+          // If both players indicated ready, start synchronized countdown
+          if (game.stateData.ready[p1] && game.stateData.ready[p2]) {
+            const now = Date.now();
+            game.stateData.raceStatus = 'countdown';
+            game.stateData.countdownStart = now;
+            game.stateData.raceStart = now + 3500; // 3.5s synchronized countdown: 3, 2, 1, GO!
+          } else {
+            game.stateData.raceStatus = 'ready';
+          }
+        } else if (action === 'progress') {
+          // Live progress update from client
+          const pData = game.stateData.progress?.[uid] || {};
+          const now = Date.now();
+          if (game.stateData.raceStart && now >= game.stateData.raceStart) {
+            game.stateData.raceStatus = 'running';
+          }
+
+          game.stateData.progress[uid] = {
+            ...pData,
+            progress: Math.min(1, Math.max(0, Number(data.move.progress) || 0)),
+            wpm: Math.max(0, Math.round(Number(data.move.wpm) || 0)),
+            accuracy: Math.min(100, Math.max(0, Math.round(Number(data.move.accuracy) || 100))),
+            errors: Math.max(0, Number(data.move.errors) || 0),
+            typedChars: Math.max(0, Number(data.move.typedChars) || 0)
+          };
+        } else if (action === 'finish') {
+          // Authoritative finish handling
+          const pData = game.stateData.progress?.[uid] || {};
+          const textLength = game.stateData.textLength || 1;
+          const typedChars = Math.max(0, Number(data.move.typedChars) || textLength);
+
+          // Player must have completed the text
+          if (typedChars >= textLength && !pData.finished) {
+            const finalWpm = Math.max(0, Math.round(Number(data.move.wpm) || 0));
+            const finalAccuracy = Math.min(100, Math.max(0, Math.round(Number(data.move.accuracy) || 100)));
+            const finalErrors = Math.max(0, Number(data.move.errors) || 0);
+
+            game.stateData.progress[uid] = {
+              ...pData,
+              progress: 1,
+              wpm: finalWpm,
+              accuracy: finalAccuracy,
+              errors: finalErrors,
+              typedChars: textLength,
+              finished: true,
+              finishTime: Date.now()
+            };
+
+            // First player to legitimately finish wins the race
+            if (!game.winnerId) {
+              game.status = 'won';
+              game.winnerId = uid;
+              game.scores[uid] = (game.scores[uid] || 0) + 1;
+              game.stateData.raceStatus = 'finished';
+            }
+          }
+        }
+
+        game.updatedAt = new Date().toISOString();
+        io.to(`conversation:${data.conversationId}`).emit('game:state', game);
+        return;
+      }
+
       // Turn enforcement for all other games
       if (game.currentTurn !== uid) return;
 

@@ -171,7 +171,8 @@ export type GameType =
   | 'checkers'
   | 'battleship'
   | 'reversi'
-  | 'coopwordle';
+  | 'coopwordle'
+  | 'typerace';
 
 export interface GameState {
   gameId: string;

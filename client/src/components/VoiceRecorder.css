@@ -162,13 +162,106 @@
   font-weight: 400;
 }
 
+/* Live Recording Header Pill */
+.voice-recording-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+}
+
+.voice-recording-pill.paused {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.voice-recording-live-text {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #EF4444;
+}
+
+.voice-recording-pill.paused .voice-recording-live-text {
+  color: #F59E0B;
+}
+
+.voice-recorder-title-default {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 /* Recording Controls */
 .voice-controls-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1.5rem;
+  gap: 1rem;
   margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Labeled Action Buttons */
+.voice-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 9999px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid transparent;
+  user-select: none;
+}
+
+.voice-action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.voice-action-btn:active {
+  transform: scale(0.97);
+}
+
+.voice-btn-cancel {
+  background: rgba(239, 68, 68, 0.12);
+  color: #EF4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.voice-btn-cancel:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.voice-btn-pause-text, .voice-btn-resume-text {
+  background: rgba(139, 92, 246, 0.18);
+  color: #C4B5FD;
+  border-color: rgba(139, 92, 246, 0.35);
+}
+
+.voice-btn-pause-text:hover, .voice-btn-resume-text:hover {
+  background: rgba(139, 92, 246, 0.3);
+  color: #EDE9FE;
+  border-color: rgba(139, 92, 246, 0.55);
+}
+
+.voice-btn-done {
+  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+  color: #FFFFFF;
+  border-color: rgba(167, 139, 250, 0.4);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+}
+
+.voice-btn-done:hover {
+  background: linear-gradient(135deg, #9061F9 0%, #6D28D9 100%);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.55);
 }
 
 .voice-btn-circle {

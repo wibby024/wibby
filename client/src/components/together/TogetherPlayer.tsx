@@ -1165,7 +1165,7 @@ export default function TogetherPlayer({
       {/* Header bar (Shown in standalone mode OR whenever minimized) */}
       {(!inline || effectiveMinimized) && (
         <div className={`together-dock-header ${effectiveMinimized ? 'minimized-header' : ''}`}>
-          <div className="together-dock-title">
+          <div className="together-dock-title together-dock-title-wrap">
             {effectiveMinimized && (
               <span className="together-drag-grip" title="Drag to move or dock to left/right">
                 ⠿
@@ -1203,18 +1203,43 @@ export default function TogetherPlayer({
               {snappedSide === 'right' ? '⇤' : '⇥'}
             </button>
 
-            <button
-              type="button"
-              className="together-ctrl-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleToggleMinimize();
-              }}
-              title={effectiveMinimized ? 'Expand Video Player' : 'Minimize to side (Draggable)'}
-              aria-label={effectiveMinimized ? 'Expand player' : 'Minimize player'}
-            >
-              {effectiveMinimized ? '🗖' : '🗕'}
-            </button>
+            {effectiveMinimized ? (
+              <button
+                type="button"
+                className="together-ctrl-btn restore-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleMinimize();
+                }}
+                title="Expand / Restore Video Player"
+                aria-label="Expand player"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="together-ctrl-btn minimize-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleMinimize();
+                }}
+                title="Minimize to side (Draggable)"
+                aria-label="Minimize player"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="4 14 10 14 10 20" />
+                  <polyline points="20 10 14 10 14 4" />
+                  <line x1="14" y1="10" x2="21" y2="3" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              </button>
+            )}
 
             <button
               type="button"
@@ -1226,7 +1251,10 @@ export default function TogetherPlayer({
               title="Close Watch Together"
               aria-label="Close session"
             >
-              ✕
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
           </div>
         </div>
@@ -1501,7 +1529,12 @@ export default function TogetherPlayer({
                     title="Minimize Player"
                     aria-label="Minimize player"
                   >
-                    🗕
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="4 14 10 14 10 20" />
+                      <polyline points="20 10 14 10 14 4" />
+                      <line x1="14" y1="10" x2="21" y2="3" />
+                      <line x1="3" y1="21" x2="10" y2="14" />
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -1517,6 +1550,46 @@ export default function TogetherPlayer({
                   title={isPlaying ? 'Pause' : 'Play'}
                 >
                   {isPlaying ? '⏸' : '▶'}
+                </button>
+                <button
+                  type="button"
+                  className="together-seek-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSeekRelative(-10);
+                  }}
+                  title="Rewind 10 seconds"
+                >
+                  -10s
+                </button>
+                <button
+                  type="button"
+                  className="together-seek-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSeekRelative(10);
+                  }}
+                  title="Forward 10 seconds"
+                >
+                  +10s
+                </button>
+                <button
+                  type="button"
+                  className="together-restore-pill-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleMinimize();
+                  }}
+                  title="Expand / Restore Video Player"
+                  aria-label="Expand player"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 3 21 3 21 9" />
+                    <polyline points="9 21 3 21 3 15" />
+                    <line x1="21" y1="3" x2="14" y2="10" />
+                    <line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                  <span>Expand</span>
                 </button>
               </div>
             )}

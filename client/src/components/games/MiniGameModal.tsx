@@ -12,6 +12,7 @@ import Checkers from './Checkers';
 import Battleship from './Battleship';
 import Reversi from './Reversi';
 import CoopWordle from './CoopWordle';
+import TypeRace from './TypeRace';
 import './MiniGameModal.css';
 
 interface MiniGameModalProps {
@@ -147,6 +148,8 @@ export default function MiniGameModal({
         return 'Reversi (Othello)';
       case 'coopwordle':
         return 'Team Wordle (Co-op)';
+      case 'typerace':
+        return 'Type Race';
       default:
         return 'Mini Games';
     }
@@ -159,6 +162,24 @@ export default function MiniGameModal({
         <div className="game-picker-container">
           <h3 className="game-picker-title">Choose a Game to Play</h3>
           <div className="game-picker-grid">
+            <button
+              className="game-option-btn"
+              onClick={() => handleStartGame('typerace')}
+              type="button"
+              style={{ border: '1.5px solid rgba(168, 85, 247, 0.45)', background: 'rgba(124, 58, 237, 0.08)' }}
+            >
+              <div className="game-option-icon">🏎️</div>
+              <div className="game-option-info">
+                <div className="game-option-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  Type Race
+                  <span style={{ fontSize: 10, background: '#7c3aed', color: '#fff', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                    NEW DUEL
+                  </span>
+                </div>
+                <div className="game-option-desc">Real-time head-to-head 2-player typing speed duel</div>
+              </div>
+            </button>
+
             <button
               className="game-option-btn"
               onClick={() => handleStartGame('tictactoe')}
@@ -342,7 +363,7 @@ export default function MiniGameModal({
     }
 
     // Finished: Won / Draw
-    if (gameState.status === 'won' || gameState.status === 'draw') {
+    if ((gameState.status === 'won' || gameState.status === 'draw') && gameState.gameType !== 'typerace') {
       const didIWin = gameState.winnerId === currentUserId;
       const isDraw = gameState.status === 'draw';
 
@@ -543,6 +564,22 @@ export default function MiniGameModal({
       );
     }
 
+    if (gameState.gameType === 'typerace') {
+      return (
+        <TypeRace
+          gameData={gameState.stateData}
+          myUid={currentUserId}
+          partnerUid={partnerUid}
+          partnerName={partnerName}
+          onMove={move => handleMove(move)}
+          onReset={handleResetGame}
+          onClose={handleCloseGame}
+          gameStatus={gameState.status}
+          winnerId={gameState.winnerId || null}
+        />
+      );
+    }
+
     return null;
   };
 
@@ -571,7 +608,7 @@ export default function MiniGameModal({
         {/* Scoreboard if game active */}
         {gameState && (
           <div className="game-scoreboard">
-            <div className={`player-score-card ${isMyTurn ? 'active-turn' : ''}`}>
+            <div className={`player-score-card ${isMyTurn && gameState.gameType !== 'typerace' ? 'active-turn' : ''}`}>
               <div className="player-score-avatar" style={{ background: '#7C3AED' }}>
                 You
               </div>
@@ -581,11 +618,11 @@ export default function MiniGameModal({
               </div>
             </div>
 
-            <span className="scoreboard-vs" style={gameState.gameType === 'coopwordle' ? { color: '#22c55e', fontWeight: 700 } : undefined}>
-              {gameState.gameType === 'coopwordle' ? '🤝 TEAM' : 'VS'}
+            <span className="scoreboard-vs" style={gameState.gameType === 'coopwordle' ? { color: '#22c55e', fontWeight: 700 } : gameState.gameType === 'typerace' ? { color: '#a78bfa', fontWeight: 700 } : undefined}>
+              {gameState.gameType === 'coopwordle' ? '🤝 TEAM' : gameState.gameType === 'typerace' ? '🏎️ DUEL' : 'VS'}
             </span>
 
-            <div className={`player-score-card ${!isMyTurn && gameState.status === 'in_progress' ? 'active-turn' : ''}`}>
+            <div className={`player-score-card ${!isMyTurn && gameState.status === 'in_progress' && gameState.gameType !== 'typerace' ? 'active-turn' : ''}`}>
               <div className="player-score-avatar" style={{ background: '#10B981' }}>
                 {partnerName.charAt(0).toUpperCase()}
               </div>
@@ -598,7 +635,7 @@ export default function MiniGameModal({
         )}
 
         {/* Turn indicator */}
-        {gameState && gameState.status === 'in_progress' && (
+        {gameState && gameState.status === 'in_progress' && gameState.gameType !== 'typerace' && (
           <div className={`game-turn-banner ${isMyTurn ? 'is-me' : ''}`}>
             {gameState.gameType === 'rockpaperscissors'
               ? '⚡ Choose your move simultaneously!'

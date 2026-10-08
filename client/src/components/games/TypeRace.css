@@ -1,0 +1,518 @@
+/* ==========================================================================
+   Wibby Type Race — Two-Player Competitive Typing Duel
+   ========================================================================== */
+
+.typerace-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  gap: 16px;
+  position: relative;
+  user-select: none;
+  font-family: inherit;
+}
+
+/* -------------------------------------------------------------
+   Lobby / Ready Screen
+   ------------------------------------------------------------- */
+.typerace-lobby {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 28px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg, 16px);
+  gap: 16px;
+}
+
+.typerace-lobby-icon {
+  font-size: 48px;
+  line-height: 1;
+  filter: drop-shadow(0 4px 12px rgba(124, 58, 237, 0.3));
+}
+
+.typerace-lobby-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--wibby-text, #fff);
+  margin: 0;
+}
+
+.typerace-lobby-desc {
+  font-size: 14px;
+  color: var(--wibby-text-muted, rgba(255, 255, 255, 0.6));
+  max-width: 400px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.typerace-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(124, 58, 237, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(124, 58, 237, 0.3);
+}
+
+.typerace-status-pill.ready {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.typerace-ready-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.typerace-ready-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5);
+}
+
+.typerace-ready-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* -------------------------------------------------------------
+   Countdown Overlay
+   ------------------------------------------------------------- */
+.typerace-countdown-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 12, 28, 0.88);
+  backdrop-filter: blur(8px);
+  border-radius: var(--radius-lg, 16px);
+  animation: typeraceFadeIn 0.2s ease-out;
+}
+
+.typerace-countdown-number {
+  font-size: 80px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #a78bfa 0%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: typeraceScalePulse 0.8s ease-in-out infinite;
+  line-height: 1;
+}
+
+.typerace-countdown-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+@keyframes typeraceScalePulse {
+  0% { transform: scale(0.85); opacity: 0.6; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.7; }
+}
+
+@keyframes typeraceFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* -------------------------------------------------------------
+   Live Race Track (Dual Progress Bars)
+   ------------------------------------------------------------- */
+.typerace-tracks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg, 16px);
+  padding: 14px 16px;
+}
+
+.typerace-track-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.typerace-track-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.typerace-track-name {
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.typerace-track-name.me {
+  color: #a78bfa;
+}
+
+.typerace-track-name.partner {
+  color: #34d399;
+}
+
+.typerace-track-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--wibby-text-muted, rgba(255, 255, 255, 0.7));
+  font-weight: 600;
+}
+
+.typerace-stat-badge {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: monospace, ui-monospace, sans-serif;
+}
+
+.typerace-stat-badge.highlight {
+  background: rgba(124, 58, 237, 0.2);
+  color: #c4b5fd;
+}
+
+.typerace-progress-rail {
+  position: relative;
+  width: 100%;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  overflow: visible;
+}
+
+.typerace-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
+}
+
+.typerace-progress-fill.me {
+  background: linear-gradient(90deg, #7c3aed 0%, #a855f7 100%);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
+}
+
+.typerace-progress-fill.partner {
+  background: linear-gradient(90deg, #059669 0%, #10b981 100%);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.typerace-racer-avatar {
+  position: absolute;
+  right: -10px;
+  top: -8px;
+  font-size: 16px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+  transform: translateY(-2px);
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------
+   Typing Challenge Box
+   ------------------------------------------------------------- */
+.typerace-challenge-card {
+  position: relative;
+  background: rgba(20, 16, 36, 0.85);
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  border-radius: var(--radius-lg, 16px);
+  padding: 20px 22px;
+  cursor: text;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.2s ease;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.typerace-challenge-card:focus-within {
+  border-color: rgba(168, 85, 247, 0.6);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15), 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.typerace-text-display {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 18px;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  word-break: break-word;
+  white-space: pre-wrap;
+  user-select: none;
+}
+
+.typerace-char {
+  position: relative;
+  transition: color 0.1s ease, background-color 0.1s ease;
+}
+
+.typerace-char.untyped {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.typerace-char.correct {
+  color: #34d399;
+}
+
+.typerace-char.incorrect {
+  color: #fff;
+  background: rgba(239, 68, 68, 0.7);
+  border-radius: 2px;
+  text-decoration: underline;
+  text-decoration-color: #ef4444;
+}
+
+.typerace-char.current {
+  color: #fff;
+  background: rgba(168, 85, 247, 0.35);
+  border-radius: 2px;
+}
+
+.typerace-char.current::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  background: #a855f7;
+  animation: typeraceCaretBlink 0.9s infinite;
+}
+
+@keyframes typeraceCaretBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Hidden input that captures keystrokes without obstructing UI */
+.typerace-hidden-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: text;
+  pointer-events: auto;
+  border: none;
+  outline: none;
+  resize: none;
+  font-size: 16px; /* Prevents auto-zoom on iOS Safari */
+}
+
+/* -------------------------------------------------------------
+   Live Race Bottom Bar (HUD)
+   ------------------------------------------------------------- */
+.typerace-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md, 12px);
+}
+
+.typerace-hud-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.typerace-hud-val {
+  font-size: 18px;
+  font-weight: 800;
+  font-family: monospace, ui-monospace, sans-serif;
+  color: var(--wibby-text, #fff);
+}
+
+.typerace-hud-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--wibby-text-muted, rgba(255, 255, 255, 0.5));
+}
+
+/* -------------------------------------------------------------
+   Finish / Winner Results Screen
+   ------------------------------------------------------------- */
+.typerace-results-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 20px;
+  background: rgba(20, 16, 36, 0.95);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  border-radius: var(--radius-lg, 16px);
+  gap: 18px;
+  text-align: center;
+  animation: typeraceFadeIn 0.3s ease-out;
+}
+
+.typerace-results-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.typerace-results-icon {
+  font-size: 52px;
+  line-height: 1;
+}
+
+.typerace-results-title {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0;
+  color: var(--wibby-text, #fff);
+}
+
+.typerace-results-title.won {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.typerace-results-title.lost {
+  color: #c4b5fd;
+}
+
+.typerace-results-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+}
+
+.typerace-result-box {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md, 12px);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.typerace-result-box.winner {
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.05);
+}
+
+.typerace-result-player-title {
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.typerace-result-stats-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--wibby-text-muted, rgba(255, 255, 255, 0.7));
+}
+
+.typerace-result-stats-row strong {
+  color: var(--wibby-text, #fff);
+  font-family: monospace, ui-monospace, sans-serif;
+  font-size: 13px;
+}
+
+.typerace-result-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.typerace-btn {
+  padding: 10px 22px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.typerace-btn:hover {
+  transform: translateY(-1px);
+}
+
+.typerace-btn.primary {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+}
+
+.typerace-btn.secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--wibby-text, #fff);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* -------------------------------------------------------------
+   Mobile Specific Styles & Visual Viewport Safety
+   ------------------------------------------------------------- */
+@media (max-width: 600px) {
+  .typerace-container {
+    gap: 12px;
+  }
+  .typerace-text-display {
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  .typerace-challenge-card {
+    padding: 14px 16px;
+    min-height: 100px;
+  }
+  .typerace-countdown-number {
+    font-size: 64px;
+  }
+  .typerace-results-grid {
+    grid-template-columns: 1fr;
+  }
+}

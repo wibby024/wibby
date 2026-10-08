@@ -601,8 +601,22 @@ export default function VoiceRecorder({
         {/* Header with Title & Cancel */}
         <div className="voice-recorder-header">
           <div className="voice-recorder-title">
-            <span className="voice-mic-icon">🎙️</span>
-            <span>Voice Message</span>
+            {state === 'RECORDING' ? (
+              <span className="voice-recording-pill">
+                <span className="voice-pulsing-dot recording" />
+                <span className="voice-recording-live-text">🔴 LIVE RECORDING</span>
+              </span>
+            ) : state === 'PAUSED' ? (
+              <span className="voice-recording-pill paused">
+                <span className="voice-pulsing-dot paused" />
+                <span className="voice-recording-live-text">⏸ RECORDING PAUSED</span>
+              </span>
+            ) : (
+              <div className="voice-recorder-title-default">
+                <span className="voice-mic-icon">🎙️</span>
+                <span>Voice Message</span>
+              </div>
+            )}
           </div>
           <button 
             className="voice-btn-close" 
@@ -662,41 +676,49 @@ export default function VoiceRecorder({
             {/* Recording Controls */}
             <div className="voice-controls-row">
               <button 
-                className="voice-btn-circle voice-btn-trash" 
+                className="voice-action-btn voice-btn-cancel" 
                 onClick={cancelRecording}
                 title="Discard recording"
-                aria-label="Discard recording"
+                aria-label="Cancel and discard recording"
+                type="button"
               >
-                <IconTrash size={20} color="#ef4444" />
+                <IconTrash size={18} color="#ef4444" />
+                <span>Cancel</span>
               </button>
 
               {state === 'RECORDING' ? (
                 <button 
-                  className="voice-btn-circle voice-btn-pause" 
+                  className="voice-action-btn voice-btn-pause-text" 
                   onClick={pauseRecording}
                   title="Pause recording"
                   aria-label="Pause recording"
+                  type="button"
                 >
-                  <IconPause size={18} color="currentColor" />
+                  <IconPause size={16} color="currentColor" />
+                  <span>Pause</span>
                 </button>
               ) : (
                 <button 
-                  className="voice-btn-circle voice-btn-resume" 
+                  className="voice-action-btn voice-btn-resume-text" 
                   onClick={resumeRecording}
                   title="Resume recording"
                   aria-label="Resume recording"
+                  type="button"
                 >
-                  <IconPlay size={18} color="currentColor" />
+                  <IconPlay size={16} color="currentColor" />
+                  <span>Resume</span>
                 </button>
               )}
 
               <button 
-                className="voice-btn-circle voice-btn-stop" 
+                className="voice-action-btn voice-btn-done" 
                 onClick={stopRecording}
-                title="Stop and preview"
-                aria-label="Stop recording"
+                title="Stop and preview voice message"
+                aria-label="Finish recording and review"
+                type="button"
               >
-                <IconStop size={18} color="currentColor" />
+                <IconStop size={16} color="currentColor" />
+                <span>Stop / Review</span>
               </button>
             </div>
           </div>

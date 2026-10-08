@@ -11,7 +11,8 @@ export type GameType =
   | 'checkers'
   | 'battleship'
   | 'reversi'
-  | 'coopwordle';
+  | 'coopwordle'
+  | 'typerace';
 
 // Word Imposter dictionary
 export const WORD_CATEGORIES: { [cat: string]: string[] } = {
@@ -27,6 +28,28 @@ export function getRandomWord(): { word: string; category: string } {
   const words = WORD_CATEGORIES[category];
   const word = words[Math.floor(Math.random() * words.length)];
   return { word, category };
+}
+
+// -------------------------------------------------------------
+// Type Race Challenges & Quotations
+// -------------------------------------------------------------
+export const TYPING_CHALLENGES: string[] = [
+  "The future belongs to people who build the things they wish existed.",
+  "Simplicity is prerequisite for reliability. Make it work, make it right, then make it fast.",
+  "The secret of getting ahead is getting started. The best preparation for good work is doing good work today.",
+  "Technology is at its best when it brings people together and makes distance disappear.",
+  "Creativity is intelligence having fun. Keep looking and do not settle until you find what you love.",
+  "Small daily improvements over time lead to stunning results. Stay curious and keep shipping.",
+  "Code is like humor. When you have to explain it, it is bad. Write cleanly and think clearly.",
+  "The best way to predict the future is to invent it with someone who shares your vision.",
+  "Great things are not done by impulse, but by a series of small things brought together.",
+  "Clear thinking becomes clear writing, and clear writing turns into extraordinary software.",
+  "No one has ever made a difference by being like everyone else. Dare to build something new.",
+  "What we achieve inwardly will change outer reality. Trust the journey and celebrate small wins."
+];
+
+export function getRandomTypingChallenge(): string {
+  return TYPING_CHALLENGES[Math.floor(Math.random() * TYPING_CHALLENGES.length)];
 }
 
 // -------------------------------------------------------------
@@ -273,6 +296,23 @@ export function initGameData(gameType: GameType, p1: string, p2: string): any {
         maxGuesses: 6,
         isCoop: true,
         revealedWord: null as string | null
+      };
+    }
+
+    case 'typerace': {
+      const challengeText = getRandomTypingChallenge();
+      return {
+        raceId: Math.random().toString(36).substring(2, 10),
+        challengeText,
+        textLength: challengeText.length,
+        raceStatus: 'waiting', // 'waiting' | 'ready' | 'countdown' | 'running' | 'finished'
+        countdownStart: null as number | null,
+        raceStart: null as number | null,
+        ready: { [p1]: false, [p2]: false } as { [uid: string]: boolean },
+        progress: {
+          [p1]: { progress: 0, wpm: 0, accuracy: 100, errors: 0, typedChars: 0, finished: false, finishTime: null },
+          [p2]: { progress: 0, wpm: 0, accuracy: 100, errors: 0, typedChars: 0, finished: false, finishTime: null }
+        }
       };
     }
 
