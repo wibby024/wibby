@@ -339,6 +339,7 @@
   .sidebar-overlay {
     display: block;
     pointer-events: none;
+    z-index: 1100;
   }
 
   .sidebar-overlay.visible {
@@ -349,6 +350,7 @@
     width: min(var(--sidebar-width), calc(100vw - 52px));
     transform: translateX(-100%);
     box-shadow: var(--shadow-lg);
+    z-index: 1200;
   }
 
   .sidebar.open {

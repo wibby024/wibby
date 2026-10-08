@@ -100,6 +100,31 @@ export function parseMediaUrl(inputUrl: string): { url: string; type: 'youtube' 
   return { url: mediaUrl, type: 'direct' };
 }
 
+function getViewportMetrics() {
+  const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+  const viewportWidth = vv ? vv.width : (typeof window !== 'undefined' ? window.innerWidth : 360);
+  const viewportHeight = vv ? vv.height : (typeof window !== 'undefined' ? window.innerHeight : 640);
+  const viewportOffsetLeft = vv ? vv.offsetLeft : 0;
+  const viewportOffsetTop = vv ? vv.offsetTop : 0;
+  return { viewportWidth, viewportHeight, viewportOffsetLeft, viewportOffsetTop };
+}
+
+function getSafeAreaInsets() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return { top: 0, right: 0, bottom: 0, left: 0 };
+  }
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);visibility:hidden;pointer-events:none;';
+  document.body.appendChild(probe);
+  const cs = window.getComputedStyle(probe);
+  const top = parseFloat(cs.paddingTop) || 0;
+  const right = parseFloat(cs.paddingRight) || 0;
+  const bottom = parseFloat(cs.paddingBottom) || 0;
+  const left = parseFloat(cs.paddingLeft) || 0;
+  document.body.removeChild(probe);
+  return { top, right, bottom, left };
+}
+
 export default function TogetherPlayer({
   conversationId,
   partnerName,
@@ -713,17 +738,48 @@ export default function TogetherPlayer({
     return () => clearInterval(driftInterval);
   }, [isPlaying, session, user?.uid]);
 
-  // Default position for minimized card (docked to bottom-right or bottom-left)
-  const getDefaultPosition = useCallback((side: 'left' | 'right' = 'right') => {
-    const width = 340;
-    const height = 230;
-    const padding = 16;
-    const bottomOffset = 84;
+  // Calculate robust viewport boundaries respecting safe areas, headers, and composer
+  const getSafeBounds = useCallback((customCardWidth?: number, customCardHeight?: number) => {
+    const { viewportWidth, viewportHeight, viewportOffsetLeft, viewportOffsetTop } = getViewportMetrics();
+    const safeArea = getSafeAreaInsets();
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 
-    const x = side === 'left' ? padding : Math.max(padding, window.innerWidth - width - padding);
-    const y = Math.max(padding, window.innerHeight - height - bottomOffset);
-    return { x, y };
+    const measuredW = containerRef.current?.offsetWidth;
+    const measuredH = containerRef.current?.offsetHeight;
+    const cardWidth = customCardWidth || (measuredW && measuredW > 0 ? measuredW : (isMobile ? Math.min(290, viewportWidth - 28) : 300));
+    const cardHeight = customCardHeight || (measuredH && measuredH > 0 ? measuredH : 195);
+
+    // Keep safe clearance below header (68px header + safe area top)
+    const headerHeight = isMobile ? 68 + safeArea.top : 68;
+    const safeTop = viewportOffsetTop + headerHeight + 8;
+
+    // Keep safe clearance above composer (76px composer + safe area bottom)
+    const composerHeight = 76 + safeArea.bottom;
+    const safeBottom = composerHeight + 8;
+
+    // Left clearance: on desktop, stay within chat area (sidebar width is 360px)
+    const sidebarWidth = isMobile ? 0 : 360;
+    const safeLeft = viewportOffsetLeft + (isMobile ? Math.max(12, safeArea.left + 12) : sidebarWidth + 16);
+
+    // Right clearance
+    const safeRightMargin = Math.max(12, safeArea.right + 12);
+    const safeRight = viewportOffsetLeft + viewportWidth - safeRightMargin;
+
+    const minX = safeLeft;
+    const maxX = Math.max(minX, safeRight - cardWidth);
+    const minY = safeTop;
+    const maxY = Math.max(minY, viewportOffsetTop + viewportHeight - cardHeight - safeBottom);
+
+    return { minX, maxX, minY, maxY, cardWidth, cardHeight };
   }, []);
+
+  // Default position for minimized card (docked near bottom-right or bottom-left)
+  const getDefaultPosition = useCallback((side: 'left' | 'right' = 'right') => {
+    const bounds = getSafeBounds();
+    const x = side === 'left' ? bounds.minX : bounds.maxX;
+    const y = bounds.maxY;
+    return { x, y };
+  }, [getSafeBounds]);
 
   const handleToggleMinimize = useCallback(() => {
     if (inline) {
@@ -737,6 +793,10 @@ export default function TogetherPlayer({
     setIsMinimized(prev => {
       const next = !prev;
       if (next) {
+        if (containerRef.current) {
+          containerRef.current.style.height = '';
+          containerRef.current.style.maxWidth = '';
+        }
         setPosition(getDefaultPosition(snappedSide));
       } else {
         setPosition(null);
@@ -745,14 +805,60 @@ export default function TogetherPlayer({
     });
   }, [inline, effectiveMinimized, onExpandCall, onMinimizeCall, getDefaultPosition, snappedSide]);
 
-  // Keep position initialized when minimizing
+  // Keep position initialized and safely clamped when minimizing
   useEffect(() => {
     if (effectiveMinimized) {
-      setPosition(prev => prev || getDefaultPosition(snappedSide));
+      if (containerRef.current) {
+        containerRef.current.style.height = '';
+        containerRef.current.style.maxWidth = '';
+      }
+      setPosition(prev => {
+        if (prev) {
+          const bounds = getSafeBounds();
+          return {
+            x: Math.min(Math.max(bounds.minX, prev.x), bounds.maxX),
+            y: Math.min(Math.max(bounds.minY, prev.y), bounds.maxY)
+          };
+        }
+        return getDefaultPosition(snappedSide);
+      });
     } else {
       setPosition(null);
     }
-  }, [effectiveMinimized, snappedSide, getDefaultPosition]);
+  }, [effectiveMinimized, snappedSide, getSafeBounds, getDefaultPosition]);
+
+  // Recalculate bounds on window resize, orientation change, or virtual keyboard toggle
+  useEffect(() => {
+    if (!effectiveMinimized) return;
+
+    const handleViewportChange = () => {
+      setPosition(prev => {
+        if (!prev) return getDefaultPosition(snappedSide);
+        const bounds = getSafeBounds();
+        return {
+          x: Math.min(Math.max(bounds.minX, prev.x), bounds.maxX),
+          y: Math.min(Math.max(bounds.minY, prev.y), bounds.maxY)
+        };
+      });
+    };
+
+    window.addEventListener('resize', handleViewportChange, { passive: true });
+    window.addEventListener('orientationchange', handleViewportChange, { passive: true });
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (vv) {
+      vv.addEventListener('resize', handleViewportChange);
+      vv.addEventListener('scroll', handleViewportChange);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('orientationchange', handleViewportChange);
+      if (vv) {
+        vv.removeEventListener('resize', handleViewportChange);
+        vv.removeEventListener('scroll', handleViewportChange);
+      }
+    };
+  }, [effectiveMinimized, snappedSide, getSafeBounds, getDefaultPosition]);
 
   const handleToggleFullscreen = useCallback(() => {
     if (onToggleFullscreen) {
@@ -774,7 +880,10 @@ export default function TogetherPlayer({
       localStorage.setItem('wibby_together_side', nextSide);
     } catch {}
     if (effectiveMinimized) {
-      setPosition(getDefaultPosition(nextSide));
+      const bounds = getSafeBounds();
+      const snapX = nextSide === 'left' ? bounds.minX : bounds.maxX;
+      const currentY = position ? Math.min(Math.max(bounds.minY, position.y), bounds.maxY) : bounds.maxY;
+      setPosition({ x: snapX, y: currentY });
     }
   };
 
@@ -786,8 +895,9 @@ export default function TogetherPlayer({
     e.preventDefault();
     setIsDragging(true);
 
-    const currentX = position?.x ?? getDefaultPosition(snappedSide).x;
-    const currentY = position?.y ?? getDefaultPosition(snappedSide).y;
+    const defaultPos = getDefaultPosition(snappedSide);
+    const currentX = position?.x ?? defaultPos.x;
+    const currentY = position?.y ?? defaultPos.y;
 
     dragStartRef.current = {
       x: e.clientX,
@@ -805,19 +915,14 @@ export default function TogetherPlayer({
     const dx = e.clientX - dragStartRef.current.x;
     const dy = e.clientY - dragStartRef.current.y;
 
-    const newX = dragStartRef.current.posX + dx;
-    const newY = dragStartRef.current.posY + dy;
+    const rawX = dragStartRef.current.posX + dx;
+    const rawY = dragStartRef.current.posY + dy;
 
-    const cardWidth = containerRef.current ? containerRef.current.offsetWidth : (window.innerWidth <= 640 ? 280 : 320);
-    const cardHeight = containerRef.current ? containerRef.current.offsetHeight : 180;
-    const minX = 8;
-    const maxX = Math.max(minX, window.innerWidth - cardWidth - 8);
-    const minY = 8;
-    const maxY = Math.max(minY, window.innerHeight - cardHeight - 8);
+    const bounds = getSafeBounds();
 
     setPosition({
-      x: Math.min(Math.max(minX, newX), maxX),
-      y: Math.min(Math.max(minY, newY), maxY)
+      x: Math.min(Math.max(bounds.minX, rawX), bounds.maxX),
+      y: Math.min(Math.max(bounds.minY, rawY), bounds.maxY)
     });
   };
 
@@ -830,23 +935,19 @@ export default function TogetherPlayer({
     } catch { }
 
     if (position) {
-      const isMobile = window.innerWidth <= 640;
-      const cardWidth = containerRef.current ? containerRef.current.offsetWidth : (isMobile ? 280 : 320);
-      const cardHeight = containerRef.current ? containerRef.current.offsetHeight : 180;
-      const midX = window.innerWidth / 2;
-      const midY = window.innerHeight / 2;
+      const isMobile = window.innerWidth <= 768;
+      const bounds = getSafeBounds();
 
       if (isMobile) {
         // 4-corner snap for mobile (top-left, top-right, bottom-left, bottom-right)
-        const snapLeft = (position.x + cardWidth / 2) < midX;
-        const snapTop = (position.y + cardHeight / 2) < midY;
+        const midX = (bounds.minX + bounds.maxX) / 2;
+        const midY = (bounds.minY + bounds.maxY) / 2;
 
-        const safePaddingX = 12;
-        const safePaddingTop = 16;
-        const safePaddingBottom = 84; // Avoid composer and dock controls
+        const snapLeft = position.x < midX;
+        const snapTop = position.y < midY;
 
-        const finalX = snapLeft ? safePaddingX : Math.max(safePaddingX, window.innerWidth - cardWidth - safePaddingX);
-        const finalY = snapTop ? safePaddingTop : Math.max(safePaddingTop, window.innerHeight - cardHeight - safePaddingBottom);
+        const finalX = snapLeft ? bounds.minX : bounds.maxX;
+        const finalY = snapTop ? bounds.minY : bounds.maxY;
 
         setPosition({ x: finalX, y: finalY });
         const targetSide = snapLeft ? 'left' : 'right';
@@ -855,15 +956,16 @@ export default function TogetherPlayer({
           localStorage.setItem('wibby_together_side', targetSide);
         } catch {}
       } else {
-        // Desktop: snap left or right, preserve vertical position within safe bounds
-        const targetSide = (position.x + cardWidth / 2) < midX ? 'left' : 'right';
+        // Desktop: snap left or right of chat area, preserve vertical position within safe bounds
+        const midX = (bounds.minX + bounds.maxX) / 2;
+        const targetSide = position.x < midX ? 'left' : 'right';
         setSnappedSide(targetSide);
         try {
           localStorage.setItem('wibby_together_side', targetSide);
         } catch {}
-        const padding = 16;
-        const snapX = targetSide === 'left' ? padding : Math.max(padding, window.innerWidth - cardWidth - padding);
-        const safeY = Math.min(Math.max(padding, position.y), window.innerHeight - cardHeight - 84);
+
+        const snapX = targetSide === 'left' ? bounds.minX : bounds.maxX;
+        const safeY = Math.min(Math.max(bounds.minY, position.y), bounds.maxY);
         setPosition({ x: snapX, y: safeY });
       }
     }
@@ -1144,10 +1246,17 @@ export default function TogetherPlayer({
   return (
     <div
       ref={containerRef}
-      className={`together-dock ${inline ? 'together-inline-container' : ''} ${effectiveMinimized ? `minimized dock-${snappedSide}` : inline ? 'inline-expanded' : 'standard'} ${isDragging ? 'is-dragging' : ''}`}
+      className={`together-dock ${inline ? 'together-inline-container' : ''} ${effectiveMinimized ? `minimized dock-${snappedSide}` : inline ? 'inline-expanded' : 'standard'} ${isDragging ? 'dragging is-dragging' : ''}`}
       style={
         effectiveMinimized && position
-          ? { left: `${position.x}px`, top: `${position.y}px` }
+          ? {
+              left: `${position.x}px`,
+              top: `${position.y}px`,
+              right: 'auto',
+              bottom: 'auto',
+              height: 'auto',
+              maxHeight: 'none'
+            }
           : inline && !effectiveMinimized
             ? { width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }
             : !effectiveMinimized && (customSize.height || customSize.width)

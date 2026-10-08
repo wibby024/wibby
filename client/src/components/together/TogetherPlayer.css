@@ -44,30 +44,37 @@
 
 /* 2. Minimized Floating Draggable PiP (Goes to either left or right side) */
 .together-dock.minimized {
-  position: fixed;
-  z-index: 1000;
-  width: 290px;
+  position: fixed !important;
+  z-index: 500;
+  width: 300px;
   max-width: calc(100vw - 28px);
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  bottom: auto !important;
+  right: auto !important;
+  margin: 0 !important;
   border-radius: var(--radius-lg);
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--wibby-border);
   transition: left 0.25s cubic-bezier(0.16, 1, 0.3, 1), top 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
   touch-action: none;
   user-select: none;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .together-dock.minimized.dock-left {
-  left: max(16px, env(safe-area-inset-left, 16px));
-  right: auto;
-  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  right: auto !important;
+  bottom: auto !important;
 }
 
 .together-dock.minimized.dock-right {
-  right: max(16px, env(safe-area-inset-right, 16px));
-  left: auto;
-  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  right: auto !important;
+  bottom: auto !important;
 }
 
-.together-dock.minimized.dragging {
+.together-dock.minimized.dragging,
+.together-dock.minimized.is-dragging {
   transition: none !important;
   cursor: grabbing !important;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75), 0 0 0 1.5px var(--wibby-primary);
@@ -75,7 +82,9 @@
 
 /* Prevent iframe from eating pointer events during drag */
 .together-dock.minimized.dragging iframe,
-.together-dock.minimized.dragging video {
+.together-dock.minimized.dragging video,
+.together-dock.minimized.is-dragging iframe,
+.together-dock.minimized.is-dragging video {
   pointer-events: none !important;
 }
 
@@ -218,8 +227,41 @@
 }
 
 .together-dock-body.minimized-body {
-  padding: 0.45rem;
-  display: block;
+  padding: 0.35rem 0.45rem 0.45rem;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.together-dock.minimized .together-player-content-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  gap: 0.35rem;
+}
+
+.together-dock.minimized .together-player-frame-wrap.mini-frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  max-height: 160px;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.together-dock.minimized .together-sync-action-bar.minimized-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.2rem 0 0 0;
+  margin: 0;
+  flex: 0 0 auto;
 }
 
 .together-start-container {
@@ -814,8 +856,13 @@
   }
 
   .together-dock.minimized {
-    width: calc(100vw - 32px);
-    max-width: 280px;
+    width: min(290px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    bottom: auto !important;
+    right: auto !important;
   }
 }
 
