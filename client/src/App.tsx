@@ -20,6 +20,7 @@ const ChatInfoDrawer = lazy(() => import('./components/ChatInfoDrawer'));
 const ChatSearchModal = lazy(() => import('./components/ChatSearchModal'));
 const SettingsModal = lazy(() => import('./components/SettingsModal'));
 const MiniGameModal = lazy(() => import('./components/games/MiniGameModal'));
+const MediaGalleryModal = lazy(() => import('./components/MediaGalleryModal'));
 
 function LoadingScreen() {
   return (
@@ -80,6 +81,7 @@ function WibbyAppWrapper() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showTogether, setShowTogether] = useState(false);
   const [showGameModal, setShowGameModal] = useState(false);
+  const [showMediaGallery, setShowMediaGallery] = useState(false);
   const [showSessionConflict, setShowSessionConflict] = useState(false);
   const [jumpTarget, setJumpTarget] = useState<{ id: string; timestamp: number } | null>(null);
 
@@ -544,7 +546,7 @@ function WibbyAppWrapper() {
 
   const [chatClearCount, setChatClearCount] = useState(0);
 
-  const handleClearChat = async (clearMediaAndStarred: boolean = false) => {
+  const handleClearChat = async (mode: 'everything' | 'messages_only' = 'messages_only') => {
     if (!conversationId || !user) return;
     try {
       const token = await user.getIdToken();
@@ -555,7 +557,10 @@ function WibbyAppWrapper() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ clearMediaAndStarred })
+        body: JSON.stringify({
+          clearMode: mode,
+          clearMediaAndStarred: mode === 'everything'
+        })
       });
       setChatClearCount(prev => prev + 1);
     } catch (err) {
@@ -588,6 +593,10 @@ function WibbyAppWrapper() {
           setSidebarOpen(false);
           if (isPaired && conversationId) setShowSearchModal(true);
         }}
+        onOpenMedia={() => {
+          setSidebarOpen(false);
+          if (isPaired && conversationId) setShowMediaGallery(true);
+        }}
       />
 
       <main className={`chat-panel chat-theme-${chatThemePreset}`}>
@@ -599,6 +608,7 @@ function WibbyAppWrapper() {
               conversationId={conversationId}
               onOpenSearch={() => setShowSearchModal(true)}
               onOpenInfoDrawer={() => setShowInfoDrawer(true)}
+              onOpenMedia={() => setShowMediaGallery(true)}
               onOpenTogether={handleOpenTogether}
               isTogetherOpen={showTogether}
               onOpenGame={() => setShowGameModal(true)}
@@ -652,6 +662,10 @@ function WibbyAppWrapper() {
             onUnpair={handleUnpairAction}
             currentThemePreset={chatThemePreset}
             onSelectThemePreset={handleSelectThemePreset}
+            onOpenMediaGallery={() => {
+              setShowInfoDrawer(false);
+              setShowMediaGallery(true);
+            }}
           />
         </Suspense>
       )}
@@ -678,6 +692,11 @@ function WibbyAppWrapper() {
             onToggleTheme={toggleTheme}
             currentThemePreset={chatThemePreset}
             onSelectThemePreset={handleSelectThemePreset}
+            conversationId={conversationId || undefined}
+            onOpenMediaGallery={() => {
+              setShowSettingsModal(false);
+              setShowMediaGallery(true);
+            }}
           />
         </Suspense>
       )}
@@ -721,6 +740,19 @@ function WibbyAppWrapper() {
             socket={socket}
             currentUserId={user?.uid || ''}
             partnerName={partnerName}
+          />
+        </Suspense>
+      )}
+
+      {/* Shared Media & Storage Modal (Req 3-9) */}
+      {isPaired && conversationId && showMediaGallery && (
+        <Suspense fallback={null}>
+          <MediaGalleryModal
+            isOpen={showMediaGallery}
+            onClose={() => setShowMediaGallery(false)}
+            conversationId={conversationId}
+            partnerName={partnerName}
+            partnerUid={partner?.firebaseUid}
           />
         </Suspense>
       )}

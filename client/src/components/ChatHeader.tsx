@@ -23,10 +23,11 @@ interface ChatHeaderProps {
   conversationId?: string;
   onOpenSearch?: () => void;
   onOpenInfoDrawer?: () => void;
+  onOpenMedia?: () => void;
   onOpenTogether?: () => void;
   isTogetherOpen?: boolean;
   onOpenGame?: () => void;
-  onClearChat?: (clearMediaAndStarred: boolean) => void;
+  onClearChat?: (mode: 'everything' | 'messages_only') => void;
 }
 
 export default function ChatHeader({ 
@@ -35,6 +36,7 @@ export default function ChatHeader({
   conversationId,
   onOpenSearch,
   onOpenInfoDrawer,
+  onOpenMedia,
   onOpenTogether,
   isTogetherOpen,
   onOpenGame,
@@ -44,7 +46,7 @@ export default function ChatHeader({
   const { user } = useAuth();
   const { startCall, callState } = useCall();
   const [isTyping, setIsTyping] = useState(false);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearStep, setClearStep] = useState<'none' | 'choose' | 'confirm_everything'>('none');
   const [avatarError, setAvatarError] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -124,7 +126,7 @@ export default function ChatHeader({
   };
 
   useEffect(() => {
-    if (!showMoreMenu && !showClearConfirm) return;
+    if (!showMoreMenu && clearStep === 'none') return;
     const handleClickOutside = (e: MouseEvent) => {
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
         setShowMoreMenu(false);
@@ -133,7 +135,7 @@ export default function ChatHeader({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setShowMoreMenu(false);
-        setShowClearConfirm(false);
+        setClearStep('none');
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -142,7 +144,7 @@ export default function ChatHeader({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showMoreMenu, showClearConfirm]);
+  }, [showMoreMenu, clearStep]);
 
   return (
     <header className="chat-header">
@@ -234,6 +236,20 @@ export default function ChatHeader({
           </button>
         )}
 
+        {/* Media & Files (desktop only — on mobile it's in More menu) */}
+        {onOpenMedia && (
+          <button
+            className="header-action-btn desktop-only"
+            onClick={onOpenMedia}
+            aria-label="Shared Media & Files"
+            title="Shared Media & Files"
+          >
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+          </button>
+        )}
+
         {/* Search (desktop only — on mobile it's in More menu) */}
         {onOpenSearch && (
           <button
@@ -315,6 +331,14 @@ export default function ChatHeader({
 
           {showMoreMenu && (
             <div className="header-more-dropdown" role="menu">
+              {onOpenMedia && (
+                <button className="dropdown-item" role="menuitem" onClick={() => { setShowMoreMenu(false); onOpenMedia(); }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  </svg>
+                  <span>Media & Files</span>
+                </button>
+              )}
               <button className="dropdown-item" role="menuitem" onClick={() => { setShowMoreMenu(false); onOpenSearch?.(); }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8" />
@@ -328,7 +352,7 @@ export default function ChatHeader({
                   <circle cx="8.5" cy="8.5" r="1.5" />
                   <polyline points="21 15 16 10 5 21" />
                 </svg>
-                <span>Chat info & Shared media</span>
+                <span>Chat info & Details</span>
               </button>
               {onOpenTogether && (
                 <button className="dropdown-item" role="menuitem" onClick={() => { setShowMoreMenu(false); onOpenTogether(); }}>
@@ -350,7 +374,7 @@ export default function ChatHeader({
               {onClearChat && (
                 <>
                   <div className="dropdown-divider" />
-                  <button className="dropdown-item danger" role="menuitem" onClick={() => { setShowMoreMenu(false); setShowClearConfirm(true); }}>
+                  <button className="dropdown-item danger" role="menuitem" onClick={() => { setShowMoreMenu(false); setClearStep('choose'); }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="3 6 5 6 21 6" />
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -366,57 +390,93 @@ export default function ChatHeader({
         </div>
       </div>
 
-      {showClearConfirm && createPortal(
+      {clearStep !== 'none' && createPortal(
         <div 
           className="clear-confirm-overlay" 
-          onClick={() => setShowClearConfirm(false)} 
+          onClick={() => setClearStep('none')} 
           role="dialog" 
           aria-modal="true"
           aria-labelledby="clear-chat-title"
         >
           <div className="clear-confirm-card" onClick={e => e.stopPropagation()}>
-            <div className="clear-confirm-icon-badge">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h18" />
-                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                <line x1="10" y1="11" x2="10" y2="17" />
-                <line x1="14" y1="11" x2="14" y2="17" />
-              </svg>
-            </div>
-            <h3 id="clear-chat-title" className="clear-confirm-title">Clear chat?</h3>
-            <p className="clear-confirm-desc">
-              Also clear media and starred messages?
-            </p>
-            <div className="clear-confirm-actions" style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-              <button
-                type="button"
-                className="clear-confirm-btn confirm danger"
-                onClick={() => {
-                  setShowClearConfirm(false);
-                  onClearChat?.(true);
-                }}
-              >
-                YES
-              </button>
-              <button
-                type="button"
-                className="clear-confirm-btn confirm"
-                onClick={() => {
-                  setShowClearConfirm(false);
-                  onClearChat?.(false);
-                }}
-              >
-                NO
-              </button>
-              <button
-                type="button"
-                className="clear-confirm-btn cancel"
-                onClick={() => setShowClearConfirm(false)}
-              >
-                CANCEL
-              </button>
-            </div>
+            {clearStep === 'choose' ? (
+              <>
+                <div className="clear-confirm-icon-badge">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </div>
+                <h3 id="clear-chat-title" className="clear-confirm-title">Clear this chat?</h3>
+                <p className="clear-confirm-desc">
+                  Choose what happens to shared files and media.
+                </p>
+                <div className="clear-confirm-actions vertical">
+                  <button
+                    type="button"
+                    className="clear-confirm-btn danger-outline"
+                    onClick={() => setClearStep('confirm_everything')}
+                  >
+                    Clear messages + files
+                  </button>
+                  <button
+                    type="button"
+                    className="clear-confirm-btn primary-outline"
+                    onClick={() => {
+                      setClearStep('none');
+                      onClearChat?.('messages_only');
+                    }}
+                  >
+                    Continue without clearing files
+                  </button>
+                  <button
+                    type="button"
+                    className="clear-confirm-btn cancel"
+                    onClick={() => setClearStep('none')}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="clear-confirm-icon-badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#EF4444' }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                </div>
+                <h3 id="clear-chat-title" className="clear-confirm-title">Permanently delete?</h3>
+                <p className="clear-confirm-desc">
+                  This will permanently delete the selected conversation content and associated files for both users.
+                  <br />
+                  <strong style={{ color: '#f87171' }}>This action cannot be undone.</strong>
+                </p>
+                <div className="clear-confirm-actions" style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                  <button
+                    type="button"
+                    className="clear-confirm-btn confirm"
+                    onClick={() => {
+                      setClearStep('none');
+                      onClearChat?.('everything');
+                    }}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    className="clear-confirm-btn cancel"
+                    onClick={() => setClearStep('choose')}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>,
         document.body

@@ -337,7 +337,6 @@ router.get('/', async (req: Request, res: Response) => {
         {
           $or: [
             { createdAt: { $gt: new Date(userClearedAt) } },
-            { type: { $in: ['image', 'video', 'file', 'audio'] } },
             { starredBy: user.uid }
           ]
         }
@@ -364,18 +363,21 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// Clear chat for conversation (Issue 6: YES / NO / CANCEL server-authoritative)
+// Clear chat for conversation (Options: everything vs messages_only)
 router.post('/clear', async (req: Request, res: Response) => {
   try {
     const conversationId = req.params.conversationId as string;
     const user = (req as any).user;
-    const { clearMediaAndStarred } = req.body || {};
+    const { clearMediaAndStarred, clearMode, confirmSharedDelete } = req.body || {};
     const db = getDb();
     const now = new Date();
     const convObjId = new ObjectId(conversationId);
 
-    if (clearMediaAndStarred) {
-      // YES: Clear all conversation messages, media in GridFS, and starred messages from DB
+    // Support both new clearMode ('everything' | 'messages_only') and legacy clearMediaAndStarred
+    const isEverything = clearMode === 'everything' || clearMediaAndStarred === true;
+
+    if (isEverything) {
+      // Option 1: Clear all conversation messages, media in GridFS, and starred messages from DB
       const mediaMsgs = await db.collection('messages').find({
         conversationId: convObjId,
         mediaKey: { $exists: true, $ne: null }
@@ -384,7 +386,14 @@ router.post('/clear', async (req: Request, res: Response) => {
       const storage = getStorageProvider();
       for (const m of mediaMsgs) {
         if (m.mediaKey) {
-          storage.delete(m.mediaKey).catch(err => console.warn('GridFS delete error on clear chat:', err));
+          // Reference safety: Ensure no OTHER message or conversation uses this key
+          const otherRefs = await db.collection('messages').countDocuments({
+            _id: { $ne: m._id },
+            mediaKey: m.mediaKey
+          });
+          if (otherRefs === 0) {
+            storage.delete(m.mediaKey).catch(err => console.warn('GridFS delete error on clear chat:', err));
+          }
         }
       }
 
@@ -401,10 +410,10 @@ router.post('/clear', async (req: Request, res: Response) => {
         }
       );
     } else {
-      // NO: Clear unstarred text messages, preserve media and starred messages
+      // Option 2: Clear unstarred text messages, RETAIN media in GridFS & Media Gallery!
       await db.collection('messages').deleteMany({
         conversationId: convObjId,
-        type: { $nin: ['image', 'video', 'file', 'audio'] },
+        type: { $in: ['text', 'poll', 'contact', 'location', 'sticker'] },
         $or: [
           { starredBy: { $exists: false } },
           { starredBy: { $size: 0 } },
@@ -412,6 +421,7 @@ router.post('/clear', async (req: Request, res: Response) => {
         ]
       });
 
+      // Update clearedAt so chat feed starts fresh, while media remains in Media section
       await db.collection('conversations').updateOne(
         { _id: convObjId },
         { $set: { [`clearedAt.${user.uid}`]: now, updatedAt: now } }
@@ -423,12 +433,18 @@ router.post('/clear', async (req: Request, res: Response) => {
       io.to(`conversation:${conversationId}`).emit('conversation:cleared', {
         conversationId,
         clearedBy: user.uid,
-        clearMediaAndStarred: !!clearMediaAndStarred,
+        clearMode: isEverything ? 'everything' : 'messages_only',
+        clearMediaAndStarred: isEverything,
         clearedAt: now.toISOString()
       });
     }
 
-    res.json({ success: true, clearMediaAndStarred: !!clearMediaAndStarred, clearedAt: now.toISOString() });
+    res.json({
+      success: true,
+      clearMode: isEverything ? 'everything' : 'messages_only',
+      clearMediaAndStarred: isEverything,
+      clearedAt: now.toISOString()
+    });
   } catch (error) {
     console.error('Clear chat error:', error);
     res.status(500).json({ error: 'Failed to clear chat' });

@@ -23,6 +23,7 @@ interface SidebarProps {
   onToggleTheme?: () => void;
   onOpenSettings?: () => void;
   onOpenSearch?: () => void;
+  onOpenMedia?: () => void;
 }
 
 export default function Sidebar({ 
@@ -33,7 +34,8 @@ export default function Sidebar({
   theme = 'dark', 
   onToggleTheme,
   onOpenSettings,
-  onOpenSearch
+  onOpenSearch,
+  onOpenMedia
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -157,32 +159,64 @@ export default function Sidebar({
 
         <div className="sidebar-conversations">
           {isPaired ? (
-            <button className="conversation-item active" onClick={onClose} title="Return to chat">
-              <div className="conversation-avatar">
-                <div className="avatar" style={{ background: 'linear-gradient(135deg, #A78BFA, #7C3AED)' }}>
-                  {partner?.avatarUrl && !partnerAvatarError ? (
-                    <img
-                      src={resolveAvatarUrl(partner.avatarUrl)}
-                      alt={partnerName}
-                      className="user-avatar-img"
-                      onError={() => setPartnerAvatarError(true)}
-                    />
-                  ) : (
-                    <span>{partnerInitial}</span>
-                  )}
+            <>
+              <button className="conversation-item active" onClick={onClose} title="Return to chat">
+                <div className="conversation-avatar">
+                  <div className="avatar" style={{ background: 'linear-gradient(135deg, #A78BFA, #7C3AED)' }}>
+                    {partner?.avatarUrl && !partnerAvatarError ? (
+                      <img
+                        src={resolveAvatarUrl(partner.avatarUrl)}
+                        alt={partnerName}
+                        className="user-avatar-img"
+                        onError={() => setPartnerAvatarError(true)}
+                      />
+                    ) : (
+                      <span>{partnerInitial}</span>
+                    )}
+                  </div>
+                  <div className={`avatar-status ${partner?.online ? 'online' : 'offline'}`} />
                 </div>
-                <div className={`avatar-status ${partner?.online ? 'online' : 'offline'}`} />
-              </div>
 
-              <div className="conversation-content">
-                <div className="conversation-top">
-                  <span className="conversation-name">{partnerName}</span>
+                <div className="conversation-content">
+                  <div className="conversation-top">
+                    <span className="conversation-name">{partnerName}</span>
+                  </div>
+                  <p className="conversation-preview">
+                    Connected
+                  </p>
                 </div>
-                <p className="conversation-preview">
-                  Connected
-                </p>
-              </div>
-            </button>
+              </button>
+              {onOpenMedia && (
+                <button
+                  className="sidebar-media-shortcut-btn"
+                  onClick={() => {
+                    onClose();
+                    onOpenMedia();
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: 'calc(100% - 1.5rem)',
+                    margin: '8px 0.75rem',
+                    padding: '9px 12px',
+                    background: 'var(--wibby-surface-hover)',
+                    border: '1px solid var(--wibby-border)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--wibby-text)',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  </svg>
+                  <span>📁 Shared Media & Files</span>
+                </button>
+              )}
+            </>
           ) : (
             <div 
               className="conversation-empty" 

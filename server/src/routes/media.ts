@@ -230,10 +230,250 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/conversations/:conversationId/media/*mediaKey
- * Authenticated and authorized media streaming endpoint.
- * Private: Only conversation members can access the media stream.
+ * GET /api/conversations/:conversationId/media/storage-stats
+ * Real-time conversation storage calculation & category breakdown.
  */
+router.get('/storage-stats', async (req: Request, res: Response) => {
+  try {
+    const conversationId = req.params.conversationId as string;
+    const db = getDb();
+    const convObjId = new ObjectId(conversationId);
+
+    // Aggregate conversation media by type
+    const pipeline = [
+      {
+        $match: {
+          conversationId: convObjId,
+          mediaKey: { $exists: true, $ne: null },
+          deletedAt: null
+        }
+      },
+      {
+        $group: {
+          _id: '$type',
+          count: { $sum: 1 },
+          totalBytes: { $sum: { $ifNull: ['$fileSize', 0] } }
+        }
+      }
+    ];
+
+    const aggResults = await db.collection('messages').aggregate(pipeline).toArray();
+
+    let photosBytes = 0, photosCount = 0;
+    let videosBytes = 0, videosCount = 0;
+    let documentsBytes = 0, documentsCount = 0;
+    let voiceBytes = 0, voiceCount = 0;
+    let otherBytes = 0, otherCount = 0;
+
+    for (const row of aggResults) {
+      const type = row._id;
+      const count = row.count || 0;
+      const bytes = row.totalBytes || 0;
+
+      if (type === 'image') {
+        photosBytes += bytes;
+        photosCount += count;
+      } else if (type === 'video') {
+        videosBytes += bytes;
+        videosCount += count;
+      } else if (type === 'file') {
+        documentsBytes += bytes;
+        documentsCount += count;
+      } else if (type === 'audio') {
+        voiceBytes += bytes;
+        voiceCount += count;
+      } else {
+        otherBytes += bytes;
+        otherCount += count;
+      }
+    }
+
+    const totalBytes = photosBytes + videosBytes + documentsBytes + voiceBytes + otherBytes;
+    const totalCount = photosCount + videosCount + documentsCount + voiceCount + otherCount;
+
+    // Retrieve system storage status for overall capacity context
+    const { getStorageAudit } = await import('../services/storageMonitor.js');
+    let systemStatus = 'Normal';
+    let systemUsedMb = 0;
+    let systemLimitMb = 512;
+    try {
+      const audit = await getStorageAudit();
+      systemStatus = audit.status;
+      systemUsedMb = audit.usedMb;
+      systemLimitMb = audit.limitMb;
+    } catch {
+      // Fallback
+    }
+
+    res.json({
+      conversationId,
+      totalBytes,
+      totalCount,
+      categories: {
+        photos: { count: photosCount, sizeBytes: photosBytes },
+        videos: { count: videosCount, sizeBytes: videosBytes },
+        documents: { count: documentsCount, sizeBytes: documentsBytes },
+        voice: { count: voiceCount, sizeBytes: voiceBytes },
+        other: { count: otherCount, sizeBytes: otherBytes }
+      },
+      systemStorage: {
+        status: systemStatus,
+        usedMb: systemUsedMb,
+        limitMb: systemLimitMb
+      }
+    });
+  } catch (error) {
+    console.error('Storage stats error:', error);
+    res.status(500).json({ error: 'Failed to retrieve storage stats' });
+  }
+});
+
+/**
+ * GET /api/conversations/:conversationId/media/gallery
+ * Paginated media items for the conversation.
+ */
+router.get('/gallery', async (req: Request, res: Response) => {
+  try {
+    const conversationId = req.params.conversationId as string;
+    const user = (req as any).user;
+    const category = (req.query.category as string) || 'all';
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 40));
+    const before = req.query.before as string;
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const db = getDb();
+    const convObjId = new ObjectId(conversationId);
+
+    const query: any = {
+      conversationId: convObjId,
+      mediaKey: { $exists: true, $ne: null },
+      deletedFor: { $ne: user.uid },
+      deletedAt: null
+    };
+
+    if (category === 'photos') {
+      query.type = 'image';
+    } else if (category === 'videos') {
+      query.type = 'video';
+    } else if (category === 'documents') {
+      query.type = 'file';
+    } else if (category === 'voice') {
+      query.type = 'audio';
+    } else if (category === 'other') {
+      query.type = { $nin: ['image', 'video', 'file', 'audio', 'text'] };
+    } else {
+      // 'all' includes any downloadable media attachment
+      query.type = { $in: ['image', 'video', 'file', 'audio', 'sticker', 'gif'] };
+    }
+
+    if (search) {
+      query.$or = [
+        { fileName: { $regex: search, $options: 'i' } },
+        { text: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (before && ObjectId.isValid(before)) {
+      query._id = { $lt: new ObjectId(before) };
+    }
+
+    const messages = await db.collection('messages')
+      .find(query)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit + 1)
+      .toArray();
+
+    const hasMore = messages.length > limit;
+    const resultMessages = hasMore ? messages.slice(0, limit) : messages;
+    const nextCursor = hasMore && resultMessages.length > 0
+      ? resultMessages[resultMessages.length - 1]._id.toString()
+      : null;
+
+    res.json({
+      messages: resultMessages.map(serializeMessage),
+      hasMore,
+      nextCursor
+    });
+  } catch (error) {
+    console.error('Media gallery fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch media gallery' });
+  }
+});
+
+/**
+ * POST /api/conversations/:conversationId/media/batch-delete
+ * User-initiated batch deletion of selected media with reference safety.
+ */
+router.post('/batch-delete', async (req: Request, res: Response) => {
+  try {
+    const conversationId = req.params.conversationId as string;
+    const user = (req as any).user;
+    const { messageIds } = req.body || {};
+    const db = getDb();
+    const storage = getStorageProvider();
+    const convObjId = new ObjectId(conversationId);
+
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ error: 'No message IDs provided' });
+    }
+
+    const validObjIds = messageIds
+      .filter(id => typeof id === 'string' && ObjectId.isValid(id))
+      .map(id => new ObjectId(id));
+
+    if (validObjIds.length === 0) {
+      return res.status(400).json({ error: 'No valid message IDs provided' });
+    }
+
+    // Find the targeted messages that belong to this conversation
+    const messagesToDelete = await db.collection('messages').find({
+      _id: { $in: validObjIds },
+      conversationId: convObjId
+    }).toArray();
+
+    let physicalDeletedCount = 0;
+
+    for (const msg of messagesToDelete) {
+      if (msg.mediaKey) {
+        // Reference Safety Check: Ensure no OTHER message references this same mediaKey
+        const otherRefs = await db.collection('messages').countDocuments({
+          _id: { $ne: msg._id },
+          mediaKey: msg.mediaKey
+        });
+
+        if (otherRefs === 0) {
+          try {
+            await storage.delete(msg.mediaKey);
+            physicalDeletedCount++;
+          } catch (storageErr) {
+            console.warn(`GridFS deletion error for key ${msg.mediaKey}:`, storageErr);
+          }
+        }
+      }
+    }
+
+    // Delete message documents from collection
+    const deleteResult = await db.collection('messages').deleteMany({
+      _id: { $in: messagesToDelete.map(m => m._id) }
+    });
+
+    // Notify connected conversation members via socket
+    const io = getIo();
+    io.to(`conversation:${conversationId}`).emit('messages:batch_deleted', {
+      conversationId,
+      messageIds: messagesToDelete.map(m => m._id.toString()),
+      deletedBy: user.uid
+    });
+
+    res.json({
+      success: true,
+      deletedCount: deleteResult.deletedCount,
+      physicalFilesReclaimed: physicalDeletedCount
+    });
+  } catch (error) {
+    console.error('Batch delete media error:', error);
+    res.status(500).json({ error: 'Failed to delete media items' });
+  }
+});
 router.get('/*mediaKey', async (req: Request, res: Response) => {
   try {
     const conversationId = req.params.conversationId as string;

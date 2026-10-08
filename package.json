@@ -10,6 +10,7 @@
     "build:all": "npm run build:client && npm run build:server",
     "build:client": "npm --prefix client run build",
     "build:server": "npm --prefix server install --include=dev && npm --prefix server run build",
+    "test": "node --experimental-strip-types server/src/scripts/test-media-storage-pass.ts",
     "start": "node server/dist/index.js"
   },
   "devDependencies": {

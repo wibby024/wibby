@@ -26,6 +26,8 @@ interface SettingsModalProps {
   onToggleTheme: () => void;
   currentThemePreset?: ChatThemePreset;
   onSelectThemePreset?: (preset: ChatThemePreset) => void;
+  conversationId?: string;
+  onOpenMediaGallery?: () => void;
 }
 
 const THEME_PRESETS: Array<{ id: ChatThemePreset; name: string; gradient: string; description: string }> = [
@@ -48,14 +50,17 @@ export default function SettingsModal({
   theme,
   onToggleTheme,
   currentThemePreset = 'classic',
-  onSelectThemePreset
+  onSelectThemePreset,
+  conversationId,
+  onOpenMediaGallery
 }: SettingsModalProps) {
 
   const { user, profile, refreshProfile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'privacy' | 'security' | 'storage' | 'account'>('profile');
 
-  // Storage Audit State
+  // Storage Audit & Media Stats State
   const [storageAudit, setStorageAudit] = useState<any>(null);
+  const [mediaStats, setMediaStats] = useState<any>(null);
   const [loadingStorage, setLoadingStorage] = useState(false);
   const [cleanupResult, setCleanupResult] = useState<string | null>(null);
   const [cleaningUp, setCleaningUp] = useState(false);
@@ -297,6 +302,21 @@ export default function SettingsModal({
         const data = await res.json();
         setStorageAudit(data);
       }
+
+      if (conversationId && user) {
+        try {
+          const token = await user.getIdToken();
+          const mediaRes = await fetch(`${baseUrl}/api/conversations/${conversationId}/media/storage-stats`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (mediaRes.ok) {
+            const mData = await mediaRes.json();
+            setMediaStats(mData);
+          }
+        } catch (mErr) {
+          console.warn('Failed to fetch media stats:', mErr);
+        }
+      }
     } catch (err) {
       console.error('Fetch storage audit error:', err);
     } finally {
@@ -308,7 +328,7 @@ export default function SettingsModal({
     if (activeTab === 'storage') {
       fetchStorageAudit();
     }
-  }, [activeTab]);
+  }, [activeTab, conversationId]);
 
   const handleRunSafeCleanup = async () => {
     setCleaningUp(true);
@@ -1086,6 +1106,114 @@ export default function SettingsModal({
             {/* Storage & Data Protection Tab */}
             {activeTab === 'storage' && (
               <div className="settings-storage-section">
+                {/* Wibby Storage & Media Breakdown (Req 10, 11, 18, 19) */}
+                <div className="storage-status-card">
+                  <div className="storage-card-header">
+                    <div>
+                      <h4 className="storage-card-title">Wibby Storage & Shared Media</h4>
+                      <p className="storage-card-sub">
+                        {mediaStats ? `Used: ${mediaStats.totalMediaFormatted} across ${mediaStats.totalMediaCount} files` : 'Calculating shared media storage…'}
+                      </p>
+                    </div>
+                    {storageAudit && (
+                      <span className={`storage-status-pill status-${storageAudit.status.toLowerCase()}`}>
+                        {storageAudit.status} ({storageAudit.percentUsed}%)
+                      </span>
+                    )}
+                  </div>
+
+                  {storageAudit && (
+                    <div className="storage-meter-wrap" style={{ marginBottom: 14 }}>
+                      <div className="storage-meter-track">
+                        <div
+                          className={`storage-meter-fill fill-${storageAudit.status.toLowerCase()}`}
+                          style={{ width: `${Math.min(100, storageAudit.percentUsed)}%` }}
+                        />
+                      </div>
+                      <div className="storage-meter-labels">
+                        <span>{storageAudit.usedMb} MB / {storageAudit.limitMb} MB Capacity</span>
+                        <span>{storageAudit.percentUsed}% Utilized</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Advisory Storage Warning Banner (Req 19) */}
+                  {storageAudit?.percentUsed >= 85 ? (
+                    <div style={{ padding: '10px 12px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 8, marginBottom: 14, fontSize: '0.8125rem', color: '#fca5a5' }}>
+                      ⚠️ <strong>Critical Storage Limit:</strong> Your database storage is over 85%. You can export your media as a ZIP and delete older files using the Media Center. Wibby will never delete your files automatically.
+                    </div>
+                  ) : storageAudit?.percentUsed >= 75 ? (
+                    <div style={{ padding: '10px 12px', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 8, marginBottom: 14, fontSize: '0.8125rem', color: '#fde68a' }}>
+                      ⚡ <strong>High Usage Notice:</strong> Storage is approaching 75%. We recommend reviewing your shared Media and exporting a ZIP backup if desired.
+                    </div>
+                  ) : null}
+
+                  {/* Media Category Breakdown */}
+                  <div className="media-storage-breakdown">
+                    <div className="media-breakdown-item">
+                      <div className="media-breakdown-item-left">
+                        <span>📸 Photos</span>
+                      </div>
+                      <div className="media-breakdown-item-right">
+                        <span>{mediaStats?.breakdown?.photos?.count || 0} items</span>
+                        <strong>{mediaStats?.breakdown?.photos?.formatted || '0 KB'}</strong>
+                      </div>
+                    </div>
+                    <div className="media-breakdown-item">
+                      <div className="media-breakdown-item-left">
+                        <span>🎥 Videos</span>
+                      </div>
+                      <div className="media-breakdown-item-right">
+                        <span>{mediaStats?.breakdown?.videos?.count || 0} items</span>
+                        <strong>{mediaStats?.breakdown?.videos?.formatted || '0 KB'}</strong>
+                      </div>
+                    </div>
+                    <div className="media-breakdown-item">
+                      <div className="media-breakdown-item-left">
+                        <span>📄 Documents</span>
+                      </div>
+                      <div className="media-breakdown-item-right">
+                        <span>{mediaStats?.breakdown?.documents?.count || 0} items</span>
+                        <strong>{mediaStats?.breakdown?.documents?.formatted || '0 KB'}</strong>
+                      </div>
+                    </div>
+                    <div className="media-breakdown-item">
+                      <div className="media-breakdown-item-left">
+                        <span>🎙️ Voice Messages</span>
+                      </div>
+                      <div className="media-breakdown-item-right">
+                        <span>{mediaStats?.breakdown?.voice?.count || 0} items</span>
+                        <strong>{mediaStats?.breakdown?.voice?.formatted || '0 KB'}</strong>
+                      </div>
+                    </div>
+                    <div className="media-breakdown-item">
+                      <div className="media-breakdown-item-left">
+                        <span>📦 Other Files</span>
+                      </div>
+                      <div className="media-breakdown-item-right">
+                        <span>{mediaStats?.breakdown?.other?.count || 0} items</span>
+                        <strong>{mediaStats?.breakdown?.other?.formatted || '0 KB'}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {onOpenMediaGallery && (
+                    <button
+                      type="button"
+                      className="open-media-center-btn"
+                      onClick={() => {
+                        onClose();
+                        onOpenMediaGallery();
+                      }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                      </svg>
+                      <span>Open Media Gallery & Export ZIP</span>
+                    </button>
+                  )}
+                </div>
+
                 <div className="storage-status-card">
                   <div className="storage-card-header">
                     <div>

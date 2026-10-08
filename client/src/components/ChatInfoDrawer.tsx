@@ -45,6 +45,7 @@ interface ChatInfoDrawerProps {
   onUnpair: () => void;
   currentThemePreset: ChatThemePreset;
   onSelectThemePreset: (preset: ChatThemePreset) => void;
+  onOpenMediaGallery?: () => void;
 }
 
 const THEME_PRESETS: Array<{ id: ChatThemePreset; name: string; gradient: string }> = [
@@ -73,7 +74,8 @@ export default function ChatInfoDrawer({
   onJumpToMessage,
   onUnpair,
   currentThemePreset,
-  onSelectThemePreset
+  onSelectThemePreset,
+  onOpenMediaGallery
 }: ChatInfoDrawerProps) {
   const { user } = useAuth();
   const [partnerAvatarError, setPartnerAvatarError] = useState(false);
@@ -335,52 +337,104 @@ export default function ChatInfoDrawer({
               <span>Loading items…</span>
             </div>
           ) : activeTab === 'media' ? (
-            sharedItems.length > 0 ? (
-              <div className="shared-media-grid">
-                {sharedItems.map(item => (
-                  <div key={item._id} className="shared-media-thumb" onClick={() => onJumpToMessage(item._id)}>
-                    {item.type === 'video' ? (
-                      <div className="shared-video-thumb">
-                        {item.thumbnailUrl ? (
-                          <AuthenticatedImage
-                            conversationId={conversationId}
-                            mediaUrl={item.thumbnailUrl}
-                            alt={item.fileName || 'Shared video'}
-                          />
-                        ) : null}
-                        <span className="video-badge"><IconVideo size={12} color="#fff" /></span>
-                      </div>
-                    ) : item.mediaUrl ? (
-                      <AuthenticatedImage
-                        conversationId={conversationId}
-                        mediaUrl={item.mediaUrl}
-                        alt={item.fileName || 'Shared thumbnail'}
-                      />
-                    ) : (
-                      <div className="fallback-thumb"><IconImage size={24} color="var(--wibby-text-muted)" /></div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-shared-state">No photos or videos shared yet</div>
-            )
-          ) : activeTab === 'files' ? (
-            sharedItems.length > 0 ? (
-              <div className="shared-files-list">
-                {sharedItems.map(item => (
-                  <div key={item._id} className="shared-file-row" onClick={() => onJumpToMessage(item._id)}>
-                    <span className="file-icon"><IconDocument size={20} color="var(--wibby-primary)" /></span>
-                    <div className="file-details">
-                      <span className="file-name">{item.fileName || 'Document'}</span>
-                      <span className="file-size">{item.fileSize ? formatFileSize(item.fileSize) : 'File'}</span>
+            <div>
+              {onOpenMediaGallery && (
+                <button
+                  type="button"
+                  onClick={onOpenMediaGallery}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    width: '100%',
+                    padding: '8px 12px',
+                    marginBottom: '12px',
+                    background: 'var(--wibby-surface-hover)',
+                    border: '1px solid var(--wibby-border)',
+                    borderRadius: '8px',
+                    color: 'var(--wibby-text)',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span>📁 Open Media Center & Export ZIP</span>
+                </button>
+              )}
+              {sharedItems.length > 0 ? (
+                <div className="shared-media-grid">
+                  {sharedItems.map(item => (
+                    <div key={item._id} className="shared-media-thumb" onClick={() => onJumpToMessage(item._id)}>
+                      {item.type === 'video' ? (
+                        <div className="shared-video-thumb">
+                          {item.thumbnailUrl ? (
+                            <AuthenticatedImage
+                              conversationId={conversationId}
+                              mediaUrl={item.thumbnailUrl}
+                              alt={item.fileName || 'Shared video'}
+                            />
+                          ) : null}
+                          <span className="video-badge"><IconVideo size={12} color="#fff" /></span>
+                        </div>
+                      ) : item.mediaUrl ? (
+                        <AuthenticatedImage
+                          conversationId={conversationId}
+                          mediaUrl={item.mediaUrl}
+                          alt={item.fileName || 'Shared thumbnail'}
+                        />
+                      ) : (
+                        <div className="fallback-thumb"><IconImage size={24} color="var(--wibby-text-muted)" /></div>
+                      )}
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-shared-state">No documents or files shared yet</div>
-            )
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-shared-state">No photos or videos shared yet</div>
+              )}
+            </div>
+          ) : activeTab === 'files' ? (
+            <div>
+              {onOpenMediaGallery && (
+                <button
+                  type="button"
+                  onClick={onOpenMediaGallery}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    width: '100%',
+                    padding: '8px 12px',
+                    marginBottom: '12px',
+                    background: 'var(--wibby-surface-hover)',
+                    border: '1px solid var(--wibby-border)',
+                    borderRadius: '8px',
+                    color: 'var(--wibby-text)',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span>📁 Open Media Center & Export ZIP</span>
+                </button>
+              )}
+              {sharedItems.length > 0 ? (
+                <div className="shared-files-list">
+                  {sharedItems.map(item => (
+                    <div key={item._id} className="shared-file-row" onClick={() => onJumpToMessage(item._id)}>
+                      <span className="file-icon"><IconDocument size={20} color="var(--wibby-primary)" /></span>
+                      <div className="file-details">
+                        <span className="file-name">{item.fileName || 'Document'}</span>
+                        <span className="file-size">{item.fileSize ? formatFileSize(item.fileSize) : 'File'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-shared-state">No documents or files shared yet</div>
+              )}
+            </div>
           ) : activeTab === 'links' ? (
             sharedItems.length > 0 ? (
               <div className="shared-links-list">
