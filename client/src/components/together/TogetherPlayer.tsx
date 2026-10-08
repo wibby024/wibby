@@ -808,10 +808,12 @@ export default function TogetherPlayer({
     const newX = dragStartRef.current.posX + dx;
     const newY = dragStartRef.current.posY + dy;
 
+    const cardWidth = containerRef.current ? containerRef.current.offsetWidth : (window.innerWidth <= 640 ? 280 : 320);
+    const cardHeight = containerRef.current ? containerRef.current.offsetHeight : 180;
     const minX = 8;
-    const maxX = Math.max(minX, window.innerWidth - 340 - 8);
+    const maxX = Math.max(minX, window.innerWidth - cardWidth - 8);
     const minY = 8;
-    const maxY = Math.max(minY, window.innerHeight - 230 - 8);
+    const maxY = Math.max(minY, window.innerHeight - cardHeight - 8);
 
     setPosition({
       x: Math.min(Math.max(minX, newX), maxX),
@@ -828,12 +830,42 @@ export default function TogetherPlayer({
     } catch { }
 
     if (position) {
+      const isMobile = window.innerWidth <= 640;
+      const cardWidth = containerRef.current ? containerRef.current.offsetWidth : (isMobile ? 280 : 320);
+      const cardHeight = containerRef.current ? containerRef.current.offsetHeight : 180;
       const midX = window.innerWidth / 2;
-      const targetSide = position.x + 170 < midX ? 'left' : 'right';
-      setSnappedSide(targetSide);
-      try {
-        localStorage.setItem('wibby_together_side', targetSide);
-      } catch {}
+      const midY = window.innerHeight / 2;
+
+      if (isMobile) {
+        // 4-corner snap for mobile (top-left, top-right, bottom-left, bottom-right)
+        const snapLeft = (position.x + cardWidth / 2) < midX;
+        const snapTop = (position.y + cardHeight / 2) < midY;
+
+        const safePaddingX = 12;
+        const safePaddingTop = 16;
+        const safePaddingBottom = 84; // Avoid composer and dock controls
+
+        const finalX = snapLeft ? safePaddingX : Math.max(safePaddingX, window.innerWidth - cardWidth - safePaddingX);
+        const finalY = snapTop ? safePaddingTop : Math.max(safePaddingTop, window.innerHeight - cardHeight - safePaddingBottom);
+
+        setPosition({ x: finalX, y: finalY });
+        const targetSide = snapLeft ? 'left' : 'right';
+        setSnappedSide(targetSide);
+        try {
+          localStorage.setItem('wibby_together_side', targetSide);
+        } catch {}
+      } else {
+        // Desktop: snap left or right, preserve vertical position within safe bounds
+        const targetSide = (position.x + cardWidth / 2) < midX ? 'left' : 'right';
+        setSnappedSide(targetSide);
+        try {
+          localStorage.setItem('wibby_together_side', targetSide);
+        } catch {}
+        const padding = 16;
+        const snapX = targetSide === 'left' ? padding : Math.max(padding, window.innerWidth - cardWidth - padding);
+        const safeY = Math.min(Math.max(padding, position.y), window.innerHeight - cardHeight - 84);
+        setPosition({ x: snapX, y: safeY });
+      }
     }
   };
 
@@ -1509,38 +1541,8 @@ export default function TogetherPlayer({
                   Watch Together
                 </button>
               </form>
-              <div className="together-sample-chips">
-                <span className="together-sample-label">Try sample:</span>
-                <button
-                  type="button"
-                  className="together-sample-chip"
-                  onClick={() => {
-                    setUrlInput('https://www.youtube.com/watch?v=aqz-KE-bpKQ');
-                    startWithUrl('https://www.youtube.com/watch?v=aqz-KE-bpKQ');
-                  }}
-                >
-                  🎬 Big Buck Bunny
-                </button>
-                <button
-                  type="button"
-                  className="together-sample-chip"
-                  onClick={() => {
-                    setUrlInput('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
-                    startWithUrl('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
-                  }}
-                >
-                  🍿 Sample MP4
-                </button>
-                <button
-                  type="button"
-                  className="together-sample-chip"
-                  onClick={() => {
-                    setUrlInput('https://www.youtube.com/watch?v=jfKfPfyJRdk');
-                    startWithUrl('https://www.youtube.com/watch?v=jfKfPfyJRdk');
-                  }}
-                >
-                  🎵 Lo-Fi Beats
-                </button>
+              <div className="together-supported-hint">
+                <span>Supports YouTube, direct MP4/WebM videos, and Spotify</span>
               </div>
             </div>
           ) : (

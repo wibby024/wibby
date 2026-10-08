@@ -33,7 +33,7 @@ function LoadingScreen() {
 function WibbyAppWrapper() {
   const { user, signOut } = useAuth();
   const { socket } = useSocket();
-  const { startCall, callState, activeCall, expandCall, isMinimized } = useCall();
+  const { startCall, callState, activeCall } = useCall();
   const isCallActive = Boolean(activeCall || callState === 'CONNECTING' || callState === 'CONNECTED' || callState === 'RECONNECTING');
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -564,18 +564,8 @@ function WibbyAppWrapper() {
   };
 
   const handleOpenTogether = useCallback(() => {
-    if (isCallActive) {
-      if (isMinimized) {
-        expandCall();
-      }
-      window.dispatchEvent(new CustomEvent('wibby:open-moviemode'));
-      if (socket && conversationId) {
-        socket.emit('together:get-state', { conversationId });
-      }
-    } else {
-      setShowTogether(prev => !prev);
-    }
-  }, [isCallActive, isMinimized, expandCall, socket, conversationId]);
+    setShowTogether(prev => !prev);
+  }, []);
 
   if (isPaired === null) {
     return <LoadingScreen />
@@ -614,7 +604,7 @@ function WibbyAppWrapper() {
               onOpenGame={() => setShowGameModal(true)}
               onClearChat={handleClearChat}
             />
-            {showTogether && !isCallActive && (
+            {showTogether && (
               <TogetherPlayer
                 conversationId={conversationId}
                 partnerName={partnerName}

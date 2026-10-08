@@ -201,40 +201,15 @@
   width: 100%;
 }
 
-.together-sample-chips {
+.together-supported-hint {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.together-sample-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--wibby-text-secondary, #94a3b8);
-  margin-right: 0.2rem;
-}
-
-.together-sample-chip {
-  background: var(--wibby-surface-hover, rgba(255, 255, 255, 0.08));
-  border: 1px solid var(--wibby-border, rgba(255, 255, 255, 0.16));
-  border-radius: var(--radius-full, 9999px);
-  padding: 0.25rem 0.65rem;
-  font-size: 0.75rem;
+  justify-content: center;
+  font-size: 0.78rem;
   font-weight: 500;
-  color: var(--wibby-text, #ffffff);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.together-sample-chip:hover {
-  background: var(--wibby-surface-active, rgba(255, 255, 255, 0.16));
-  border-color: var(--wibby-primary, #6366f1);
-  transform: translateY(-1px);
+  color: var(--wibby-text-secondary, #94a3b8);
+  margin-top: 0.25rem;
+  text-align: center;
 }
 
 .together-url-input {
@@ -821,9 +796,6 @@
     padding: 0.6rem;
   }
 
-  .together-sample-chips {
-    justify-content: flex-start;
-  }
 }
 
 /* Mobile Virtual Keyboard Active Protection (when viewport height shrinks) */

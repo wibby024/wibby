@@ -683,10 +683,9 @@ interface MessageAreaProps {
   };
   onOpenGame?: () => void;
   jumpTarget?: { id: string; timestamp: number } | null;
-  isMovieMode?: boolean;
 }
 
-export default function MessageArea({ conversationId, partner, onOpenGame, jumpTarget, isMovieMode }: MessageAreaProps) {
+export default function MessageArea({ conversationId, partner, onOpenGame, jumpTarget }: MessageAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [contextMenu, setContextMenu] = useState<{ msgId: string, x: number, y: number } | null>(null);
@@ -878,13 +877,17 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (scrollContainerRef.current) {
-      try {
-        scrollContainerRef.current.scrollTo({
-          top: scrollContainerRef.current.scrollHeight,
-          behavior
-        });
-      } catch {
+      if (behavior === 'auto') {
         scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      } else {
+        try {
+          scrollContainerRef.current.scrollTo({
+            top: scrollContainerRef.current.scrollHeight,
+            behavior
+          });
+        } catch {
+          scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+        }
       }
     } else if (messagesEndRef.current) {
       try {
@@ -894,6 +897,10 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
       }
     }
   }, []);
+
+  const scrollToBottomInstant = useCallback(() => {
+    scrollToBottom('auto');
+  }, [scrollToBottom]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -1018,7 +1025,13 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
         setHasMoreOlderMessages(loaded.length >= 50);
         setIsLoadingOlderMessages(false);
         isLoadingOlderMessagesRef.current = false;
-        setTimeout(scrollToBottom, 100);
+        // Instant scroll to bottom on initial load, reinforced with RAF and timeout to ensure rendered DOM is measured
+        scrollToBottomInstant();
+        requestAnimationFrame(() => {
+          scrollToBottomInstant();
+        });
+        setTimeout(scrollToBottomInstant, 50);
+        setTimeout(scrollToBottomInstant, 150);
         setShowScrollBottom(false);
         setUnreadCount(0);
         isNearBottomRef.current = true;
@@ -1122,19 +1135,49 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
   }, [fetchMessages]);
 
   useEffect(() => {
-    const handleResize = () => {
+    const handleViewportChange = () => {
+      const vv = window.visualViewport;
+      if (vv) {
+        document.documentElement.style.setProperty('--vvh', `${vv.height}px`);
+      } else {
+        document.documentElement.style.setProperty('--vvh', `${window.innerHeight}px`);
+      }
+
       const container = scrollContainerRef.current;
       if (!container) return;
-      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-      const isNearBottom = distanceFromBottom <= 150;
-      isNearBottomRef.current = isNearBottom;
-      if (isNearBottom) {
+
+      // If user was near bottom, keep pinned to bottom on keyboard or viewport resize
+      if (isNearBottomRef.current) {
+        container.scrollTop = container.scrollHeight;
         setShowScrollBottom(false);
         setUnreadCount(0);
+      } else {
+        // If reading older history, preserve reading position and update scroll indicators
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        const isNearBottom = distanceFromBottom <= 150;
+        isNearBottomRef.current = isNearBottom;
+        if (isNearBottom) {
+          setShowScrollBottom(false);
+          setUnreadCount(0);
+        }
       }
     };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+
+    handleViewportChange();
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+      window.visualViewport.addEventListener('scroll', handleViewportChange);
+    }
+    window.addEventListener('resize', handleViewportChange);
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportChange);
+        window.visualViewport.removeEventListener('scroll', handleViewportChange);
+      }
+      window.removeEventListener('resize', handleViewportChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -2198,7 +2241,7 @@ export default function MessageArea({ conversationId, partner, onOpenGame, jumpT
 
   return (
     <div 
-      className={`chat-area-container ${isMovieMode ? 'is-moviemode' : ''}`}
+      className="chat-area-container"
       onDragEnter={handleChatDragEnter}
       onDragLeave={handleChatDragLeave}
       onDragOver={handleChatDragOver}

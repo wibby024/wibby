@@ -5,8 +5,6 @@ import { useSocket } from '../../context/SocketContext';
 import { rtcService } from '../../services/rtcService';
 import { resolvePartnerName } from '../../utils/partnerName';
 import { resolveAvatarUrl } from '../../utils/avatar';
-import TogetherPlayer, { parseMediaUrl } from '../together/TogetherPlayer';
-import MessageArea from '../MessageArea';
 import './CallModal.css';
 
 function formatCallDuration(seconds: number): string {
@@ -31,8 +29,8 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   setIsScreenshareFullscreen: _setIsScreenshareFullscreen,
   hideFloatingTiles,
   setHideFloatingTiles: _setHideFloatingTiles,
-  toggleFullscreen,
-  isFullscreen,
+  toggleFullscreen: _toggleFullscreen,
+  isFullscreen: _isFullscreen,
   focusedParticipant,
   setFocusedParticipant,
   remoteVideoRef,
@@ -53,19 +51,14 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   flipCamera,
   currentFacingMode,
   stopScreenSharing,
-  conversationId,
-  socket,
-  movieUrl,
-  setMovieUrl,
-  movieInput,
-  setMovieInput,
-  handleStartMovie,
-  partner,
-  isVideo = true,
-  isLocalMuted = false
+  conversationId: _conversationId,
+  socket: _socket,
+  partner: _partner,
+  isVideo: _isVideo = true,
+  isLocalMuted: _isLocalMuted = false
 }: {
-  viewMode: 'grid' | 'stacked' | 'pip' | 'screenshare' | 'moviemode';
-  setViewMode: React.Dispatch<React.SetStateAction<'stacked' | 'pip' | 'screenshare' | 'moviemode'>>;
+  viewMode: 'stacked' | 'pip' | 'screenshare';
+  setViewMode: React.Dispatch<React.SetStateAction<'stacked' | 'pip' | 'screenshare'>>;
   isScreenSharing: boolean;
   isRemoteScreenSharing: boolean;
   isScreenshareFullscreen: boolean;
@@ -96,16 +89,10 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
   stopScreenSharing?: () => Promise<void> | void;
   conversationId?: string;
   socket?: any;
-  movieUrl?: string;
-  setMovieUrl?: React.Dispatch<React.SetStateAction<string>>;
-  movieInput?: string;
-  setMovieInput?: React.Dispatch<React.SetStateAction<string>>;
-  handleStartMovie?: (url: string) => void;
   partner?: any;
   isVideo?: boolean;
   isLocalMuted?: boolean;
 }) {
-  const { isMinimized, minimizeCall, expandCall, toggleMute, toggleCamera } = useCall();
   const localPanelRef = useRef<HTMLDivElement | null>(null);
   const posRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
@@ -451,346 +438,6 @@ const MemoizedVideoStage = React.memo(function MemoizedVideoStage({
     );
   }
 
-  if (viewMode === 'moviemode') {
-    return (
-      <div className="call-video-stage view-mode-moviemode">
-        {/* Compact Modern Movie Header */}
-        <div className="call-moviemode-header">
-          <div className="call-moviemode-header-left">
-            <div className="call-moviemode-brand">
-              <span className="call-moviemode-brand-icon">🎬</span>
-              <span className="call-moviemode-brand-title">Movie Mode</span>
-            </div>
-            <div className="call-moviemode-sync-pill" title="Synchronized playback engine active">
-              <span className="call-moviemode-sync-dot" />
-              <span>Synced</span>
-            </div>
-          </div>
-          <div className="call-moviemode-header-actions">
-            {movieUrl && setMovieUrl && (
-              <button
-                type="button"
-                className="call-moviemode-hdr-btn"
-                onClick={() => {
-                  setMovieUrl('');
-                  if (socket && conversationId) {
-                    socket.emit('together:end', { conversationId });
-                  }
-                }}
-                title="Change movie source"
-                aria-label="Change movie"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="23 4 23 10 17 10" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
-                <span>Change</span>
-              </button>
-            )}
-            <button
-              type="button"
-              className="call-moviemode-hdr-btn"
-              onClick={minimizeCall}
-              title="Minimize to floating card"
-              aria-label="Minimize Movie Mode"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              <span>Minimize</span>
-            </button>
-            <button
-              type="button"
-              className="call-moviemode-hdr-btn"
-              onClick={() => toggleFullscreen?.()}
-              title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-              aria-label="Toggle Fullscreen"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                {isFullscreen ? (
-                  <>
-                    <polyline points="4 14 10 14 10 20" />
-                    <polyline points="20 10 14 10 14 4" />
-                    <line x1="14" y1="10" x2="21" y2="3" />
-                    <line x1="3" y1="21" x2="10" y2="14" />
-                  </>
-                ) : (
-                  <>
-                    <polyline points="15 3 21 3 21 9" />
-                    <polyline points="9 21 3 21 3 15" />
-                    <line x1="21" y1="3" x2="14" y2="10" />
-                    <line x1="3" y1="21" x2="10" y2="14" />
-                  </>
-                )}
-              </svg>
-              <span>{isFullscreen ? 'Exit Full' : 'Fullscreen'}</span>
-            </button>
-            <button
-              type="button"
-              className="call-moviemode-hdr-btn exit-btn"
-              onClick={() => setViewMode('stacked')}
-              title="Exit Movie Mode"
-              aria-label="Exit Movie Mode"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="18" x2="18" y2="6" />
-              </svg>
-              <span>Exit</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="call-stage-presentation-frame">
-          {/* Main Hero: Large Movie (70-75% Desktop) */}
-          <div className="call-moviemode-main">
-            {movieUrl ? (
-              <div className="call-moviemode-player-container">
-                <TogetherPlayer
-                  inline
-                  isCallMinimized={isMinimized}
-                  onExpandCall={expandCall}
-                  onMinimizeCall={minimizeCall}
-                  onToggleFullscreen={toggleFullscreen}
-                  conversationId={conversationId || ''}
-                  partnerName={partnerName}
-                  onClose={() => {
-                    setMovieUrl?.('');
-                    setViewMode?.('stacked');
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="call-moviemode-empty-state">
-                <div className="call-moviemode-empty-card">
-                  <div className="call-moviemode-empty-icon-box">
-                    <span className="call-moviemode-empty-icon">🎬</span>
-                  </div>
-                  <h3 className="call-moviemode-empty-title">Start Watching Together</h3>
-                  <p className="call-moviemode-empty-desc">
-                    Paste a YouTube or supported video link to stream synchronously with live video feeds
-                  </p>
-                  <form
-                    className="call-moviemode-empty-form"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const target = movieInput?.trim() || 'https://www.youtube.com/watch?v=aqz-KE-bpKQ';
-                      if (handleStartMovie) {
-                        handleStartMovie(target);
-                      }
-                    }}
-                  >
-                    <div className="call-moviemode-input-row">
-                      <input
-                        type="text"
-                        inputMode="url"
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        spellCheck="false"
-                        className="call-moviemode-input"
-                        placeholder="Paste YouTube or video link..."
-                        value={movieInput || ''}
-                        onChange={(e) => setMovieInput?.(e.target.value)}
-                        autoFocus
-                      />
-                      <button
-                        type="submit"
-                        className="call-moviemode-submit-btn"
-                      >
-                        Play Movie
-                      </button>
-                    </div>
-                  </form>
-                  <div className="call-moviemode-sample-chips">
-                    <span className="call-moviemode-chip-label">Try sample:</span>
-                    <button
-                      type="button"
-                      className="call-moviemode-chip"
-                      onClick={() => {
-                        setMovieInput?.('https://www.youtube.com/watch?v=aqz-KE-bpKQ');
-                        handleStartMovie?.('https://www.youtube.com/watch?v=aqz-KE-bpKQ');
-                      }}
-                    >
-                      🎬 Big Buck Bunny
-                    </button>
-                    <button
-                      type="button"
-                      className="call-moviemode-chip"
-                      onClick={() => {
-                        setMovieInput?.('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
-                        handleStartMovie?.('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
-                      }}
-                    >
-                      🍿 Sample MP4
-                    </button>
-                    <button
-                      type="button"
-                      className="call-moviemode-chip"
-                      onClick={() => {
-                        setMovieInput?.('https://www.youtube.com/watch?v=jfKfPfyJRdk');
-                        handleStartMovie?.('https://www.youtube.com/watch?v=jfKfPfyJRdk');
-                      }}
-                    >
-                      🎵 Lo-Fi Beats
-                    </button>
-                  </div>
-                  <span className="call-moviemode-supported-hint">
-                    Supports YouTube • MP4 / WebM • Spotify
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right Column: Stacked Users (Top) + Movie Chat (Bottom) (25-30% Desktop) */}
-          <div className="call-moviemode-sidebar">
-            <div className="call-moviemode-users-strip">
-              {/* User 1: Partner User (Taller, object-fit: cover) */}
-              <div className="call-moviemode-user-tile remote">
-                <video
-                  ref={(el) => {
-                    if (remoteVideoRef) (remoteVideoRef as any).current = el;
-                    if (el) {
-                      rtcService.bindRemoteVideoElement(el);
-                      const stream = rtcService.getRemoteVideoStream();
-                      if (stream && el.srcObject !== stream) {
-                        el.srcObject = stream;
-                      }
-                      el.play().catch(() => { });
-                    }
-                  }}
-                  className={`call-video-fg-live ${(!isVideo || isRemoteCameraOff || !isConnected) ? 'hidden' : ''}`}
-                  autoPlay
-                  playsInline
-                  muted
-                />
-                {(!isVideo || isRemoteCameraOff || !isConnected) && (
-                  <div className="call-video-placeholder">
-                    <div className="call-avatar-wrapper" style={{ width: 56, height: 56, position: 'relative' }}>
-                      {isConnected && isRemoteSpeaking && <div className="call-pulse-ring speaking" />}
-                      <div className={`call-avatar ${isRemoteSpeaking ? 'avatar-speaking' : ''}`} style={{ width: 50, height: 50, fontSize: 20 }}>
-                        {avatar ? (
-                          <img
-                            src={resolveAvatarUrl(avatar) || avatar}
-                            alt=""
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <span>{initial}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div className="call-moviemode-tile-badge">
-                  <span className="call-moviemode-tile-name">{partnerName}</span>
-                  {isRemoteMuted && <span className="call-moviemode-tile-mute" title="Partner muted">🔇</span>}
-                </div>
-              </div>
-
-              {/* User 2: You (Taller, object-fit: cover) */}
-              <div className={`call-moviemode-user-tile local ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''}`}>
-                <video
-                  ref={(el) => {
-                    if (localVideoRef) (localVideoRef as any).current = el;
-                    if (el) {
-                      rtcService.bindLocalVideoElement(el);
-                      const stream = rtcService.getLocalStream();
-                      if (stream && el.srcObject !== stream) {
-                        el.srcObject = stream;
-                      }
-                      el.play().catch(() => { });
-                    }
-                  }}
-                  className={`call-video-fg-live local-main ${currentFacingMode === 'environment' ? 'is-rear-camera' : ''} ${(!isVideo || isCameraOff || isCameraUnavailable) ? 'hidden' : ''}`}
-                  autoPlay
-                  playsInline
-                  muted
-                />
-                {(!isVideo || isCameraOff || isCameraUnavailable) && (
-                  <div className="call-video-placeholder">
-                    <div className="call-avatar-wrapper" style={{ width: 56, height: 56, position: 'relative' }}>
-                      <div className="call-avatar" style={{ width: 50, height: 50, fontSize: 20 }}>
-                        <span>Y</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div className="call-moviemode-tile-badge">
-                  <span className="call-moviemode-tile-name">You</span>
-                  {isLocalMuted && <span className="call-moviemode-tile-mute" title="You are muted">🔇</span>}
-                </div>
-                {/* Tile Action Controls for Quick Interaction */}
-                <div className="call-moviemode-tile-actions">
-                  <button
-                    type="button"
-                    className={`call-moviemode-tile-action-btn ${isLocalMuted ? 'muted' : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleMute();
-                    }}
-                    title={isLocalMuted ? 'Unmute microphone' : 'Mute microphone'}
-                    aria-label={isLocalMuted ? 'Unmute microphone' : 'Mute microphone'}
-                  >
-                    {isLocalMuted ? '🔇' : '🎙️'}
-                  </button>
-                  <button
-                    type="button"
-                    className={`call-moviemode-tile-action-btn ${isCameraOff ? 'cam-off' : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleCamera();
-                    }}
-                    title={isCameraOff ? 'Turn camera on' : 'Turn camera off'}
-                    aria-label={isCameraOff ? 'Turn camera on' : 'Turn camera off'}
-                  >
-                    {isCameraOff ? '🚫' : '📹'}
-                  </button>
-                  {isVideo && !isCameraOff && !isCameraUnavailable && (
-                    <button
-                      type="button"
-                      className="call-moviemode-tile-action-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        flipCamera();
-                      }}
-                      title="Switch camera"
-                      aria-label="Switch camera"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 7h-3a2 2 0 0 1-2-2V2" />
-                        <path d="M9 2H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5" />
-                        <path d="M14 2v3a2 2 0 0 0 2 2h4" />
-                        <circle cx="10" cy="13" r="3" />
-                        <path d="M16 10l2 2-2 2" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Integrated Movie Chat with Independent Scrolling */}
-            <div className="call-moviemode-chat-container">
-              <div className="call-moviemode-chat-header">
-                <span>💬 Movie Chat</span>
-              </div>
-              <div className="call-moviemode-chat-body">
-                <MessageArea
-                  conversationId={conversationId || ''}
-                  partner={partner}
-                  isMovieMode={true}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className={`call-video-stage view-mode-${viewMode} ${focusedParticipant !== 'none' ? 'has-focused-participant' : ''}`}>
       <div className="call-stage-presentation-frame">
@@ -1049,53 +696,13 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
 
   const { socket } = useSocket();
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [viewMode, setViewMode] = useState<'stacked' | 'pip' | 'screenshare' | 'moviemode'>('stacked');
+  const [viewMode, setViewMode] = useState<'stacked' | 'pip' | 'screenshare'>('stacked');
   const [isScreenshareFullscreen, setIsScreenshareFullscreen] = useState(false);
   const [hideFloatingTiles, setHideFloatingTiles] = useState(false);
   const [focusedParticipant, setFocusedParticipant] = useState<'none' | 'remote' | 'local'>('none');
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [screenShareNotice, setScreenShareNotice] = useState<string | null>(null);
-
-  // Movie Mode States
-  const [movieUrl, setMovieUrl] = useState<string>('');
-
-  const [movieInput, setMovieInput] = useState<string>('');
-
-  useEffect(() => {
-    const handleOpenMovie = () => {
-      setViewMode('moviemode');
-    };
-    window.addEventListener('wibby:open-moviemode', handleOpenMovie);
-    return () => window.removeEventListener('wibby:open-moviemode', handleOpenMovie);
-  }, []);
-
-  useEffect(() => {
-    if (!socket || !activeCall?.conversationId) return;
-
-    /**
-     * ActiveCallPanel only tracks session existence to manage viewMode ('moviemode' vs 'stacked').
-     * All media playback, syncing, play/pause, volume, and drift handling are encapsulated in <TogetherPlayer inline>.
-     */
-    const handleSessionActive = (s: any) => {
-      if (s && s.mediaUrl) {
-        setMovieUrl(s.mediaUrl);
-      }
-    };
-    const handleTogetherEnded = () => {
-      setMovieUrl('');
-      setViewMode(prev => (prev === 'moviemode' ? 'stacked' : prev));
-    };
-
-    socket.on('together:started', handleSessionActive);
-    socket.on('together:state', handleSessionActive);
-    socket.on('together:ended', handleTogetherEnded);
-    return () => {
-      socket.off('together:started', handleSessionActive);
-      socket.off('together:state', handleSessionActive);
-      socket.off('together:ended', handleTogetherEnded);
-    };
-  }, [socket, activeCall?.conversationId]);
 
   // Screen share audio availability notification listener
   useEffect(() => {
@@ -1106,19 +713,6 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
     window.addEventListener('wibby:screen-audio-notice', handleNotice);
     return () => window.removeEventListener('wibby:screen-audio-notice', handleNotice);
   }, []);
-
-  const handleStartMovie = (url: string) => {
-    if (!socket || !activeCall?.conversationId) return;
-    const parsed = parseMediaUrl(url);
-    setMovieUrl(parsed.url);
-    setViewMode('moviemode');
-    socket.emit('together:start', {
-      conversationId: activeCall.conversationId,
-      mediaUrl: parsed.url,
-      mediaType: parsed.type,
-      title: 'Movie Mode'
-    });
-  };
 
   // Auto-switch to screenshare layout when either participant shares screen
   useEffect(() => {
@@ -1302,13 +896,13 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
   const isVideo = activeCall.callType === 'video';
 
   // -------------------------------------------------------------
-  // CALL PRESENTATION STAGE (Video Call or Movie Mode)
+  // CALL PRESENTATION STAGE (Video Call)
   // -------------------------------------------------------------
-  if (isVideo || viewMode === 'moviemode') {
+  if (isVideo) {
     return (
       <div
         ref={containerRef}
-        className={`call-overlay call-video-overlay ${isFullscreen ? 'is-fullscreen' : ''} ${isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare' ? 'is-screenshare-mode' : ''} ${viewMode === 'moviemode' ? 'is-moviemode-mode' : ''}`}
+        className={`call-overlay call-video-overlay ${isFullscreen ? 'is-fullscreen' : ''} ${isScreenSharing || isRemoteScreenSharing || viewMode === 'screenshare' ? 'is-screenshare-mode' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="active-video-call-title"
@@ -1349,11 +943,6 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
           stopScreenSharing={stopScreenSharing}
           conversationId={activeCall?.conversationId}
           socket={socket}
-          movieUrl={movieUrl}
-          setMovieUrl={setMovieUrl}
-          movieInput={movieInput}
-          setMovieInput={setMovieInput}
-          handleStartMovie={handleStartMovie}
           partner={partner}
           isVideo={isVideo}
           isLocalMuted={activeCall.isMuted}
@@ -1425,7 +1014,7 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
               </button>
             )}
 
-            {/* Audio Output Device Selector in Video / Movie Mode */}
+            {/* Audio Output Device Selector in Video Call */}
             {isConnected && availableOutputDevices.length > 1 && (
               <div className="call-device-selector-wrap" style={{ margin: '0 4px', maxWidth: 160 }}>
                 <select
@@ -1703,39 +1292,6 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
             </div>
           )}
 
-          {/* Movie Mode Button (Watch Together in Call) */}
-          <div className="call-control-item">
-            <button
-              type="button"
-              id="movie-mode-btn"
-              className={`call-btn movie-ctrl ${viewMode === 'moviemode' ? 'active' : ''}`}
-              onClick={() => {
-                if (viewMode === 'moviemode') {
-                  setViewMode('stacked');
-                } else {
-                  setViewMode('moviemode');
-                  if (!movieUrl && socket && activeCall?.conversationId) {
-                    socket.emit('together:get-state', { conversationId: activeCall.conversationId });
-                  }
-                }
-              }}
-              title={viewMode === 'moviemode' ? 'Exit Movie Mode' : 'Movie Mode (Watch Together in Call)'}
-              aria-label={viewMode === 'moviemode' ? 'Exit Movie Mode' : 'Movie Mode'}
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-                <line x1="7" y1="2" x2="7" y2="22" />
-                <line x1="17" y1="2" x2="17" y2="22" />
-                <line x1="2" y1="12" x2="22" y2="12" />
-                <line x1="2" y1="7" x2="7" y2="7" />
-                <line x1="2" y1="17" x2="7" y2="17" />
-                <line x1="17" y1="17" x2="22" y2="17" />
-                <line x1="17" y1="7" x2="22" y2="7" />
-              </svg>
-            </button>
-            <span className="call-btn-label">{viewMode === 'moviemode' ? 'Exit Movie' : 'Movie'}</span>
-          </div>
-
           {/* Microphone Mute Button */}
           <div className="call-control-item">
             <button
@@ -1971,31 +1527,6 @@ export default function ActiveCallPanel({ partner }: ActiveCallPanelProps = {}) 
 
         {/* Action Controls */}
         <div className="call-actions">
-          {/* Watch Together in Voice Call */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <button
-              id="voice-movie-mode-btn"
-              type="button"
-              className="call-btn movie-ctrl"
-              onClick={() => {
-                setViewMode('moviemode');
-                if (!movieUrl && socket && activeCall?.conversationId) {
-                  socket.emit('together:get-state', { conversationId: activeCall.conversationId });
-                }
-              }}
-              title="Watch Together in Call"
-              aria-label="Watch Together in Call"
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-                <line x1="7" y1="2" x2="7" y2="22" />
-                <line x1="17" y1="2" x2="17" y2="22" />
-                <line x1="2" y1="12" x2="22" y2="12" />
-              </svg>
-            </button>
-            <span className="call-btn-label">Watch</span>
-          </div>
-
           {/* Mute Button */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <button
